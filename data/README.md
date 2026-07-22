@@ -1,0 +1,55 @@
+# Sample Data TODO Checklist
+
+No sample data has been created yet. The final data set must be plausible and must make every operation, query, and report immediately testable.
+
+## Venues and seating
+
+- [ ] At least 8 venues across at least 4 cities and 2 countries
+- [ ] Realistic addresses, postal codes, latitude, and longitude
+- [ ] At least 3 nearby venues in the same or adjacent postal codes
+- [ ] Several sections per venue and varied venue capacities
+- [ ] At least 2 venues with both reserved and general-admission sections
+
+## Events and performances
+
+- [ ] At least 20 events managed by at least 5 organizers
+- [ ] At least 3 segments, 6 genres, and 15 artists or teams
+- [ ] Multi-artist events with different billing orders
+- [ ] At least 60 past and upcoming performances
+- [ ] A touring event that appears at different venues
+- [ ] A theatre-style event with many performances at one venue
+- [ ] Different tier mappings and prices for two performances at one venue
+
+## Pricing and inventory
+
+- [ ] At least 2 price tiers for every performance
+- [ ] Future tiers with no sales and future tiers with existing sales
+- [ ] Performance-specific blocked seats
+- [ ] A future performance more than 7 days away with reserved and general-admission availability
+- [ ] A row with at least 4 consecutive available seats
+- [ ] A row with only nonconsecutive seats available
+- [ ] An upcoming performance fewer than 7 days away with sold tickets
+
+## Customers, orders, and tickets
+
+- [ ] At least 100 adult customers with fictional personal and card information
+- [ ] At least 300 orders containing at least 800 tickets
+- [ ] Orders distributed across the past 12 months and the future
+- [ ] Several customers with at least 2 recent orders across multiple cities
+- [ ] Past sold-out performances in several cities and months
+- [ ] Past performances that sold less than 25% of capacity
+
+## Cancellations and resale
+
+- [ ] Ticket cancellations by several customers
+- [ ] At least 2 organizer-cancelled performances in the past year
+- [ ] Completed, withdrawn, and active resale listings
+- [ ] Some listings priced exactly at the event resale cap
+- [ ] At least 1 ticket that changed owners twice
+- [ ] At least 2 customers who bought 10 or more tickets and listed more than half within the past year
+
+## Reviews
+
+- [ ] Multiple reviews for at least 10 events
+- [ ] Ratings and comments containing several meaningful sentences
+
