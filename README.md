@@ -1,8 +1,17 @@
 # MyTix
 
-MyTix is a database design project for an event ticketing platform similar to Ticketmaster. The finished system will let organizers manage events, performances, venues, inventory, pricing, and sales while customers buy, cancel, resell, and review tickets.
+MyTix is a database design project for an event ticketing platform similar to Ticketmaster. The  system will let organizers manage events, performances, venues, inventory, pricing, and sales while customers buy, cancel, resell, and review tickets.
+
+## Prerequisites
+
+- MySQL 8 installed and running.
+- A JDK with `java` and `javac` available.
+- `lib/mysql-connector-java-8.0.29.jar` (MySQL JDBC driver). *Java's standard `java.sql` API does not natively understand the MySQL protocol. Connector/J provides that MySQL-specific implementation so `DriverManager` can open the JDBC connection and send SQL to MySQL.*
+
 
 ## Core data requirements
+
+Keeping [business logic constraint map](docs/business-logic-constraints.md) in mind when building and testing the schema and operations without overlooking a rule. 
 
 The final relational design must represent:
 
@@ -68,6 +77,10 @@ mytix/
 ├── run.sh                  # Top-level shell script to compile and run the Java app
 ├── report.pdf              # Comprehensive project report (ER diagram, schema, dependencies)
 ├── manual.pdf              # User manual, system limitations, and improvement ideas
+├── docs/
+│   └── business-logic-constraints.md
+├── lib/
+│   └── mysql-connector-java-8.0.29.jar
 │
 ├── sql/
 │   ├── schema.sql          # DDL file to create all tables and constraints on MySQL 8
@@ -82,26 +95,12 @@ mytix/
 │
 └── src/                    # Full Java source code of your application
     ├── Main.java           # Entry point for the application
-    ├── database/           # JDBC connections and database utility classes
-    ├── operations/         # User, organizer, customer, and booking logic
+    ├── database/           # JDBC configuration and connection lifecycle
+    ├── operations/         # Future user, organizer, customer, and booking logic
     ├── queries/            # Q1–Q7 SQL search query implementations
-    └── reports/            # R1–R9 SQL report generators and text analysis
+    ├── reports/            # R1–R9 SQL report generators and text analysis
+    └── ui/                 # Persistent text-based terminal loop
 ```
-
-## Sample data targets
-
-The final bulk-load data must include at least:
-
-- 8 venues across 4 cities and 2 countries
-- 20 events, 5 organizers, 3 segments, 6 genres, and 15 artists
-- 60 past and upcoming performances
-- 2 price tiers per performance
-- 100 customers, 300 orders, and 800 tickets
-- Sold-out and below-25%-sold past performances
-- Reserved and general-admission availability, blocked seats, and consecutive-seat test cases
-- Customer and organizer cancellations
-- Sold, withdrawn, and active resale listings, including repeat transfers and cap-priced listings
-- Reviews for 10 events with multiple meaningful comments per event
 
 
 ## Required grading sequence
@@ -111,3 +110,13 @@ The finished project must work without manual intervention when the grader execu
 1. `sql/schema.sql`
 2. `sql/load.sql`
 3. `run.sh`
+
+### Run the Java foundation
+
+```sh
+sh run.sh
+```
+
+`run.sh` compiles every Java source file into `.build/classes`, adds `lib/mysql-connector-java-8.0.29.jar` to the Java classpath, and starts `Main`.
+
+The application connects to the local `mytix` database with the username `root` and an empty password. If the initial connection fails, the terminal starts in offline mode and option 10 can retry after MySQL becomes available.
