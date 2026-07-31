@@ -1,11 +1,14 @@
 package database;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 // Configuration: local mytix database with the username root and an empty password
 public final class DatabaseConfig {
-    private static final String DEFAULT_URL =
-            "jdbc:mysql://localhost:3306/mytix?serverTimezone=UTC&connectTimeout=5000";
-    private static final String DEFAULT_USER = "root";
-    private static final String DEFAULT_PASSWORD = "";
+
+    private static final String CONFIG_FILE = "config.properties";
 
     private final String url;
     private final String user;
@@ -18,10 +21,22 @@ public final class DatabaseConfig {
     }
 
     public static DatabaseConfig defaults() {
+        Properties properties = new Properties();
+
+        try (InputStream input = new FileInputStream(CONFIG_FILE)) {
+            properties.load(input);
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "Could not load config.properties. " +
+                    "Copy config.properties.example and update your database credentials.",
+                    exception
+            );
+        }
+
         return new DatabaseConfig(
-                DEFAULT_URL,
-                DEFAULT_USER,
-                DEFAULT_PASSWORD
+                properties.getProperty("db.url"),
+                properties.getProperty("db.user"),
+                properties.getProperty("db.password")
         );
     }
 
