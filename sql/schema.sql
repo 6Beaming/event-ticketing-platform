@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Creates all tables, keys, and constraints.
 -- Foreign key checks are disabled during creation so mutually dependent tables,
--- such as ResaleSale → ResaleListing → Tickets → ResaleSale
+-- such as Transactions → ResaleListing → Tickets → Transactions,
 -- can declare their relationships inline.
 -- ============================================================================
 
@@ -38,6 +38,7 @@ CREATE TABLE PaymentInfo (
     card_holder_name VARCHAR(150) NOT NULL,
     expiry_date     DATE NOT NULL,
     billing_zip     VARCHAR(20) NOT NULL,
+    UNIQUE (payment_info_id, customer_id),
     FOREIGN KEY (customer_id) REFERENCES Customer(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -229,25 +230,22 @@ CREATE TABLE Transactions (
     transaction_id   INT AUTO_INCREMENT PRIMARY KEY,
     customer_id      INT NOT NULL,
     payment_info_id  INT NOT NULL,
+    transaction_type ENUM('purchase','resale') NOT NULL,
+    performance_id   INT NULL,
+    listing_id       INT NULL,
     transaction_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (transaction_id, customer_id),
-    FOREIGN KEY (customer_id) REFERENCES Customer(user_id),
-    FOREIGN KEY (payment_info_id) REFERENCES PaymentInfo(payment_info_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE Purchase (
-    transaction_id   INT PRIMARY KEY,
-    performance_id   INT NOT NULL,
     UNIQUE (transaction_id, performance_id),
-    FOREIGN KEY (transaction_id) REFERENCES Transactions(transaction_id) ON DELETE CASCADE,
-    FOREIGN KEY (performance_id) REFERENCES Performance(performance_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE ResaleSale (
-    transaction_id   INT PRIMARY KEY,
-    listing_id       INT NOT NULL,
-    FOREIGN KEY (transaction_id) REFERENCES Transactions(transaction_id) ON DELETE CASCADE,
-    FOREIGN KEY (listing_id) REFERENCES ResaleListing(listing_id)
+    UNIQUE (listing_id),
+    FOREIGN KEY (customer_id) REFERENCES Customer(user_id),
+    FOREIGN KEY (payment_info_id, customer_id)
+        REFERENCES PaymentInfo(payment_info_id, customer_id),
+    FOREIGN KEY (performance_id) REFERENCES Performance(performance_id),
+    FOREIGN KEY (listing_id) REFERENCES ResaleListing(listing_id),
+    CHECK (
+        (transaction_type = 'purchase' AND performance_id IS NOT NULL AND listing_id IS NULL)
+        OR (transaction_type = 'resale' AND performance_id IS NULL AND listing_id IS NOT NULL)
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Tickets (
@@ -262,7 +260,7 @@ CREATE TABLE Tickets (
     cancelled_by          ENUM('customer','organizer') NULL,
     cancellation_reason   VARCHAR(255) NULL,
     FOREIGN KEY (purchase_id, performance_id)
-        REFERENCES Purchase(transaction_id, performance_id),
+        REFERENCES Transactions(transaction_id, performance_id),
     FOREIGN KEY (performance_seats_ref, performance_id)
         REFERENCES PerformanceSeats(performance_seat_id, performance_id),
     FOREIGN KEY (general_seats_ref, performance_id)
@@ -279,11 +277,15 @@ CREATE TABLE Tickets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE ResaleListing (
-    listing_id      INT AUTO_INCREMENT PRIMARY KEY,
-    ticket_id       INT NOT NULL,
-    listing_price   DECIMAL(10,2) NOT NULL,
-    status          ENUM('active','sold','withdrawn') NOT NULL DEFAULT 'active',
-    listed_date     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    listing_id       INT AUTO_INCREMENT PRIMARY KEY,
+    ticket_id        INT NOT NULL,
+    listing_price    DECIMAL(10,2) NOT NULL,
+    status           ENUM('active','sold','withdrawn') NOT NULL DEFAULT 'active',
+    listed_date      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    active_ticket_id INT GENERATED ALWAYS AS (
+        CASE WHEN status = 'active' THEN ticket_id ELSE NULL END
+    ) STORED,
+    UNIQUE (active_ticket_id),
     FOREIGN KEY (ticket_id) REFERENCES Tickets(ticket_id),
     CHECK (listing_price >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
