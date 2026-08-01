@@ -314,7 +314,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ============================================================================
 -- TRIGGERS (constraints that can't express as single-row CHECKs)
 -- cross-row uniqueness (seat double-sell), cross-table disjointness (Section subtype),
--- and cross-table comparisons (resale cap, GA capacity bookkeeping).
+-- and database-level protection against conflicting inventory records.
 -- ============================================================================
 
 DELIMITER $$
@@ -393,72 +393,6 @@ BEGIN
         IF v_conflict > 0 THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seat already sold for this performance';
         END IF;
-    END IF;
-END$$
-
--- ---------------------------------------------------------------------------
--- GA capacity bookkeeping: keep GeneralAdmissionCapacity.remaining_capacity in
--- sync with active Tickets automatically, rather than leaving it as an
--- independently-maintained counter that can drift.
--- ---------------------------------------------------------------------------
-
-CREATE TRIGGER trg_tickets_ga_capacity_ins
-BEFORE INSERT ON Tickets
-FOR EACH ROW
-BEGIN
-    DECLARE v_remaining INT;
-    IF NEW.general_seats_ref IS NOT NULL AND NEW.status <> 'cancelled' THEN
-        SELECT remaining_capacity INTO v_remaining FROM GeneralAdmissionCapacity
-            WHERE ga_capacity_id = NEW.general_seats_ref FOR UPDATE;
-        IF v_remaining <= 0 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No remaining GA capacity for this section';
-        END IF;
-        UPDATE GeneralAdmissionCapacity SET remaining_capacity = remaining_capacity - 1
-            WHERE ga_capacity_id = NEW.general_seats_ref;
-    END IF;
-END$$
-
-CREATE TRIGGER trg_tickets_ga_capacity_upd
-AFTER UPDATE ON Tickets
-FOR EACH ROW
-BEGIN
-    IF NEW.general_seats_ref IS NOT NULL AND OLD.status <> 'cancelled' AND NEW.status = 'cancelled' THEN
-        UPDATE GeneralAdmissionCapacity SET remaining_capacity = remaining_capacity + 1
-            WHERE ga_capacity_id = NEW.general_seats_ref;
-    ELSEIF NEW.general_seats_ref IS NOT NULL AND OLD.status = 'cancelled' AND NEW.status <> 'cancelled' THEN
-        UPDATE GeneralAdmissionCapacity SET remaining_capacity = remaining_capacity - 1
-            WHERE ga_capacity_id = NEW.general_seats_ref;
-    END IF;
-END$$
-
--- ---------------------------------------------------------------------------
--- Resale cap validation: listing_price must not exceed the resold ticket's
--- face_value * the parent Event's resale_cap_pct. Traced through whichever
--- seat path (reserved or GA) the ticket used, up to Performance -> Event.
--- ---------------------------------------------------------------------------
-
-CREATE TRIGGER trg_resalelisting_cap_ins
-BEFORE INSERT ON ResaleListing
-FOR EACH ROW
-BEGIN
-    DECLARE v_face DECIMAL(10,2);
-    DECLARE v_cap DECIMAL(4,2);
-    DECLARE v_perf INT;
-
-    SELECT face_value,
-           COALESCE(
-               (SELECT performance_id FROM PerformanceSeats WHERE performance_seat_id = t.performance_seats_ref),
-               (SELECT performance_id FROM GeneralAdmissionCapacity WHERE ga_capacity_id = t.general_seats_ref)
-           )
-      INTO v_face, v_perf
-      FROM Tickets t WHERE t.ticket_id = NEW.ticket_id;
-
-    SELECT e.resale_cap_pct INTO v_cap
-      FROM Performance p JOIN Event e ON e.event_id = p.event_id
-      WHERE p.performance_id = v_perf;
-
-    IF NEW.listing_price > v_face * v_cap THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Listing price exceeds the event resale cap';
     END IF;
 END$$
 

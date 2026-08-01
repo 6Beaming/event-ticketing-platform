@@ -3,9 +3,6 @@
 -- Cleanly drops everything created by schema.sql, in reverse dependency order.
 -- ============================================================================
 
-DROP TRIGGER IF EXISTS trg_resalelisting_cap_ins;
-DROP TRIGGER IF EXISTS trg_tickets_ga_capacity_upd;
-DROP TRIGGER IF EXISTS trg_tickets_ga_capacity_ins;
 DROP TRIGGER IF EXISTS trg_tickets_no_double_sell_upd;
 DROP TRIGGER IF EXISTS trg_tickets_no_double_sell_ins;
 DROP TRIGGER IF EXISTS trg_generalseating_disjoint;
