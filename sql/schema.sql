@@ -195,6 +195,7 @@ CREATE TABLE GeneralAdmissionCapacity (
     section_name        VARCHAR(100) NOT NULL,
     remaining_capacity  INT NOT NULL,
     PRIMARY KEY (performance_id, venue_id, section_name),
+    UNIQUE (ga_capacity_id, performance_id),
     FOREIGN KEY (performance_id, venue_id) REFERENCES Performance(performance_id, venue_id),
     FOREIGN KEY (venue_id, section_name) REFERENCES GeneralSeating(venue_id, section_name),
     CHECK (remaining_capacity >= 0)
@@ -213,6 +214,7 @@ CREATE TABLE PerformanceSeats (
     seat_number           INT NOT NULL,
     blocked_status         BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (performance_id, venue_id, section_name, row_name, seat_number),
+    UNIQUE (performance_seat_id, performance_id),
     FOREIGN KEY (performance_id, venue_id) REFERENCES Performance(performance_id, venue_id),
     FOREIGN KEY (venue_id, section_name, row_name, seat_number)
         REFERENCES Seats(venue_id, section_name, row_name, seat_number)
@@ -235,6 +237,7 @@ CREATE TABLE Transactions (
 CREATE TABLE Purchase (
     transaction_id   INT PRIMARY KEY,
     performance_id   INT NOT NULL,
+    UNIQUE (transaction_id, performance_id),
     FOREIGN KEY (transaction_id) REFERENCES Transactions(transaction_id) ON DELETE CASCADE,
     FOREIGN KEY (performance_id) REFERENCES Performance(performance_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -250,6 +253,7 @@ CREATE TABLE Tickets (
     ticket_id             INT AUTO_INCREMENT PRIMARY KEY,
     purchase_id           INT NULL,
     resale_sale_id        INT NULL,
+    performance_id        INT NOT NULL,
     performance_seats_ref INT NULL,
     general_seats_ref     INT NULL,
     face_value            DECIMAL(10,2) NOT NULL,
@@ -258,10 +262,13 @@ CREATE TABLE Tickets (
     cancellation_date     DATETIME NULL,
     cancelled_by          ENUM('customer','organizer') NULL,
     cancellation_reason   VARCHAR(255) NULL,
-    FOREIGN KEY (purchase_id) REFERENCES Purchase(transaction_id),
+    FOREIGN KEY (purchase_id, performance_id)
+        REFERENCES Purchase(transaction_id, performance_id),
     FOREIGN KEY (resale_sale_id) REFERENCES ResaleSale(transaction_id),
-    FOREIGN KEY (performance_seats_ref) REFERENCES PerformanceSeats(performance_seat_id),
-    FOREIGN KEY (general_seats_ref) REFERENCES GeneralAdmissionCapacity(ga_capacity_id),
+    FOREIGN KEY (performance_seats_ref, performance_id)
+        REFERENCES PerformanceSeats(performance_seat_id, performance_id),
+    FOREIGN KEY (general_seats_ref, performance_id)
+        REFERENCES GeneralAdmissionCapacity(ga_capacity_id, performance_id),
     CHECK (
         (purchase_id IS NOT NULL AND resale_sale_id IS NULL)
         OR (purchase_id IS NULL AND resale_sale_id IS NOT NULL)
