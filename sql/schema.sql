@@ -252,9 +252,6 @@ CREATE TABLE Tickets (
     general_seats_ref     INT NULL,
     face_value            DECIMAL(10,2) NOT NULL,
     status                ENUM('active','cancelled') NOT NULL DEFAULT 'active',
-    cancellation_date     DATETIME NULL,
-    cancelled_by          ENUM('customer','organizer') NULL,
-    cancellation_reason   VARCHAR(255) NULL,
     active_reserved_seat_ref INT GENERATED ALWAYS AS (
         CASE WHEN status = 'active' THEN performance_seats_ref ELSE NULL END
     ) STORED,
@@ -268,10 +265,6 @@ CREATE TABLE Tickets (
     CHECK (
         (performance_seats_ref IS NOT NULL AND general_seats_ref IS NULL)
         OR (performance_seats_ref IS NULL AND general_seats_ref IS NOT NULL)
-    ),
-    CHECK (
-        (status = 'cancelled' AND cancellation_date IS NOT NULL AND cancelled_by IS NOT NULL)
-        OR (status <> 'cancelled' AND cancellation_date IS NULL AND cancelled_by IS NULL)
     ),
     CHECK (face_value >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -304,11 +297,37 @@ CREATE TABLE TicketOwnership (
         CASE WHEN ended_at IS NULL THEN ticket_id ELSE NULL END
     ) STORED,
     UNIQUE (ticket_id, acquired_transaction_id),
+    UNIQUE (ownership_id, ticket_id),
     UNIQUE (current_ticket_id),
     FOREIGN KEY (ticket_id) REFERENCES Tickets(ticket_id),
     FOREIGN KEY (acquired_transaction_id, customer_id)
         REFERENCES Transactions(transaction_id, customer_id),
     CHECK (ended_at IS NULL OR ended_at >= acquired_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE TicketCancellation (
+    cancellation_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ticket_id            INT NOT NULL,
+    ownership_id         BIGINT NOT NULL,
+    cancelled_by_user_id INT NOT NULL,
+    cancellation_date    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reason               VARCHAR(255) NULL,
+    UNIQUE (ticket_id),
+    UNIQUE (ownership_id),
+    FOREIGN KEY (ownership_id, ticket_id)
+        REFERENCES TicketOwnership(ownership_id, ticket_id),
+    FOREIGN KEY (cancelled_by_user_id) REFERENCES Users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE Refund (
+    refund_id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cancellation_id BIGINT NOT NULL,
+    amount          DECIMAL(10,2) NOT NULL,
+    refund_date     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (cancellation_id),
+    FOREIGN KEY (cancellation_id)
+        REFERENCES TicketCancellation(cancellation_id),
+    CHECK (amount >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Reviews (
