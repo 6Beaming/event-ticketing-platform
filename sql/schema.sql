@@ -1,14 +1,12 @@
 -- ============================================================================
--- MyTix — schema.sql
--- Single-execution DDL for MySQL 8. Creates all tables, keys, and constraints.
--- Table order follows FK dependency order (see Part 4 of relational_schema_
--- normalized.md), except ResaleSale <-> ResaleListing, which are mutually
--- dependent: ResaleSale.listing_id's FK is added via ALTER TABLE at the end,
--- after ResaleListing exists.
+-- Creates all tables, keys, and constraints.
+-- Foreign key checks are disabled during creation so mutually dependent tables,
+-- such as ResaleSale → ResaleListing → Tickets → ResaleSale
+-- can declare their relationships inline.
 -- ============================================================================
 
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
+SET FOREIGN_KEY_CHECKS = 0; 
 
 -- ============================================================================
 -- CLUSTER 1: Users
@@ -243,8 +241,9 @@ CREATE TABLE Purchase (
 
 CREATE TABLE ResaleSale (
     transaction_id   INT PRIMARY KEY,
-    listing_id       INT NOT NULL,   -- FK added via ALTER TABLE after ResaleListing exists
-    FOREIGN KEY (transaction_id) REFERENCES Transactions(transaction_id) ON DELETE CASCADE
+    listing_id       INT NOT NULL,
+    FOREIGN KEY (transaction_id) REFERENCES Transactions(transaction_id) ON DELETE CASCADE,
+    FOREIGN KEY (listing_id) REFERENCES ResaleListing(listing_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Tickets (
@@ -289,10 +288,6 @@ CREATE TABLE ResaleListing (
     CHECK (listing_price >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Close the ResaleSale <-> ResaleListing cycle now that both tables exist.
-ALTER TABLE ResaleSale
-    ADD FOREIGN KEY (listing_id) REFERENCES ResaleListing(listing_id);
-
 CREATE TABLE Reviews (
     customer_id     INT NOT NULL,
     performance_id  INT NOT NULL,
@@ -310,9 +305,8 @@ CREATE TABLE Reviews (
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================================
--- TRIGGERS
--- Enforce the constraints MySQL 8 can't express as single-row CHECKs: cross-row
--- uniqueness (seat double-sell), cross-table disjointness (Section subtype),
+-- TRIGGERS (constraints that can't express as single-row CHECKs)
+-- cross-row uniqueness (seat double-sell), cross-table disjointness (Section subtype),
 -- and cross-table comparisons (resale cap, GA capacity bookkeeping).
 -- ============================================================================
 
@@ -361,8 +355,7 @@ END$$
 
 -- ---------------------------------------------------------------------------
 -- Seat double-sell prevention: at most one non-cancelled ticket per
--- performance_seats_ref at any time. Replaces a partial/filtered unique index,
--- which MySQL 8 does not support natively.
+-- performance_seats_ref at any time. Replaces a partial/filtered unique index.
 -- ---------------------------------------------------------------------------
 
 CREATE TRIGGER trg_tickets_no_double_sell_ins
@@ -399,8 +392,7 @@ END$$
 -- ---------------------------------------------------------------------------
 -- GA capacity bookkeeping: keep GeneralAdmissionCapacity.remaining_capacity in
 -- sync with active Tickets automatically, rather than leaving it as an
--- independently-maintained counter that can drift (the open item flagged in
--- Part 6/7 of the design doc).
+-- independently-maintained counter that can drift.
 -- ---------------------------------------------------------------------------
 
 CREATE TRIGGER trg_tickets_ga_capacity_ins
