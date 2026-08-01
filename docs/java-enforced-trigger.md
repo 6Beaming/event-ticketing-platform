@@ -39,6 +39,7 @@ event resale cap. The Java listing transaction must instead:
 4. Reject a listing price above `face_value * resale_cap_pct`.
 5. Insert the listing and commit only when every check succeeds.
 
-The section-subtype and reserved-seat double-sale triggers remain in the schema
-because they provide database-level integrity protection against conflicting
-records and concurrent writes.
+The reserved-seat double-sale triggers remain in the schema because they provide
+database-level integrity protection against conflicting records and concurrent
+writes. Section subtypes are enforced declaratively by `Section` checks and
+typed foreign keys.

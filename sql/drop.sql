@@ -5,8 +5,6 @@
 
 DROP TRIGGER IF EXISTS trg_tickets_no_double_sell_upd;
 DROP TRIGGER IF EXISTS trg_tickets_no_double_sell_ins;
-DROP TRIGGER IF EXISTS trg_generalseating_disjoint;
-DROP TRIGGER IF EXISTS trg_reservedsection_disjoint;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -22,8 +20,6 @@ DROP TABLE IF EXISTS PriceTier;
 DROP TABLE IF EXISTS Performance;
 DROP TABLE IF EXISTS Seats;
 DROP TABLE IF EXISTS SeatRows;
-DROP TABLE IF EXISTS GeneralSeating;
-DROP TABLE IF EXISTS ReservedSection;
 DROP TABLE IF EXISTS Section;
 DROP TABLE IF EXISTS Venue;
 DROP TABLE IF EXISTS BillingOrder;

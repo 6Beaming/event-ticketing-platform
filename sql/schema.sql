@@ -104,38 +104,28 @@ CREATE TABLE Venue (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Section (
-    venue_id        INT NOT NULL,
-    section_name    VARCHAR(100) NOT NULL,
-    section_type    ENUM('reserved','general') NOT NULL,
+    venue_id          INT NOT NULL,
+    section_name      VARCHAR(100) NOT NULL,
+    section_type      ENUM('reserved','general') NOT NULL,
+    standing_capacity INT NULL,
     PRIMARY KEY (venue_id, section_name),
-    FOREIGN KEY (venue_id) REFERENCES Venue(venue_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- section_type disjointness (a section is reserved XOR general) is enforced by
--- the trg_reservedsection_disjoint / trg_generalseating_disjoint triggers below.
-
-CREATE TABLE ReservedSection (
-    venue_id        INT NOT NULL,
-    section_name    VARCHAR(100) NOT NULL,
-    PRIMARY KEY (venue_id, section_name),
-    FOREIGN KEY (venue_id, section_name) REFERENCES Section(venue_id, section_name) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE GeneralSeating (
-    venue_id            INT NOT NULL,
-    section_name        VARCHAR(100) NOT NULL,
-    standing_capacity   INT NOT NULL,
-    PRIMARY KEY (venue_id, section_name),
-    FOREIGN KEY (venue_id, section_name) REFERENCES Section(venue_id, section_name) ON DELETE CASCADE,
-    CHECK (standing_capacity > 0)
+    UNIQUE (venue_id, section_name, section_type),
+    FOREIGN KEY (venue_id) REFERENCES Venue(venue_id) ON DELETE CASCADE,
+    CHECK (
+        (section_type = 'reserved' AND standing_capacity IS NULL)
+        OR (section_type = 'general' AND standing_capacity > 0)
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE SeatRows (
     venue_id        INT NOT NULL,
     section_name    VARCHAR(100) NOT NULL,
+    section_type    ENUM('reserved','general') NOT NULL DEFAULT 'reserved',
     row_name        VARCHAR(20) NOT NULL,
     PRIMARY KEY (venue_id, section_name, row_name),
-    FOREIGN KEY (venue_id, section_name) REFERENCES ReservedSection(venue_id, section_name) ON DELETE CASCADE
+    FOREIGN KEY (venue_id, section_name, section_type)
+        REFERENCES Section(venue_id, section_name, section_type) ON DELETE CASCADE,
+    CHECK (section_type = 'reserved')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Seats (
@@ -194,11 +184,14 @@ CREATE TABLE GeneralAdmissionCapacity (
     performance_id      INT NOT NULL,
     venue_id            INT NOT NULL,
     section_name        VARCHAR(100) NOT NULL,
+    section_type        ENUM('reserved','general') NOT NULL DEFAULT 'general',
     remaining_capacity  INT NOT NULL,
     PRIMARY KEY (performance_id, venue_id, section_name),
     UNIQUE (ga_capacity_id, performance_id),
     FOREIGN KEY (performance_id, venue_id) REFERENCES Performance(performance_id, venue_id),
-    FOREIGN KEY (venue_id, section_name) REFERENCES GeneralSeating(venue_id, section_name),
+    FOREIGN KEY (venue_id, section_name, section_type)
+        REFERENCES Section(venue_id, section_name, section_type),
+    CHECK (section_type = 'general'),
     CHECK (remaining_capacity >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- ga_capacity_id: surrogate key added purely so Tickets can hold a single-column
@@ -329,52 +322,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================================
 -- TRIGGERS (constraints that can't express as single-row CHECKs)
--- cross-row uniqueness (seat double-sell), cross-table disjointness (Section subtype),
--- and database-level protection against conflicting inventory records.
+-- Database-level protection against conflicting reserved-seat allocations.
 -- ============================================================================
 
 DELIMITER $$
-
--- ---------------------------------------------------------------------------
--- Section subtype disjointness: a (venue_id, section_name) may have a row in
--- ReservedSection OR GeneralSeating, never both, and must match Section.section_type.
--- ---------------------------------------------------------------------------
-
-CREATE TRIGGER trg_reservedsection_disjoint
-BEFORE INSERT ON ReservedSection
-FOR EACH ROW
-BEGIN
-    DECLARE v_type VARCHAR(20);
-    DECLARE v_conflict INT;
-    SELECT section_type INTO v_type FROM Section
-        WHERE venue_id = NEW.venue_id AND section_name = NEW.section_name;
-    IF v_type IS NULL OR v_type <> 'reserved' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Section.section_type must be reserved for a ReservedSection row';
-    END IF;
-    SELECT COUNT(*) INTO v_conflict FROM GeneralSeating
-        WHERE venue_id = NEW.venue_id AND section_name = NEW.section_name;
-    IF v_conflict > 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Section already has a GeneralSeating row: cannot also be reserved';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_generalseating_disjoint
-BEFORE INSERT ON GeneralSeating
-FOR EACH ROW
-BEGIN
-    DECLARE v_type VARCHAR(20);
-    DECLARE v_conflict INT;
-    SELECT section_type INTO v_type FROM Section
-        WHERE venue_id = NEW.venue_id AND section_name = NEW.section_name;
-    IF v_type IS NULL OR v_type <> 'general' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Section.section_type must be general for a GeneralSeating row';
-    END IF;
-    SELECT COUNT(*) INTO v_conflict FROM ReservedSection
-        WHERE venue_id = NEW.venue_id AND section_name = NEW.section_name;
-    IF v_conflict > 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Section already has a ReservedSection row: cannot also be general';
-    END IF;
-END$$
 
 -- ---------------------------------------------------------------------------
 -- Seat double-sell prevention: at most one non-cancelled ticket per
