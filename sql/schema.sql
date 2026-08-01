@@ -230,6 +230,7 @@ CREATE TABLE Transactions (
     customer_id      INT NOT NULL,
     payment_info_id  INT NOT NULL,
     transaction_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (transaction_id, customer_id),
     FOREIGN KEY (customer_id) REFERENCES Customer(user_id),
     FOREIGN KEY (payment_info_id) REFERENCES PaymentInfo(payment_info_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -251,28 +252,21 @@ CREATE TABLE ResaleSale (
 
 CREATE TABLE Tickets (
     ticket_id             INT AUTO_INCREMENT PRIMARY KEY,
-    purchase_id           INT NULL,
-    resale_sale_id        INT NULL,
+    purchase_id           INT NOT NULL,
     performance_id        INT NOT NULL,
     performance_seats_ref INT NULL,
     general_seats_ref     INT NULL,
     face_value            DECIMAL(10,2) NOT NULL,
-    resold_count          INT NOT NULL DEFAULT 0,
-    status                ENUM('active','resold','cancelled') NOT NULL DEFAULT 'active',
+    status                ENUM('active','cancelled') NOT NULL DEFAULT 'active',
     cancellation_date     DATETIME NULL,
     cancelled_by          ENUM('customer','organizer') NULL,
     cancellation_reason   VARCHAR(255) NULL,
     FOREIGN KEY (purchase_id, performance_id)
         REFERENCES Purchase(transaction_id, performance_id),
-    FOREIGN KEY (resale_sale_id) REFERENCES ResaleSale(transaction_id),
     FOREIGN KEY (performance_seats_ref, performance_id)
         REFERENCES PerformanceSeats(performance_seat_id, performance_id),
     FOREIGN KEY (general_seats_ref, performance_id)
         REFERENCES GeneralAdmissionCapacity(ga_capacity_id, performance_id),
-    CHECK (
-        (purchase_id IS NOT NULL AND resale_sale_id IS NULL)
-        OR (purchase_id IS NULL AND resale_sale_id IS NOT NULL)
-    ),
     CHECK (
         (performance_seats_ref IS NOT NULL AND general_seats_ref IS NULL)
         OR (performance_seats_ref IS NULL AND general_seats_ref IS NOT NULL)
@@ -281,7 +275,6 @@ CREATE TABLE Tickets (
         (status = 'cancelled' AND cancellation_date IS NOT NULL AND cancelled_by IS NOT NULL)
         OR (status <> 'cancelled' AND cancellation_date IS NULL AND cancelled_by IS NULL)
     ),
-    CHECK (resold_count >= 0),
     CHECK (face_value >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -293,6 +286,27 @@ CREATE TABLE ResaleListing (
     listed_date     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ticket_id) REFERENCES Tickets(ticket_id),
     CHECK (listing_price >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Each ticket keeps one stable identity. Ownership transfers close the current
+-- history row and append a new row for the acquiring customer's transaction.
+
+CREATE TABLE TicketOwnership (
+    ownership_id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ticket_id               INT NOT NULL,
+    customer_id             INT NOT NULL,
+    acquired_transaction_id INT NOT NULL,
+    acquired_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at                DATETIME NULL,
+    current_ticket_id       INT GENERATED ALWAYS AS (
+        CASE WHEN ended_at IS NULL THEN ticket_id ELSE NULL END
+    ) STORED,
+    UNIQUE (ticket_id, acquired_transaction_id),
+    UNIQUE (current_ticket_id),
+    FOREIGN KEY (ticket_id) REFERENCES Tickets(ticket_id),
+    FOREIGN KEY (acquired_transaction_id, customer_id)
+        REFERENCES Transactions(transaction_id, customer_id),
+    CHECK (ended_at IS NULL OR ended_at >= acquired_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Reviews (
