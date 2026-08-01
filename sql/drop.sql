@@ -3,9 +3,6 @@
 -- Cleanly drops everything created by schema.sql, in reverse dependency order.
 -- ============================================================================
 
-DROP TRIGGER IF EXISTS trg_tickets_no_double_sell_upd;
-DROP TRIGGER IF EXISTS trg_tickets_no_double_sell_ins;
-
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS Reviews;

@@ -83,6 +83,7 @@ CREATE TABLE BillingOrder (
     artist_id       INT NOT NULL,
     billing_rank    INT NOT NULL,
     PRIMARY KEY (event_id, artist_id),
+    UNIQUE (event_id, billing_rank),
     FOREIGN KEY (event_id) REFERENCES Event(event_id) ON DELETE CASCADE,
     FOREIGN KEY (artist_id) REFERENCES ArtistsTeams(artist_id),
     CHECK (billing_rank > 0)
@@ -110,6 +111,7 @@ CREATE TABLE Section (
     standing_capacity INT NULL,
     PRIMARY KEY (venue_id, section_name),
     UNIQUE (venue_id, section_name, section_type),
+    UNIQUE (venue_id, section_name, section_type, standing_capacity),
     FOREIGN KEY (venue_id) REFERENCES Venue(venue_id) ON DELETE CASCADE,
     CHECK (
         (section_type = 'reserved' AND standing_capacity IS NULL)
@@ -185,14 +187,15 @@ CREATE TABLE GeneralAdmissionCapacity (
     venue_id            INT NOT NULL,
     section_name        VARCHAR(100) NOT NULL,
     section_type        ENUM('reserved','general') NOT NULL DEFAULT 'general',
+    total_capacity      INT NOT NULL,
     remaining_capacity  INT NOT NULL,
     PRIMARY KEY (performance_id, venue_id, section_name),
     UNIQUE (ga_capacity_id, performance_id),
     FOREIGN KEY (performance_id, venue_id) REFERENCES Performance(performance_id, venue_id),
-    FOREIGN KEY (venue_id, section_name, section_type)
-        REFERENCES Section(venue_id, section_name, section_type),
+    FOREIGN KEY (venue_id, section_name, section_type, total_capacity)
+        REFERENCES Section(venue_id, section_name, section_type, standing_capacity),
     CHECK (section_type = 'general'),
-    CHECK (remaining_capacity >= 0)
+    CHECK (remaining_capacity BETWEEN 0 AND total_capacity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- ga_capacity_id: surrogate key added purely so Tickets can hold a single-column
 -- FK (general_seats_ref) instead of a 3-column composite; the natural composite
@@ -252,6 +255,10 @@ CREATE TABLE Tickets (
     cancellation_date     DATETIME NULL,
     cancelled_by          ENUM('customer','organizer') NULL,
     cancellation_reason   VARCHAR(255) NULL,
+    active_reserved_seat_ref INT GENERATED ALWAYS AS (
+        CASE WHEN status = 'active' THEN performance_seats_ref ELSE NULL END
+    ) STORED,
+    UNIQUE (active_reserved_seat_ref),
     FOREIGN KEY (purchase_id, performance_id)
         REFERENCES Transactions(transaction_id, performance_id),
     FOREIGN KEY (performance_seats_ref, performance_id)
@@ -319,48 +326,3 @@ CREATE TABLE Reviews (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
-
--- ============================================================================
--- TRIGGERS (constraints that can't express as single-row CHECKs)
--- Database-level protection against conflicting reserved-seat allocations.
--- ============================================================================
-
-DELIMITER $$
-
--- ---------------------------------------------------------------------------
--- Seat double-sell prevention: at most one non-cancelled ticket per
--- performance_seats_ref at any time. Replaces a partial/filtered unique index.
--- ---------------------------------------------------------------------------
-
-CREATE TRIGGER trg_tickets_no_double_sell_ins
-BEFORE INSERT ON Tickets
-FOR EACH ROW
-BEGIN
-    DECLARE v_conflict INT;
-    IF NEW.performance_seats_ref IS NOT NULL AND NEW.status <> 'cancelled' THEN
-        SELECT COUNT(*) INTO v_conflict FROM Tickets
-            WHERE performance_seats_ref = NEW.performance_seats_ref
-              AND status <> 'cancelled';
-        IF v_conflict > 0 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seat already sold for this performance';
-        END IF;
-    END IF;
-END$$
-
-CREATE TRIGGER trg_tickets_no_double_sell_upd
-BEFORE UPDATE ON Tickets
-FOR EACH ROW
-BEGIN
-    DECLARE v_conflict INT;
-    IF NEW.performance_seats_ref IS NOT NULL AND NEW.status <> 'cancelled' THEN
-        SELECT COUNT(*) INTO v_conflict FROM Tickets
-            WHERE performance_seats_ref = NEW.performance_seats_ref
-              AND status <> 'cancelled'
-              AND ticket_id <> OLD.ticket_id;
-        IF v_conflict > 0 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seat already sold for this performance';
-        END IF;
-    END IF;
-END$$
-
-DELIMITER ;
