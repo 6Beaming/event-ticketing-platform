@@ -54,3 +54,18 @@ means optional; `PK`, `FK`, and `UQ` identify primary, foreign, and unique keys.
 | `TicketCancellation` | `cancellation_id BIGINT NN AUTO_INCREMENT`; `ticket_id INT NN`; `ownership_id BIGINT NN`; `cancelled_by_user_id INT NN`; `cancellation_date DATETIME NN`; `reason VARCHAR(255) NULL` | PK `cancellation_id`; UQ `ticket_id`, `ownership_id`; FKs to the matching ownership/ticket and cancelling user |
 | `Refund` | `refund_id BIGINT NN AUTO_INCREMENT`; `cancellation_id BIGINT NN`; `amount DECIMAL(10,2) NN`; `refund_date DATETIME NN` | PK `refund_id`; UQ `cancellation_id`; FK to `TicketCancellation`; nonnegative amount |
 | `Reviews` | `customer_id INT NN`; `performance_id INT NN`; `comment_text TEXT NULL`; `event_rating TINYINT NN`; `venue_rating TINYINT NN`; `review_date DATETIME NN` | PK `(customer_id,performance_id)`; FKs to `Customer` and `Performance`; both ratings from 1 through 5 |
+
+## Index review
+
+- Location and date searches use `Venue` indexes for coordinates, postal code,
+  city, and address together with `Performance(status,date_time,venue_id)`.
+- Availability uses `Tickets(performance_id,status,tier_code)`, the unique
+  active reserved-seat reference, performance-seat keys, and GA capacity keys.
+- Ownership and resale use the unique current-ownership/current-listing keys
+  and `ResaleListing(status,listed_date)`.
+- Time-period customer reports use
+  `Transactions(transaction_date,customer_id)`; MySQL also creates supporting
+  indexes for declared foreign keys when an equivalent index does not exist.
+- Before the August 4-6 report work, review `EXPLAIN` output for cancellation
+  date/actor and ownership customer/date filters. Add report-specific indexes
+  only when the real SQL demonstrates they are needed.

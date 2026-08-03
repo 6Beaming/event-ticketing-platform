@@ -76,98 +76,98 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member A
 
-- [ ] **Map the database tables used by transaction features.** Cover users, customers, payments, orders, tickets, inventory, cancellations, refunds, resale, and ownership history.
-  - [ ] Record the table, key, and status columns each operation will use.
-  - [ ] Identify the records that must already exist before inserting orders, tickets, cancellations, listings, or ownership history.
-  - [ ] Identify which inventory, ticket, listing, and ownership rows require `SELECT ... FOR UPDATE`.
-- [ ] **Build the shared JDBC transaction helper.**
-  - [ ] Use the active connection from `DatabaseConnection`.
-  - [ ] Turn off auto-commit before an operation with several database changes.
-  - [ ] Commit only when every change succeeds.
-  - [ ] Roll back when validation or SQL fails, then restore the previous auto-commit setting.
-  - [ ] Show clear terminal errors without exposing passwords or raw stack traces.
-- [ ] **Agree on one result format for all operations.**
-  - [ ] Handle success, invalid input, not found, no permission, and database failure consistently.
-  - [ ] Return a clear message plus any IDs or rows the terminal needs to display.
-- [ ] **Build customer profile operations and terminal screens.**
-  - [ ] Collect name, address, email, date of birth, and fictional card/payment information.
-  - [ ] Check required fields and confirm the customer is at least 18.
-  - [ ] Save the user, customer, and payment records in one transaction.
-  - [ ] Retrieve a customer profile without displaying a full card number.
-  - [ ] Follow the agreed delete/deactivate rule without losing purchase history.
-- [ ] **Build reusable inventory lookups.**
-  - [ ] For reserved seating, return section, row, seat number, tier, price, and available/sold/blocked status for one performance.
-  - [ ] For general admission, return tier, price, total capacity, sold quantity, and remaining capacity.
-  - [ ] Exclude cancelled performances from saleable results.
-- [ ] **Check the foundation with known examples.**
-  - [ ] Successful and rejected customer creation
-  - [ ] Under-18 profiles
-  - [ ] Commit and rollback behavior
-  - [ ] Reserved and general-admission availability calculations
-- [ ] **Add repeatable transaction data for development.**
-  - [ ] Create stable customer, payment, order, ticket, cancellation, listing, and ownership IDs.
-  - [ ] Add one known reserved order and one known general-admission order for early transaction checks.
-  - [ ] Coordinate foreign keys and generation order with Member B’s venue/event/performance records.
+- [x] **Map the database tables used by transaction features.** Cover users, customers, payments, orders, tickets, inventory, cancellations, refunds, resale, and ownership history.
+  - [x] Record the table, key, and status columns each operation will use.
+  - [x] Identify the records that must already exist before inserting orders, tickets, cancellations, listings, or ownership history.
+  - [x] Identify which inventory, ticket, listing, and ownership rows require `SELECT ... FOR UPDATE`.
+- [x] **Build the shared JDBC transaction helper.**
+  - [x] Use the active connection from `DatabaseConnection`.
+  - [x] Turn off auto-commit before an operation with several database changes.
+  - [x] Commit only when every change succeeds.
+  - [x] Roll back when validation or SQL fails, then restore the previous auto-commit setting.
+  - [x] Show clear terminal errors without exposing passwords or raw stack traces.
+- [x] **Agree on one result format for all operations.**
+  - [x] Handle success, invalid input, not found, no permission, and database failure consistently.
+  - [x] Return a clear message plus any IDs or rows the terminal needs to display.
+- [x] **Build customer profile operations and terminal screens.**
+  - [x] Collect name, address, email, date of birth, and fictional card/payment information.
+  - [x] Check required fields and confirm the customer is at least 18.
+  - [x] Save the user, customer, and payment records in one transaction.
+  - [x] Retrieve a customer profile without displaying a full card number.
+  - [x] Follow the agreed delete/deactivate rule without losing purchase history.
+- [x] **Build reusable inventory lookups.**
+  - [x] For reserved seating, return section, row, seat number, tier, price, and available/sold/blocked status for one performance.
+  - [x] For general admission, return tier, price, total capacity, sold quantity, and remaining capacity.
+  - [x] Exclude cancelled performances from saleable results.
+- [x] **Check the foundation with known examples.**
+  - [x] Successful and rejected customer creation
+  - [x] Under-18 profiles
+  - [x] Commit and rollback behavior
+  - [x] Reserved and general-admission availability calculations
+- [x] **Add repeatable transaction data for development.**
+  - [x] Create stable customer, payment, order, ticket, cancellation, listing, and ownership IDs.
+  - [x] Add one known reserved order and one known general-admission order for early transaction checks.
+  - [x] Coordinate foreign keys and generation order with Member B’s venue/event/performance records.
 
 ### Member B
 
-- [ ] **Map the database tables used by organizer and discovery features.** Cover venues, seating, organizers, events, artists, performances, pricing, blocked seats, taxonomy, and reviews.
-  - [ ] Record each table’s primary key, foreign keys, and status columns.
-  - [ ] Confirm how reserved and general-admission sections are distinguished.
-  - [ ] Confirm how a tier is tied to its performance and how every performance section is assigned once.
-- [ ] **Create the shared data dictionary.**
-  - [ ] List column types, required/optional fields, unique rules, indexes, and allowed statuses.
-  - [ ] Note the indexes needed for location/date searches, availability, ownership, reports, and date ranges.
-  - [ ] Record any schema correction that both members approve.
-- [ ] **Build the repeatable sample-data generator foundation.**
-  - [ ] Use fixed IDs or a fixed seed so both members can use the same records.
-  - [ ] Generate data in foreign-key-safe order.
-  - [ ] Produce files or statements that `sql/load.sql` can load without manual edits.
-  - [ ] Add the venue, event, performance, tier, and inventory portion of the development dataset, including reserved/general-admission sections and future/past performances.
-  - [ ] Integrate Member A’s customer, order, ticket, and ownership records into the same deterministic dataset.
-- [ ] **Build organizer profile operations and terminal screens.**
-  - [ ] Collect the required user fields and organizer information.
-  - [ ] Check age and required fields.
-  - [ ] Save the user and organizer records in one transaction.
-  - [ ] Follow the agreed delete/deactivate rule without losing event history.
-- [ ] **Build the first event and performance setup operations.**
-  - [ ] Create an event for the selected organizer.
-  - [ ] Require a valid Ticketmaster segment and genre.
-  - [ ] Store the resale-cap value.
-  - [ ] Add one or more artists/teams with explicit billing order.
-  - [ ] Add a performance with venue, date, and time.
-- [ ] **Start performance pricing.**
-  - [ ] Create at least two named price tiers with positive prices.
-  - [ ] Load every section belonging to the performance venue.
-  - [ ] Begin assigning each section to exactly one tier for that performance.
-- [ ] **Check the foundation with known examples.**
-  - [ ] Organizer and event creation
-  - [ ] Invalid taxonomy or venue IDs
-  - [ ] Duplicate artist billing order
-  - [ ] Missing or duplicate section-to-tier assignments
+- [x] **Map the database tables used by organizer and discovery features.** Cover venues, seating, organizers, events, artists, performances, pricing, blocked seats, taxonomy, and reviews.
+  - [x] Record each table’s primary key, foreign keys, and status columns.
+  - [x] Confirm how reserved and general-admission sections are distinguished.
+  - [x] Confirm how a tier is tied to its performance and how every performance section is assigned once.
+- [x] **Create the shared data dictionary.**
+  - [x] List column types, required/optional fields, unique rules, indexes, and allowed statuses.
+  - [x] Note the indexes needed for location/date searches, availability, ownership, reports, and date ranges.
+  - [x] Record any schema correction that both members approve.
+- [x] **Build the repeatable sample-data generator foundation.**
+  - [x] Use fixed IDs or a fixed seed so both members can use the same records.
+  - [x] Generate data in foreign-key-safe order.
+  - [x] Produce files or statements that `sql/load.sql` can load without manual edits.
+  - [x] Add the venue, event, performance, tier, and inventory portion of the development dataset, including reserved/general-admission sections and future/past performances.
+  - [x] Integrate Member A’s customer, order, ticket, and ownership records into the same deterministic dataset.
+- [x] **Build organizer profile operations and terminal screens.**
+  - [x] Collect the required user fields and organizer information.
+  - [x] Check age and required fields.
+  - [x] Save the user and organizer records in one transaction.
+  - [x] Follow the agreed delete/deactivate rule without losing event history.
+- [x] **Build the first event and performance setup operations.**
+  - [x] Create an event for the selected organizer.
+  - [x] Require a valid Ticketmaster segment and genre.
+  - [x] Store the resale-cap value.
+  - [x] Add one or more artists/teams with explicit billing order.
+  - [x] Add a performance with venue, date, and time.
+- [x] **Start performance pricing.**
+  - [x] Create at least two named price tiers with positive prices.
+  - [x] Load every section belonging to the performance venue.
+  - [x] Begin assigning each section to exactly one tier for that performance.
+- [x] **Check the foundation with known examples.**
+  - [x] Organizer and event creation
+  - [x] Invalid taxonomy or venue IDs
+  - [x] Duplicate artist billing order
+  - [x] Missing or duplicate section-to-tier assignments
 
 ### Shared work
 
-- [ ] Execute `sql/schema.sql` on an empty MySQL 8 database.
-- [ ] Compare the schema with `docs/business-logic-constraints.md`.
-- [ ] Agree on column names, time zone, money representation, status values, and history/deletion behavior.
-- [ ] Select stable test IDs for:
-  - [ ] One organizer
-  - [ ] Two customers
-  - [ ] One reserved-seating performance
-  - [ ] One general-admission performance
-  - [ ] One past performance
-- [ ] Confirm the Java application connects through Connector/J.
-- [ ] Add terminal routes for completed operations.
-- [ ] Create outlines for `report.pdf` and `manual.pdf`.
+- [x] Execute `sql/schema.sql` on an empty MySQL 8 database.
+- [x] Compare the schema with `docs/business-logic-constraints.md`.
+- [x] Agree on column names, time zone, money representation, status values, and history/deletion behavior.
+- [x] Select stable test IDs for:
+  - [x] One organizer
+  - [x] Two customers
+  - [x] One reserved-seating performance
+  - [x] One general-admission performance
+  - [x] One past performance
+- [x] Confirm the Java application connects through Connector/J.
+- [x] Add terminal routes for completed operations.
+- [x] Create outlines for `report.pdf` and `manual.pdf`.
 
 ### Block exit criteria
 
 - [ ] Both members approve the schema contract.
 - [ ] Both members can run the application against the same development data.
-- [ ] Customer, organizer, event, performance, tier, and inventory records can be created or retrieved.
-- [ ] Database transactions can commit and roll back correctly.
-- [ ] No implementation depends on an unresolved schema question.
+- [x] Customer, organizer, event, performance, tier, and inventory records can be created or retrieved.
+- [x] Database transactions can commit and roll back correctly.
+- [x] No implementation depends on an unresolved schema question.
 
 ## August 1-3 — all operations and Q1-Q7
 
