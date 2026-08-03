@@ -18,17 +18,29 @@ CREATE TABLE Users (
     address         VARCHAR(255) NOT NULL,
     email           VARCHAR(255) NOT NULL,
     date_of_birth   DATE NOT NULL,
-    UNIQUE (email)
+    user_role       ENUM('customer','organizer') NOT NULL,
+    account_status  ENUM('active','deleted') NOT NULL DEFAULT 'active',
+    deleted_at      DATETIME NULL,
+    UNIQUE (email),
+    UNIQUE (user_id, user_role),
+    CHECK (
+        (account_status = 'active' AND deleted_at IS NULL)
+        OR (account_status = 'deleted' AND deleted_at IS NOT NULL)
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Customer (
     user_id         INT PRIMARY KEY,
-    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+    user_role       ENUM('customer','organizer') NOT NULL DEFAULT 'customer',
+    FOREIGN KEY (user_id, user_role) REFERENCES Users(user_id, user_role) ON DELETE CASCADE,
+    CHECK (user_role = 'customer')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Organizer (
     user_id         INT PRIMARY KEY,
-    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+    user_role       ENUM('customer','organizer') NOT NULL DEFAULT 'organizer',
+    FOREIGN KEY (user_id, user_role) REFERENCES Users(user_id, user_role) ON DELETE CASCADE,
+    CHECK (user_role = 'organizer')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE PaymentInfo (
@@ -40,6 +52,22 @@ CREATE TABLE PaymentInfo (
     billing_zip     VARCHAR(20) NOT NULL,
     UNIQUE (payment_info_id, customer_id),
     FOREIGN KEY (customer_id) REFERENCES Customer(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE CustomerRestriction (
+    restriction_id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id          INT NOT NULL,
+    restriction_reason   ENUM('possible_scalper','manual_review','other') NOT NULL,
+    details              VARCHAR(255) NULL,
+    started_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at             DATETIME NULL,
+    current_customer_id  INT GENERATED ALWAYS AS (
+        CASE WHEN ended_at IS NULL THEN customer_id ELSE NULL END
+    ) STORED,
+    UNIQUE (current_customer_id),
+    INDEX idx_customer_restriction_history (customer_id, started_at),
+    FOREIGN KEY (customer_id) REFERENCES Customer(user_id),
+    CHECK (ended_at IS NULL OR ended_at >= started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================================
@@ -67,6 +95,7 @@ CREATE TABLE Event (
     resale_cap_pct  DECIMAL(4,2) NOT NULL DEFAULT 1.20,
     organizer_id    INT NOT NULL,
     genre_id        INT NOT NULL,
+    UNIQUE (event_id, organizer_id),
     FOREIGN KEY (organizer_id) REFERENCES Organizer(user_id),
     FOREIGN KEY (genre_id) REFERENCES Genre(genre_id),
     CHECK (resale_cap_pct >= 1.00)
@@ -101,7 +130,13 @@ CREATE TABLE Venue (
     address         VARCHAR(255) NOT NULL,
     city            VARCHAR(100) NOT NULL,
     postal_code     VARCHAR(20) NOT NULL,
-    country         VARCHAR(100) NOT NULL
+    country         VARCHAR(100) NOT NULL,
+    INDEX idx_venue_coordinates (latitude, longitude),
+    INDEX idx_venue_postal_code (postal_code),
+    INDEX idx_venue_city (city),
+    INDEX idx_venue_address (address),
+    CHECK (latitude BETWEEN -90.000000 AND 90.000000),
+    CHECK (longitude BETWEEN -180.000000 AND 180.000000)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE Section (
@@ -152,12 +187,21 @@ CREATE TABLE Performance (
     status              ENUM('scheduled','cancelled','completed') NOT NULL DEFAULT 'scheduled',
     cancellation_date   DATETIME NULL,
     cancellation_reason VARCHAR(255) NULL,
+    cancelled_by_organizer_id INT NULL,
     FOREIGN KEY (event_id) REFERENCES Event(event_id),
     FOREIGN KEY (venue_id) REFERENCES Venue(venue_id),
+    FOREIGN KEY (event_id, cancelled_by_organizer_id)
+        REFERENCES Event(event_id, organizer_id),
     UNIQUE (performance_id, venue_id),
+    INDEX idx_performance_upcoming (status, date_time, venue_id),
     CHECK (
-        (status = 'cancelled' AND cancellation_date IS NOT NULL)
-        OR (status <> 'cancelled' AND cancellation_date IS NULL)
+        (status = 'cancelled'
+            AND cancellation_date IS NOT NULL
+            AND cancelled_by_organizer_id IS NOT NULL)
+        OR (status <> 'cancelled'
+            AND cancellation_date IS NULL
+            AND cancellation_reason IS NULL
+            AND cancelled_by_organizer_id IS NULL)
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -226,13 +270,19 @@ CREATE TABLE Transactions (
     transaction_id   INT AUTO_INCREMENT PRIMARY KEY,
     customer_id      INT NOT NULL,
     payment_info_id  INT NOT NULL,
+    payment_card_number      VARCHAR(25) NOT NULL,
+    payment_card_holder_name VARCHAR(150) NOT NULL,
+    payment_expiry_date      DATE NOT NULL,
+    payment_billing_zip      VARCHAR(20) NOT NULL,
     transaction_type ENUM('purchase','resale') NOT NULL,
     performance_id   INT NULL,
     listing_id       INT NULL,
     transaction_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (transaction_id, customer_id),
     UNIQUE (transaction_id, performance_id),
+    UNIQUE (transaction_id, listing_id),
     UNIQUE (listing_id),
+    INDEX idx_transaction_date_customer (transaction_date, customer_id),
     FOREIGN KEY (customer_id) REFERENCES Customer(user_id),
     FOREIGN KEY (payment_info_id, customer_id)
         REFERENCES PaymentInfo(payment_info_id, customer_id),
@@ -248,6 +298,7 @@ CREATE TABLE Tickets (
     ticket_id             INT AUTO_INCREMENT PRIMARY KEY,
     purchase_id           INT NOT NULL,
     performance_id        INT NOT NULL,
+    tier_code             VARCHAR(20) NOT NULL,
     performance_seats_ref INT NULL,
     general_seats_ref     INT NULL,
     face_value            DECIMAL(10,2) NOT NULL,
@@ -256,8 +307,12 @@ CREATE TABLE Tickets (
         CASE WHEN status = 'active' THEN performance_seats_ref ELSE NULL END
     ) STORED,
     UNIQUE (active_reserved_seat_ref),
+    UNIQUE (ticket_id, purchase_id),
+    INDEX idx_ticket_performance_status_tier (performance_id, status, tier_code),
     FOREIGN KEY (purchase_id, performance_id)
         REFERENCES Transactions(transaction_id, performance_id),
+    FOREIGN KEY (performance_id, tier_code)
+        REFERENCES PriceTier(performance_id, tier_code),
     FOREIGN KEY (performance_seats_ref, performance_id)
         REFERENCES PerformanceSeats(performance_seat_id, performance_id),
     FOREIGN KEY (general_seats_ref, performance_id)
@@ -270,17 +325,24 @@ CREATE TABLE Tickets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE ResaleListing (
-    listing_id       INT AUTO_INCREMENT PRIMARY KEY,
-    ticket_id        INT NOT NULL,
-    listing_price    DECIMAL(10,2) NOT NULL,
-    status           ENUM('active','sold','withdrawn') NOT NULL DEFAULT 'active',
-    listed_date      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    active_ticket_id INT GENERATED ALWAYS AS (
+    listing_id         INT AUTO_INCREMENT PRIMARY KEY,
+    ticket_id          INT NOT NULL,
+    seller_ownership_id BIGINT NOT NULL,
+    listing_price      DECIMAL(10,2) NOT NULL,
+    cap_price_at_listing DECIMAL(10,2) NOT NULL,
+    status             ENUM('active','sold','withdrawn') NOT NULL DEFAULT 'active',
+    listed_date        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    active_ticket_id   INT GENERATED ALWAYS AS (
         CASE WHEN status = 'active' THEN ticket_id ELSE NULL END
     ) STORED,
     UNIQUE (active_ticket_id),
+    UNIQUE (listing_id, ticket_id),
+    INDEX idx_resale_listing_status_date (status, listed_date),
     FOREIGN KEY (ticket_id) REFERENCES Tickets(ticket_id),
-    CHECK (listing_price >= 0)
+    FOREIGN KEY (seller_ownership_id, ticket_id)
+        REFERENCES TicketOwnership(ownership_id, ticket_id),
+    CHECK (listing_price BETWEEN 0 AND cap_price_at_listing),
+    CHECK (cap_price_at_listing >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Each ticket keeps one stable identity. Ownership transfers close the current
@@ -291,8 +353,12 @@ CREATE TABLE TicketOwnership (
     ticket_id               INT NOT NULL,
     customer_id             INT NOT NULL,
     acquired_transaction_id INT NOT NULL,
+    acquired_listing_id     INT NULL,
     acquired_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ended_at                DATETIME NULL,
+    original_purchase_id    INT GENERATED ALWAYS AS (
+        CASE WHEN acquired_listing_id IS NULL THEN acquired_transaction_id ELSE NULL END
+    ) STORED,
     current_ticket_id       INT GENERATED ALWAYS AS (
         CASE WHEN ended_at IS NULL THEN ticket_id ELSE NULL END
     ) STORED,
@@ -300,8 +366,14 @@ CREATE TABLE TicketOwnership (
     UNIQUE (ownership_id, ticket_id),
     UNIQUE (current_ticket_id),
     FOREIGN KEY (ticket_id) REFERENCES Tickets(ticket_id),
+    FOREIGN KEY (ticket_id, original_purchase_id)
+        REFERENCES Tickets(ticket_id, purchase_id),
     FOREIGN KEY (acquired_transaction_id, customer_id)
         REFERENCES Transactions(transaction_id, customer_id),
+    FOREIGN KEY (acquired_transaction_id, acquired_listing_id)
+        REFERENCES Transactions(transaction_id, listing_id),
+    FOREIGN KEY (acquired_listing_id, ticket_id)
+        REFERENCES ResaleListing(listing_id, ticket_id),
     CHECK (ended_at IS NULL OR ended_at >= acquired_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

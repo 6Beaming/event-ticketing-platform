@@ -15,7 +15,8 @@ inserted. The Java booking transaction must instead:
 
 1. Lock the matching `GeneralAdmissionCapacity` row with `SELECT ... FOR UPDATE`.
 2. Confirm that enough capacity remains for the complete requested quantity.
-3. Insert the order and all tickets.
+3. Insert the order with an immutable payment snapshot and insert every ticket
+   with its price tier at the time of sale.
 4. Reduce `remaining_capacity` by the number of tickets sold.
 5. Commit all changes together.
 
@@ -37,7 +38,13 @@ event resale cap. The Java listing transaction must instead:
 2. Confirm that the requester owns an active ticket.
 3. Read the ticket's face value and the event's current resale cap.
 4. Reject a listing price above `face_value * resale_cap_pct`.
-5. Insert the listing and commit only when every check succeeds.
+5. Insert the listing with the seller's `ownership_id` and the calculated
+   `cap_price_at_listing` snapshot.
+6. Commit only when every check succeeds.
+
+When a resale is purchased, the Java transaction must copy the listing ID into
+`TicketOwnership.acquired_listing_id`. The schema then verifies that the resale
+transaction, listing, ticket, buyer, and new ownership record all agree.
 
 Reserved-seat double sales are prevented by the unique generated
 `Tickets.active_reserved_seat_ref` value, which is enforced atomically by
