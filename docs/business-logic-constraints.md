@@ -24,6 +24,23 @@ The future implementation should keep SQL operations inside the named transactio
 
 ## Required transaction boundaries
 
+### Account deletion
+
+1. Lock the `Users` row and confirm that the requester may delete the account.
+2. Set `account_status` to `deleted` and record `deleted_at` instead of deleting
+   the user key.
+3. Replace identifying profile and saved-payment values as required, while
+   leaving transaction payment snapshots and historical relationships intact.
+4. Commit the complete anonymization as one transaction.
+
+### Customer restriction
+
+1. Run the SQL scalper-identification report for the required rolling period.
+2. Insert a `CustomerRestriction` row when a customer must be prohibited.
+3. Check for a current restriction before booking or resale operations.
+4. Close the restriction by setting `ended_at` when the prohibition is removed;
+   do not delete its history.
+
 ### Booking
 
 1. Start a transaction.
