@@ -28,4 +28,12 @@ if [ ! -s "$SOURCE_LIST" ]; then
 fi
 
 javac -cp "$CONNECTOR_PATH" -d "$BUILD_DIR" @"$SOURCE_LIST"
+
+case "${1:-}" in
+    --generate-data)
+        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" data.DevelopmentDataGenerator
+        exit 0
+        ;;
+esac
+
 java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" Main
