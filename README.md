@@ -121,8 +121,7 @@ sh run.sh
 
 The application defaults to the local `mytix` database with the username
 `root` and an empty password. Override those values with an ignored
-`config.properties` copied from `config.properties.example`, or with
-`MYTIX_DB_URL`, `MYTIX_DB_USER`, and `MYTIX_DB_PASSWORD`. If the initial
+`config.properties` copied from `config.properties.example`. If the initial
 connection fails, the terminal starts in offline mode and option 10 can retry.
 
 ### Foundation development commands

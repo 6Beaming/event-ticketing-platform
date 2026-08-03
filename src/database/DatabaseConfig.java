@@ -37,23 +37,10 @@ public final class DatabaseConfig {
         }
 
         return new DatabaseConfig(
-                configuredValue("MYTIX_DB_URL", properties, "db.url", DEFAULT_URL),
-                configuredValue("MYTIX_DB_USER", properties, "db.user", DEFAULT_USER),
-                configuredValue("MYTIX_DB_PASSWORD", properties, "db.password", DEFAULT_PASSWORD)
+                properties.getProperty("db.url", DEFAULT_URL),
+                properties.getProperty("db.user", DEFAULT_USER),
+                properties.getProperty("db.password", DEFAULT_PASSWORD)
         );
-    }
-
-    private static String configuredValue(
-            String environmentName,
-            Properties properties,
-            String propertyName,
-            String fallback
-    ) {
-        String environmentValue = System.getenv(environmentName);
-        if (environmentValue != null) {
-            return environmentValue;
-        }
-        return properties.getProperty(propertyName, fallback);
     }
 
     public String getUrl() {
