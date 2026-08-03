@@ -34,6 +34,14 @@ case "${1:-}" in
         java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" data.DevelopmentDataGenerator
         exit 0
         ;;
+    --self-test)
+        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" testing.FoundationSelfTest
+        exit 0
+        ;;
+    --database-check)
+        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" testing.FoundationDatabaseCheck --reset-database
+        exit 0
+        ;;
 esac
 
 java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" Main

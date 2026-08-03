@@ -5,7 +5,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 // Manages driver loading, connection lifecycle, validation, retry, and safe errors.
-public final class DatabaseConnection implements AutoCloseable {
+public final class DatabaseConnection implements AutoCloseable, ConnectionProvider {
     private static final String MYSQL_DRIVER = "com.mysql.cj.jdbc.Driver";
     private static final int LOGIN_TIMEOUT_SECONDS = 5;
 

@@ -1,14 +1,18 @@
 package database;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Properties;
 
-// Configuration: local mytix database with the username root and an empty password
 public final class DatabaseConfig {
-
     private static final String CONFIG_FILE = "config.properties";
+    private static final String DEFAULT_URL =
+            "jdbc:mysql://localhost:3306/mytix?serverTimezone=UTC&connectTimeout=5000";
+    private static final String DEFAULT_USER = "root";
+    private static final String DEFAULT_PASSWORD = "";
 
     private final String url;
     private final String user;
@@ -22,22 +26,34 @@ public final class DatabaseConfig {
 
     public static DatabaseConfig defaults() {
         Properties properties = new Properties();
+        Path configPath = Paths.get(CONFIG_FILE);
 
-        try (InputStream input = new FileInputStream(CONFIG_FILE)) {
-            properties.load(input);
-        } catch (IOException exception) {
-            throw new IllegalStateException(
-                    "Could not load config.properties. " +
-                    "Copy config.properties.example and update your database credentials.",
-                    exception
-            );
+        if (Files.exists(configPath)) {
+            try (InputStream input = Files.newInputStream(configPath)) {
+                properties.load(input);
+            } catch (IOException exception) {
+                throw new IllegalStateException("Could not read config.properties.", exception);
+            }
         }
 
         return new DatabaseConfig(
-                properties.getProperty("db.url"),
-                properties.getProperty("db.user"),
-                properties.getProperty("db.password")
+                configuredValue("MYTIX_DB_URL", properties, "db.url", DEFAULT_URL),
+                configuredValue("MYTIX_DB_USER", properties, "db.user", DEFAULT_USER),
+                configuredValue("MYTIX_DB_PASSWORD", properties, "db.password", DEFAULT_PASSWORD)
         );
+    }
+
+    private static String configuredValue(
+            String environmentName,
+            Properties properties,
+            String propertyName,
+            String fallback
+    ) {
+        String environmentValue = System.getenv(environmentName);
+        if (environmentValue != null) {
+            return environmentValue;
+        }
+        return properties.getProperty(propertyName, fallback);
     }
 
     public String getUrl() {

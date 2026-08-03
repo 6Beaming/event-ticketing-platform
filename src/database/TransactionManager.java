@@ -6,9 +6,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 public final class TransactionManager {
-    private final DatabaseConnection database;
+    private final ConnectionProvider database;
 
-    public TransactionManager(DatabaseConnection database) {
+    public TransactionManager(ConnectionProvider database) {
         if (database == null) {
             throw new IllegalArgumentException("Database connection manager is required");
         }
