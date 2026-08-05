@@ -54,7 +54,7 @@ public final class FoundationSelfTest {
         test("inventory calculations are consistent", this::inventoryCalculations);
         test("duplicate artist billing rank is rejected", this::duplicateBillingRejected);
         test("invalid organizer/taxonomy IDs are rejected", this::invalidEventIdsRejected);
-        test("missing, duplicate, or unused tier assignments are rejected", this::pricingShapeRejected);
+        test("invalid pricing setup and unsafe replacement are rejected", this::pricingShapeRejected);
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
@@ -201,6 +201,25 @@ public final class FoundationSelfTest {
                 )
         );
         assertTrue(PricingValidator.validateShape(unusedTier).contains("Unused tiers"));
+
+        assertTrue(PerformancePricingOperations.validateReplacement(
+                6004,
+                true,
+                true,
+                true
+        ).contains("tickets have already been sold"));
+        assertTrue(PerformancePricingOperations.validateReplacement(
+                6004,
+                true,
+                false,
+                false
+        ).contains("scheduled in the future"));
+        assertTrue(PerformancePricingOperations.validateReplacement(
+                6004,
+                true,
+                true,
+                false
+        ) == null);
     }
 
     private void pricingCoverageRejected() {

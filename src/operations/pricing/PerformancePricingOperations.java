@@ -33,14 +33,24 @@ public final class PerformancePricingOperations {
             if (venueId == null) {
                 return OperationResult.notFound("Performance not found.");
             }
+            boolean existingPricing = pricingExists(connection, performanceId);
+            String replacementError = findReplacementConflict(connection, performanceId);
+            if (replacementError != null) {
+                return OperationResult.conflict(replacementError);
+            }
             Set<String> sections = loadVenueSections(connection, venueId);
             if (sections.isEmpty()) {
                 return OperationResult.conflict(
                         "The performance venue has no sections to configure."
                 );
             }
+            String message = existingPricing
+                    ? "NOTICE: Performance " + performanceId
+                            + " already has tiers and section assignments. Completing this setup "
+                            + "will replace the existing pricing."
+                    : "Performance venue sections loaded.";
             return OperationResult.success(
-                    "Performance venue sections loaded.",
+                    message,
                     List.copyOf(sections)
             );
         });
@@ -58,12 +68,24 @@ public final class PerformancePricingOperations {
                 return OperationResult.notFound("Performance not found.");
             }
 
+            boolean replacingExistingPricing = pricingExists(connection, input.getPerformanceId());
+            String replacementError = findReplacementConflict(
+                    connection,
+                    input.getPerformanceId()
+            );
+            if (replacementError != null) {
+                return OperationResult.conflict(replacementError);
+            }
+
             Set<String> venueSections = loadVenueSections(connection, venueId);
             String coverageError = validateCoverage(input, venueSections);
             if (coverageError != null) {
                 return OperationResult.invalidInput(coverageError);
             }
 
+            if (replacingExistingPricing) {
+                deleteExistingPricing(connection, input.getPerformanceId());
+            }
             insertTiers(connection, input);
             insertAssignments(connection, input, venueId);
             PricingSetupSummary summary = new PricingSetupSummary(
@@ -71,8 +93,33 @@ public final class PerformancePricingOperations {
                     input.getTiers().size(),
                     input.getAssignments().size()
             );
-            return OperationResult.success("Performance pricing configured.", summary);
+            String message = replacingExistingPricing
+                    ? "Existing performance pricing replaced."
+                    : "Performance pricing configured.";
+            return OperationResult.success(message, summary);
         });
+    }
+
+    public static String validateReplacement(
+            int performanceId,
+            boolean existingPricing,
+            boolean futureScheduled,
+            boolean ticketsExist
+    ) {
+        if (!existingPricing) {
+            return null;
+        }
+        if (ticketsExist) {
+            return "Pricing for performance " + performanceId
+                    + " cannot be replaced because tickets have already been sold. "
+                    + "Existing tiers and section assignments were kept.";
+        }
+        if (!futureScheduled) {
+            return "Pricing for performance " + performanceId
+                    + " can be replaced only while the performance is scheduled in the future. "
+                    + "Existing tiers and section assignments were kept.";
+        }
+        return null;
     }
 
     public static String validateCoverage(PricingSetupInput input, Set<String> venueSections) {
@@ -135,6 +182,73 @@ public final class PerformancePricingOperations {
             }
         }
         return sections;
+    }
+
+    private String findReplacementConflict(Connection connection, int performanceId)
+            throws SQLException {
+        boolean existingPricing = pricingExists(connection, performanceId);
+        if (!existingPricing) {
+            return null;
+        }
+        return validateReplacement(
+                performanceId,
+                true,
+                isFutureScheduledPerformance(connection, performanceId),
+                ticketsExist(connection, performanceId)
+        );
+    }
+
+    private boolean pricingExists(Connection connection, int performanceId) throws SQLException {
+        String sql = "SELECT EXISTS(SELECT 1 FROM PriceTier WHERE performance_id = ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                return rows.getBoolean(1);
+            }
+        }
+    }
+
+    private boolean ticketsExist(Connection connection, int performanceId) throws SQLException {
+        String sql = "SELECT EXISTS(SELECT 1 FROM Tickets WHERE performance_id = ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                return rows.getBoolean(1);
+            }
+        }
+    }
+
+    private boolean isFutureScheduledPerformance(Connection connection, int performanceId)
+            throws SQLException {
+        String sql = """
+                SELECT status = 'scheduled' AND date_time > UTC_TIMESTAMP()
+                FROM Performance
+                WHERE performance_id = ?
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() && rows.getBoolean(1);
+            }
+        }
+    }
+
+    private void deleteExistingPricing(Connection connection, int performanceId)
+            throws SQLException {
+        try (PreparedStatement assignments = connection.prepareStatement(
+                "DELETE FROM SectionTierAssignment WHERE performance_id = ?"
+        )) {
+            assignments.setInt(1, performanceId);
+            assignments.executeUpdate();
+        }
+        try (PreparedStatement tiers = connection.prepareStatement(
+                "DELETE FROM PriceTier WHERE performance_id = ?"
+        )) {
+            tiers.setInt(1, performanceId);
+            tiers.executeUpdate();
+        }
     }
 
     private void insertTiers(Connection connection, PricingSetupInput input) throws SQLException {

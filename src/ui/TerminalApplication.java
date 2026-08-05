@@ -568,6 +568,7 @@ public final class TerminalApplication {
             OperationResult<List<String>> sectionsResult =
                     pricing.getVenueSectionsForPricing(performanceId);
             if (sectionsResult.isSuccess()) {
+                System.out.println(sectionsResult.getMessage());
                 venueSections = sectionsResult.getValue().orElseThrow();
                 break;
             }

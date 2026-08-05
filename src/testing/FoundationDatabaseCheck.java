@@ -211,6 +211,33 @@ public final class FoundationDatabaseCheck {
         ));
         requireSuccess(pricingResult, "pricing setup");
 
+        OperationResult<List<String>> replacementPreflight =
+                pricing.getVenueSectionsForPricing(performance.getValue().orElseThrow());
+        requireSuccess(replacementPreflight, "unsold pricing replacement preflight");
+        if (!replacementPreflight.getMessage().contains("already has tiers and section assignments")) {
+            throw new IllegalStateException("existing pricing notice was not returned");
+        }
+
+        OperationResult<?> replacementPricing = pricing.configurePricing(new PricingSetupInput(
+                performance.getValue().orElseThrow(),
+                List.of(
+                        new TierInput("Q1", new BigDecimal("125.00")),
+                        new TierInput("Q2", new BigDecimal("75.00"))
+                ),
+                List.of(
+                        new SectionTierInput("Orchestra", "Q1"),
+                        new SectionTierInput("General Floor", "Q2")
+                )
+        ));
+        requireSuccess(replacementPricing, "unsold pricing replacement");
+
+        OperationResult<List<String>> soldPricingPreflight =
+                pricing.getVenueSectionsForPricing(DevelopmentIds.PERFORMANCE_RESERVED);
+        if (soldPricingPreflight.getStatus() != OperationStatus.CONFLICT
+                || !soldPricingPreflight.getMessage().contains("tickets have already been sold")) {
+            throw new IllegalStateException("sold performance pricing replacement was not rejected");
+        }
+
         OperationResult<List<ReservedSeatAvailability>> reserved =
                 inventory.getReservedInventory(DevelopmentIds.PERFORMANCE_RESERVED);
         requireSuccess(reserved, "reserved inventory lookup");
