@@ -24,6 +24,9 @@ import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
 import operations.profile.UserProfileOperations;
+import operations.resale.ResaleListingSummary;
+import operations.resale.ResaleOperations;
+import operations.resale.ResalePurchaseSummary;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -52,6 +55,7 @@ public final class TerminalApplication {
     private final OrganizerEventOperations events;
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
+    private final ResaleOperations resale;
     private boolean running;
 
     public TerminalApplication(Scanner input, DatabaseConnection database) {
@@ -67,6 +71,7 @@ public final class TerminalApplication {
         this.events = new OrganizerEventOperations(transactions);
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
+        this.resale = new ResaleOperations(transactions);
     }
 
     public void run() {
@@ -110,10 +115,7 @@ public final class TerminalApplication {
             case "2" -> showEventMenu();
             case "3" -> showPricingAndInventoryMenu();
             case "4" -> showBookingAndCancellationMenu();
-            case "5" -> showLaterModule(
-                    "Ticket resale",
-                    "Listing, withdrawal, purchase, and ownership transfer are scheduled for August 1-3."
-            );
+            case "5" -> showResaleMenu();
             case "6" -> showLaterModule(
                     "Attendance reviews",
                     "Attendance-based reviews are scheduled for August 1-3."
@@ -1003,6 +1005,94 @@ public final class TerminalApplication {
             System.out.println("Tickets cancelled: " + summary.getCancelledTicketCount());
             System.out.println("Refund total: $" + summary.getRefundTotal().toPlainString());
         });
+    }
+
+    private void showResaleMenu() {
+        boolean inMenu = true;
+        while (running && inMenu) {
+            printHeading("Ticket resale");
+            System.out.println("1. List an owned ticket");
+            System.out.println("2. Withdraw an active listing");
+            System.out.println("3. Purchase another customer's listing");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::listTicketForResale);
+                case "2" -> runOnlineAction(this::withdrawResaleListing);
+                case "3" -> runOnlineAction(this::purchaseResaleListing);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown resale option.");
+            }
+        }
+    }
+
+    private void listTicketForResale() {
+        Integer sellerId = readPositiveIntWithRetry("Seller customer ID: ");
+        if (sellerId == null) {
+            return;
+        }
+        Integer ticketId = readPositiveIntWithRetry("Ticket ID: ");
+        if (ticketId == null) {
+            return;
+        }
+        BigDecimal listingPrice = readDecimalWithRetry(
+                "Listing price: ",
+                value -> value.compareTo(BigDecimal.ZERO) <= 0
+                        ? Optional.of("Listing price must be positive.")
+                        : Optional.empty()
+        );
+        if (listingPrice == null) {
+            return;
+        }
+        OperationResult<ResaleListingSummary> result = resale.listTicket(
+                sellerId,
+                ticketId,
+                listingPrice
+        );
+        printResult(result);
+        result.getValue().ifPresent(listing -> {
+            System.out.println("Listing ID: " + listing.getListingId());
+            System.out.println("Ticket ID: " + listing.getTicketId());
+            System.out.println("Listing price: $" + listing.getListingPrice().toPlainString());
+            System.out.println("Cap price: $" + listing.getCapPrice().toPlainString());
+        });
+        pause();
+    }
+
+    private void withdrawResaleListing() {
+        Integer sellerId = readPositiveIntWithRetry("Seller customer ID: ");
+        if (sellerId == null) {
+            return;
+        }
+        Integer listingId = readPositiveIntWithRetry("Listing ID: ");
+        if (listingId == null) {
+            return;
+        }
+        printResult(resale.withdrawListing(sellerId, listingId));
+        pause();
+    }
+
+    private void purchaseResaleListing() {
+        Integer buyerId = readPositiveIntWithRetry("Buyer customer ID: ");
+        if (buyerId == null) {
+            return;
+        }
+        Integer listingId = readPositiveIntWithRetry("Listing ID: ");
+        if (listingId == null) {
+            return;
+        }
+        OperationResult<ResalePurchaseSummary> result = resale.purchaseListing(
+                buyerId,
+                listingId
+        );
+        printResult(result);
+        result.getValue().ifPresent(purchase -> {
+            System.out.println("Transaction ID: " + purchase.getTransactionId());
+            System.out.println("Listing ID: " + purchase.getListingId());
+            System.out.println("Ticket ID: " + purchase.getTicketId());
+            System.out.println("Purchase price: $"
+                    + purchase.getPurchasePrice().toPlainString());
+        });
+        pause();
     }
 
     private void showLaterModule(String title, String message) {

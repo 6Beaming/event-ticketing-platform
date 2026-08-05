@@ -20,6 +20,7 @@ import operations.pricing.TierInput;
 import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
+import operations.resale.ResaleOperations;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -62,6 +63,7 @@ public final class FoundationSelfTest {
         test("tier-price and seat-state rules are enforced", this::organizerControlsValidated);
         test("booking request shapes are validated", this::bookingRequestsValidated);
         test("customer cancellation deadline is inclusive", this::cancellationDeadlineValidated);
+        test("resale cap uses decimal money", this::resaleCapValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -288,6 +290,16 @@ public final class FoundationSelfTest {
         assertTrue(CancellationOperations.validateCustomerCancellation(1, List.of(7, 8)) == null);
         assertTrue(CancellationOperations.validateCustomerCancellation(1, List.of(7, 7))
                 .contains("only once"));
+    }
+
+    private void resaleCapValidated() {
+        assertEquals(
+                new BigDecimal("138.00"),
+                ResaleOperations.calculateCapPrice(
+                        new BigDecimal("120.00"),
+                        new BigDecimal("1.15")
+                )
+        );
     }
 
     private void dataGenerationDeterministic() {

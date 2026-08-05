@@ -27,6 +27,9 @@ import operations.profile.PaymentInput;
 import operations.profile.CustomerProfile;
 import operations.profile.ProfileInput;
 import operations.profile.UserProfileOperations;
+import operations.resale.ResaleListingSummary;
+import operations.resale.ResaleOperations;
+import operations.resale.ResalePurchaseSummary;
 
 import java.math.BigDecimal;
 import java.nio.file.Paths;
@@ -77,6 +80,7 @@ public final class FoundationDatabaseCheck {
         InventoryOperations inventory = new InventoryOperations(transactions);
         BookingOperations bookings = new BookingOperations(transactions);
         CancellationOperations cancellations = new CancellationOperations(transactions);
+        ResaleOperations resale = new ResaleOperations(transactions);
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"
@@ -381,9 +385,78 @@ public final class FoundationDatabaseCheck {
 
         int firstBookedTicket = reservedBooking.getValue().orElseThrow().getTicketIds().get(0);
         int secondBookedTicket = reservedBooking.getValue().orElseThrow().getTicketIds().get(1);
+        OperationResult<ResaleListingSummary> aboveCapListing = resale.listTicket(
+                bookingCustomerOne.getValue().orElseThrow(),
+                secondBookedTicket,
+                new BigDecimal("1000.00")
+        );
+        if (aboveCapListing.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("above-cap resale listing was not rejected");
+        }
+        OperationResult<ResaleListingSummary> listing = resale.listTicket(
+                bookingCustomerOne.getValue().orElseThrow(),
+                secondBookedTicket,
+                new BigDecimal("100.00")
+        );
+        requireSuccess(listing, "owned ticket resale listing");
+        int listingId = listing.getValue().orElseThrow().getListingId();
+        OperationResult<ResalePurchaseSummary> sellerPurchase = resale.purchaseListing(
+                bookingCustomerOne.getValue().orElseThrow(),
+                listingId
+        );
+        if (sellerPurchase.getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("seller was allowed to buy their own listing");
+        }
+        requireSuccess(
+                resale.purchaseListing(
+                        bookingCustomerTwo.getValue().orElseThrow(),
+                        listingId
+                ),
+                "resale purchase and ownership transfer"
+        );
+        OperationResult<ResalePurchaseSummary> competingPurchase = resale.purchaseListing(
+                bookingCustomerOne.getValue().orElseThrow(),
+                listingId
+        );
+        if (competingPurchase.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("a sold listing was purchased twice");
+        }
+
+        int firstGaTicket = smallGaBooking.getValue().orElseThrow().getTicketIds().get(0);
+        int secondGaTicket = smallGaBooking.getValue().orElseThrow().getTicketIds().get(1);
+        OperationResult<ResaleListingSummary> withdrawnListing = resale.listTicket(
+                bookingCustomerOne.getValue().orElseThrow(),
+                firstGaTicket,
+                new BigDecimal("50.00")
+        );
+        requireSuccess(withdrawnListing, "resale listing for withdrawal");
+        int withdrawnListingId = withdrawnListing.getValue().orElseThrow().getListingId();
+        OperationResult<Void> wrongSellerWithdrawal = resale.withdrawListing(
+                bookingCustomerTwo.getValue().orElseThrow(),
+                withdrawnListingId
+        );
+        if (wrongSellerWithdrawal.getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("non-seller listing withdrawal was not rejected");
+        }
+        requireSuccess(
+                resale.withdrawListing(
+                        bookingCustomerOne.getValue().orElseThrow(),
+                        withdrawnListingId
+                ),
+                "seller listing withdrawal"
+        );
+        requireSuccess(
+                resale.listTicket(
+                        bookingCustomerOne.getValue().orElseThrow(),
+                        secondGaTicket,
+                        new BigDecimal("50.00")
+                ),
+                "active listing for performance-cancellation closure"
+        );
+
         OperationResult<CancellationSummary> wrongCustomerCancellation =
                 cancellations.cancelCustomerTickets(
-                        bookingCustomerTwo.getValue().orElseThrow(),
+                        bookingCustomerOne.getValue().orElseThrow(),
                         List.of(secondBookedTicket),
                         "Wrong customer check"
                 );

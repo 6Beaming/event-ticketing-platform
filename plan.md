@@ -195,12 +195,12 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Lock and mark the performance cancelled.
   - [x] Close active resale listings and refund every active ticket.
   - [x] Preserve cancellation history and keep the cancelled performance unsellable.
-- [ ] **Build the complete resale workflow.**
-  - [ ] List only a currently owned, active, non-cancelled ticket.
-  - [ ] Calculate the maximum listing price from face value and the event resale cap.
-  - [ ] Allow the seller to withdraw only an active unsold listing.
-  - [ ] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
-  - [ ] Ensure two buyers cannot complete the same listing.
+- [x] **Build the complete resale workflow.**
+  - [x] List only a currently owned, active, non-cancelled ticket.
+  - [x] Calculate the maximum listing price from face value and the event resale cap.
+  - [x] Allow the seller to withdraw only an active unsold listing.
+  - [x] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
+  - [x] Ensure two buyers cannot complete the same listing.
 - [ ] **Add the possible-scalper check.**
   - [ ] Calculate the past-year purchased and listed counts.
   - [ ] Flag customers who bought at least 10 tickets and listed more than half.
@@ -272,7 +272,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - [x] Test failed multi-seat booking and confirm the entire order rolls back.
 - [x] Test customer cancellation more than and fewer than seven days before the performance.
 - [x] Verify a cancelled performance cannot accept new bookings.
-- [ ] Test two buyers attempting to purchase the same resale listing.
+- [x] Test two buyers attempting to purchase the same resale listing.
 - [ ] Verify Q6 totals against raw inventory counts.
 - [ ] Test Q7 success, budget failure, insufficient quantity, and nonconsecutive-seat cases.
 - [ ] Cross-review all ownership, authorization, and transaction checks.

@@ -55,9 +55,9 @@ The dated work blocks below are complete only when every item in this section is
 - [x] Allow only the event organizer to cancel its performance.
 - [x] Refund every active ticket when a performance is cancelled.
 - [x] Restore or close inventory consistently and retain cancellation history.
-- [ ] List only a currently owned ticket at or below its resale cap.
-- [ ] Withdraw an unsold resale listing.
-- [ ] Purchase another customer’s active listing and transfer ownership atomically.
+- [x] List only a currently owned ticket at or below its resale cap.
+- [x] Withdraw an unsold resale listing.
+- [x] Purchase another customer’s active listing and transfer ownership atomically.
 - [ ] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
 - [ ] Flag and prohibit customers who satisfy the possible-scalper rule.
 
