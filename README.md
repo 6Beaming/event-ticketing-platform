@@ -119,4 +119,23 @@ sh run.sh
 
 `run.sh` compiles every Java source file into `.build/classes`, adds `lib/mysql-connector-java-8.0.29.jar` to the Java classpath, and starts `Main`.
 
-The application connects to the local `mytix` database with the username `root` and an empty password. If the initial connection fails, the terminal starts in offline mode and option 10 can retry after MySQL becomes available.
+The application defaults to the local `mytix` database with the username
+`root` and an empty password. Override those values with an ignored
+`config.properties` copied from `config.properties.example`. If the initial
+connection fails, the terminal starts in offline mode and option 10 can retry.
+
+### Foundation development commands
+
+```sh
+sh run.sh --generate-data
+sh run.sh --self-test
+sh run.sh --database-check
+```
+
+- `--generate-data` deterministically rewrites `data/development-data.sql`.
+- `--self-test` checks validation, commit/rollback behavior, inventory math,
+  event/pricing rejection rules, and deterministic generation without MySQL.
+- `--database-check` drops and recreates only the configured MyTix tables,
+  executes `schema.sql` and `load.sql`, exercises the foundation operations,
+  and restores the deterministic dataset. Use it only against the development
+  MyTix database.
