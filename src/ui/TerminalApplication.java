@@ -387,10 +387,12 @@ public final class TerminalApplication {
             printHeading("Organizer events and performances");
             System.out.println("1. Create event with artist billing");
             System.out.println("2. Add performance");
+            System.out.println("3. Update event resale cap");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createEvent);
                 case "2" -> runOnlineAction(this::addPerformance);
+                case "3" -> runOnlineAction(this::updateResaleCap);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown event option.");
             }
@@ -486,7 +488,14 @@ public final class TerminalApplication {
 
     private void addPerformance() {
         while (running) {
-            Integer eventId = readCheckedId("Event ID: ", events::checkEvent);
+            Integer organizerId = readCheckedId(
+                    "Organizer ID: ",
+                    events::checkActiveOrganizer
+            );
+            if (organizerId == null) {
+                return;
+            }
+            Integer eventId = readPositiveIntWithRetry("Event ID: ");
             if (eventId == null) {
                 return;
             }
@@ -502,6 +511,7 @@ public final class TerminalApplication {
             }
 
             OperationResult<Integer> result = events.addPerformance(
+                    organizerId,
                     new PerformanceInput(eventId, venueId, dateTime)
             );
             printResult(result);
@@ -516,18 +526,46 @@ public final class TerminalApplication {
         }
     }
 
+    private void updateResaleCap() {
+        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
+        if (organizerId == null) {
+            return;
+        }
+        Integer eventId = readPositiveIntWithRetry("Event ID: ");
+        if (eventId == null) {
+            return;
+        }
+        BigDecimal cap = readDecimalWithRetry(
+                "New resale cap multiplier: ",
+                value -> value.compareTo(BigDecimal.ONE) < 0
+                        ? Optional.of("Resale cap multiplier must be at least 1.00.")
+                        : Optional.empty()
+        );
+        if (cap == null) {
+            return;
+        }
+        printResult(events.updateResaleCap(organizerId, eventId, cap));
+        pause();
+    }
+
     private void showPricingAndInventoryMenu() {
         boolean inMenu = true;
         while (running && inMenu) {
             printHeading("Performance pricing and inventory");
             System.out.println("1. Configure tiers and all section assignments");
-            System.out.println("2. View reserved-seat inventory");
-            System.out.println("3. View general-admission inventory");
+            System.out.println("2. Update one tier price");
+            System.out.println("3. Block a reserved seat");
+            System.out.println("4. Unblock a reserved seat");
+            System.out.println("5. View reserved-seat inventory");
+            System.out.println("6. View general-admission inventory");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::configurePricing);
-                case "2" -> runOnlineAction(this::viewReservedInventory);
-                case "3" -> runOnlineAction(this::viewGeneralInventory);
+                case "2" -> runOnlineAction(this::updateTierPrice);
+                case "3" -> runOnlineAction(() -> changeSeatBlock(true));
+                case "4" -> runOnlineAction(() -> changeSeatBlock(false));
+                case "5" -> runOnlineAction(this::viewReservedInventory);
+                case "6" -> runOnlineAction(this::viewGeneralInventory);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown pricing/inventory option.");
             }
@@ -536,17 +574,32 @@ public final class TerminalApplication {
 
     private void configurePricing() {
         while (running) {
-            PricingSetupInput input = readPricingSetup();
-            if (input == null) {
+            Integer organizerId = readCheckedId(
+                    "Organizer ID: ",
+                    events::checkActiveOrganizer
+            );
+            if (organizerId == null) {
                 return;
             }
-            OperationResult<PricingSetupSummary> result = pricing.configurePricing(input);
+            PricingSetupInput pricingInput = readPricingSetup(organizerId);
+            if (pricingInput == null) {
+                return;
+            }
+            OperationResult<PricingSetupSummary> result = pricing.configurePricing(
+                    organizerId,
+                    pricingInput
+            );
             printResult(result);
             if (result.isSuccess()) {
                 result.getValue().ifPresent(summary -> {
                     System.out.println("Performance ID: " + summary.getPerformanceId());
                     System.out.println("Tiers created: " + summary.getTierCount());
                     System.out.println("Sections assigned: " + summary.getAssignedSectionCount());
+                    System.out.println("Tier and section map:");
+                    for (SectionTierInput assignment : pricingInput.getAssignments()) {
+                        System.out.println("  " + assignment.getSectionName()
+                                + " -> " + assignment.getTierCode());
+                    }
                 });
                 pause();
                 return;
@@ -557,7 +610,7 @@ public final class TerminalApplication {
         }
     }
 
-    private PricingSetupInput readPricingSetup() {
+    private PricingSetupInput readPricingSetup(int organizerId) {
         Integer performanceId = null;
         List<String> venueSections = null;
         while (running) {
@@ -566,7 +619,7 @@ public final class TerminalApplication {
                 return null;
             }
             OperationResult<List<String>> sectionsResult =
-                    pricing.getVenueSectionsForPricing(performanceId);
+                    pricing.getVenueSectionsForPricing(organizerId, performanceId);
             if (sectionsResult.isSuccess()) {
                 System.out.println(sectionsResult.getMessage());
                 venueSections = sectionsResult.getValue().orElseThrow();
@@ -701,6 +754,57 @@ public final class TerminalApplication {
         }
 
         return new PricingSetupInput(performanceId, tiers, assignments);
+    }
+
+    private void updateTierPrice() {
+        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
+        if (organizerId == null) {
+            return;
+        }
+        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        if (performanceId == null) {
+            return;
+        }
+        String tierCode = readValidatedText(
+                "Tier code: ",
+                value -> value.trim().isEmpty()
+                        ? Optional.of("Tier code is required.")
+                        : Optional.empty()
+        );
+        if (tierCode == null) {
+            return;
+        }
+        BigDecimal price = readDecimalWithRetry(
+                "New tier price: ",
+                value -> value.compareTo(BigDecimal.ZERO) <= 0
+                        ? Optional.of("Tier price must be positive.")
+                        : Optional.empty()
+        );
+        if (price == null) {
+            return;
+        }
+        printResult(pricing.updateTierPrice(organizerId, performanceId, tierCode, price));
+        pause();
+    }
+
+    private void changeSeatBlock(boolean block) {
+        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
+        if (organizerId == null) {
+            return;
+        }
+        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        if (performanceId == null) {
+            return;
+        }
+        Integer performanceSeatId = readPositiveIntWithRetry("Reserved seat inventory ID: ");
+        if (performanceSeatId == null) {
+            return;
+        }
+        OperationResult<Void> result = block
+                ? inventory.blockSeat(organizerId, performanceId, performanceSeatId)
+                : inventory.unblockSeat(organizerId, performanceId, performanceSeatId);
+        printResult(result);
+        pause();
     }
 
     private void viewReservedInventory() {

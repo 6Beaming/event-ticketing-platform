@@ -36,17 +36,17 @@ The dated work blocks below are complete only when every item in this section is
 
 ### Operations to support
 
-- [ ] Create customer and organizer profiles while collecting all required information.
-- [ ] Delete users according to a documented history-preserving policy.
-- [ ] Create an event and associate its organizer, taxonomy, artists, and billing order.
-- [ ] Add performances to an event.
-- [ ] Define performance price tiers and prices.
-- [ ] Assign every venue section to one tier for the performance.
-- [ ] Set the event resale cap.
-- [ ] Update a future tier price only when no ticket has been sold in that tier.
-- [ ] Inform the organizer when a tier-price change is rejected.
-- [ ] Block only an available seat for a performance and unblock it later.
-- [ ] Reject blocking a sold seat.
+- [x] Create customer and organizer profiles while collecting all required information.
+- [x] Delete users according to a documented history-preserving policy.
+- [x] Create an event and associate its organizer, taxonomy, artists, and billing order.
+- [x] Add performances to an event.
+- [x] Define performance price tiers and prices.
+- [x] Assign every venue section to one tier for the performance.
+- [x] Set the event resale cap.
+- [x] Update a future tier price only when no ticket has been sold in that tier.
+- [x] Inform the organizer when a tier-price change is rejected.
+- [x] Block only an available seat for a performance and unblock it later.
+- [x] Reject blocking a sold seat.
 - [ ] Book available reserved seats without double-selling.
 - [ ] Book general-admission tickets without exceeding capacity.
 - [ ] Reject the entire booking if any requested inventory is unavailable.

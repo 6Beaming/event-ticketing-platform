@@ -218,26 +218,26 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member B
 
-- [ ] **Finish event and performance setup.**
-  - [ ] Require organizer ownership, valid segment/genre, at least one artist/team, and billing order.
-  - [ ] Add performances with a valid venue, future/past date-time as appropriate, and active status.
-  - [ ] Set and update the event resale-cap value.
-  - [ ] Return created event/performance IDs to the terminal.
-- [ ] **Finish performance pricing.**
-  - [ ] Create named tiers with positive prices.
-  - [ ] Assign every section of the selected venue to exactly one tier for that performance.
-  - [ ] Reject missing, duplicate, cross-performance, or cross-venue assignments.
-  - [ ] Display the completed tier/section map for confirmation.
-- [ ] **Build the safe tier-price update.**
-  - [ ] Lock the tier and relevant ticket rows.
-  - [ ] Confirm the performance is in the future.
-  - [ ] Reject the update if any ticket has been sold from the tier and explain why.
-  - [ ] Update and commit only when both conditions pass.
-- [ ] **Build seat blocking and unblocking.**
-  - [ ] Accept performance and reserved-seat IDs.
-  - [ ] Lock the performance-seat inventory row.
-  - [ ] Block only an available seat, reject a sold seat, and allow only a blocked seat to be unblocked.
-  - [ ] Retain performance-specific status so the physical seat can differ across performances.
+- [x] **Finish event and performance setup.**
+  - [x] Require organizer ownership, valid segment/genre, at least one artist/team, and billing order.
+  - [x] Add performances with a valid venue, future/past date-time as appropriate, and active status.
+  - [x] Set and update the event resale-cap value.
+  - [x] Return created event/performance IDs to the terminal.
+- [x] **Finish performance pricing.**
+  - [x] Create named tiers with positive prices.
+  - [x] Assign every section of the selected venue to exactly one tier for that performance.
+  - [x] Reject missing, duplicate, cross-performance, or cross-venue assignments.
+  - [x] Display the completed tier/section map for confirmation.
+- [x] **Build the safe tier-price update.**
+  - [x] Lock the tier and relevant ticket rows.
+  - [x] Confirm the performance is in the future.
+  - [x] Reject the update if any ticket has been sold from the tier and explain why.
+  - [x] Update and commit only when both conditions pass.
+- [x] **Build seat blocking and unblocking.**
+  - [x] Accept performance and reserved-seat IDs.
+  - [x] Lock the performance-seat inventory row.
+  - [x] Block only an available seat, reject a sold seat, and allow only a blocked seat to be unblocked.
+  - [x] Retain performance-specific status so the physical seat can differ across performances.
 - [ ] **Build attendance reviews.**
   - [ ] Accept customer, performance, event rating, venue rating, and free-form comment.
   - [ ] Confirm the performance occurred within the documented “recent” period.

@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -23,22 +25,30 @@ public final class PerformancePricingOperations {
         this.transactions = transactions;
     }
 
-    public OperationResult<List<String>> getVenueSectionsForPricing(int performanceId) {
-        if (performanceId <= 0) {
-            return OperationResult.invalidInput("Performance ID must be positive.");
+    public OperationResult<List<String>> getVenueSectionsForPricing(
+            int organizerId,
+            int performanceId
+    ) {
+        if (organizerId <= 0 || performanceId <= 0) {
+            return OperationResult.invalidInput("Organizer and performance IDs must be positive.");
         }
 
         return transactions.execute(connection -> {
-            Integer venueId = findPerformanceVenue(connection, performanceId);
-            if (venueId == null) {
+            PerformanceOwner performance = findPerformanceOwner(connection, performanceId, false);
+            if (performance == null) {
                 return OperationResult.notFound("Performance not found.");
+            }
+            if (performance.organizerId != organizerId) {
+                return OperationResult.forbidden(
+                        "Only the event organizer can configure this performance."
+                );
             }
             boolean existingPricing = pricingExists(connection, performanceId);
             String replacementError = findReplacementConflict(connection, performanceId);
             if (replacementError != null) {
                 return OperationResult.conflict(replacementError);
             }
-            Set<String> sections = loadVenueSections(connection, venueId);
+            Set<String> sections = loadVenueSections(connection, performance.venueId);
             if (sections.isEmpty()) {
                 return OperationResult.conflict(
                         "The performance venue has no sections to configure."
@@ -56,16 +66,31 @@ public final class PerformancePricingOperations {
         });
     }
 
-    public OperationResult<PricingSetupSummary> configurePricing(PricingSetupInput input) {
+    public OperationResult<PricingSetupSummary> configurePricing(
+            int organizerId,
+            PricingSetupInput input
+    ) {
+        if (organizerId <= 0) {
+            return OperationResult.invalidInput("Organizer ID must be positive.");
+        }
         String validationError = PricingValidator.validateShape(input);
         if (validationError != null) {
             return OperationResult.invalidInput(validationError);
         }
 
         return transactions.execute(connection -> {
-            Integer venueId = lockPerformanceVenue(connection, input.getPerformanceId());
-            if (venueId == null) {
+            PerformanceOwner performance = findPerformanceOwner(
+                    connection,
+                    input.getPerformanceId(),
+                    true
+            );
+            if (performance == null) {
                 return OperationResult.notFound("Performance not found.");
+            }
+            if (performance.organizerId != organizerId) {
+                return OperationResult.forbidden(
+                        "Only the event organizer can configure this performance."
+                );
             }
 
             boolean replacingExistingPricing = pricingExists(connection, input.getPerformanceId());
@@ -77,7 +102,7 @@ public final class PerformancePricingOperations {
                 return OperationResult.conflict(replacementError);
             }
 
-            Set<String> venueSections = loadVenueSections(connection, venueId);
+            Set<String> venueSections = loadVenueSections(connection, performance.venueId);
             String coverageError = validateCoverage(input, venueSections);
             if (coverageError != null) {
                 return OperationResult.invalidInput(coverageError);
@@ -87,7 +112,12 @@ public final class PerformancePricingOperations {
                 deleteExistingPricing(connection, input.getPerformanceId());
             }
             insertTiers(connection, input);
-            insertAssignments(connection, input, venueId);
+            insertAssignments(connection, input, performance.venueId);
+            initializePerformanceInventory(
+                    connection,
+                    input.getPerformanceId(),
+                    performance.venueId
+            );
             PricingSetupSummary summary = new PricingSetupSummary(
                     input.getPerformanceId(),
                     input.getTiers().size(),
@@ -98,6 +128,80 @@ public final class PerformancePricingOperations {
                     : "Performance pricing configured.";
             return OperationResult.success(message, summary);
         });
+    }
+
+    public OperationResult<Void> updateTierPrice(
+            int organizerId,
+            int performanceId,
+            String tierCode,
+            java.math.BigDecimal newPrice
+    ) {
+        if (organizerId <= 0 || performanceId <= 0) {
+            return OperationResult.invalidInput("Organizer and performance IDs must be positive.");
+        }
+        if (tierCode == null || tierCode.trim().isEmpty()) {
+            return OperationResult.invalidInput("Tier code is required.");
+        }
+        if (newPrice == null || newPrice.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            return OperationResult.invalidInput("Tier price must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            PerformanceOwner performance = findPerformanceOwner(connection, performanceId, true);
+            if (performance == null) {
+                return OperationResult.notFound("Performance not found.");
+            }
+            if (performance.organizerId != organizerId) {
+                return OperationResult.forbidden(
+                        "Only the event organizer can update this tier price."
+                );
+            }
+
+            String tierSql = """
+                    SELECT price
+                    FROM PriceTier
+                    WHERE performance_id = ? AND tier_code = ?
+                    FOR UPDATE
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(tierSql)) {
+                statement.setInt(1, performanceId);
+                statement.setString(2, tierCode.trim());
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound("Price tier not found for this performance.");
+                    }
+                }
+            }
+
+            boolean futureScheduled = "scheduled".equals(performance.status)
+                    && performance.dateTime.isAfter(LocalDateTime.now(ZoneOffset.UTC));
+            boolean ticketsExist = ticketsExist(connection, performanceId, tierCode.trim());
+            String rejection = validateTierPriceUpdate(futureScheduled, ticketsExist);
+            if (rejection != null) {
+                return OperationResult.conflict(rejection);
+            }
+
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE PriceTier SET price = ? WHERE performance_id = ? AND tier_code = ?"
+            )) {
+                statement.setBigDecimal(1, newPrice);
+                statement.setInt(2, performanceId);
+                statement.setString(3, tierCode.trim());
+                statement.executeUpdate();
+            }
+            return OperationResult.success("Tier price updated.");
+        });
+    }
+
+    public static String validateTierPriceUpdate(boolean futureScheduled, boolean ticketsExist) {
+        if (!futureScheduled) {
+            return "A tier price can be changed only for a scheduled future performance.";
+        }
+        if (ticketsExist) {
+            return "The tier price cannot be changed because a ticket has already been sold "
+                    + "from this tier.";
+        }
+        return null;
     }
 
     public static String validateReplacement(
@@ -148,24 +252,29 @@ public final class PerformancePricingOperations {
         return null;
     }
 
-    private Integer lockPerformanceVenue(Connection connection, int performanceId)
-            throws SQLException {
-        String sql = "SELECT venue_id FROM Performance WHERE performance_id = ? FOR UPDATE";
+    private PerformanceOwner findPerformanceOwner(
+            Connection connection,
+            int performanceId,
+            boolean lock
+    ) throws SQLException {
+        String sql = """
+                SELECT p.venue_id, p.date_time, p.status, e.organizer_id
+                FROM Performance p
+                JOIN Event e ON e.event_id = p.event_id
+                WHERE p.performance_id = ?
+                """ + (lock ? " FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, performanceId);
             try (ResultSet rows = statement.executeQuery()) {
-                return rows.next() ? rows.getInt("venue_id") : null;
-            }
-        }
-    }
-
-    private Integer findPerformanceVenue(Connection connection, int performanceId)
-            throws SQLException {
-        String sql = "SELECT venue_id FROM Performance WHERE performance_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, performanceId);
-            try (ResultSet rows = statement.executeQuery()) {
-                return rows.next() ? rows.getInt("venue_id") : null;
+                if (!rows.next()) {
+                    return null;
+                }
+                return new PerformanceOwner(
+                        rows.getInt("venue_id"),
+                        rows.getInt("organizer_id"),
+                        rows.getTimestamp("date_time").toLocalDateTime(),
+                        rows.getString("status")
+                );
             }
         }
     }
@@ -216,6 +325,24 @@ public final class PerformancePricingOperations {
             try (ResultSet rows = statement.executeQuery()) {
                 rows.next();
                 return rows.getBoolean(1);
+            }
+        }
+    }
+
+    private boolean ticketsExist(Connection connection, int performanceId, String tierCode)
+            throws SQLException {
+        String sql = """
+                SELECT ticket_id
+                FROM Tickets
+                WHERE performance_id = ? AND tier_code = ?
+                ORDER BY ticket_id
+                FOR UPDATE
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            statement.setString(2, tierCode);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
             }
         }
     }
@@ -283,7 +410,76 @@ public final class PerformancePricingOperations {
         }
     }
 
+    private void initializePerformanceInventory(
+            Connection connection,
+            int performanceId,
+            int venueId
+    ) throws SQLException {
+        String reservedSql = """
+                INSERT INTO PerformanceSeats
+                    (performance_id, venue_id, section_name, row_name, seat_number)
+                SELECT ?, s.venue_id, s.section_name, s.row_name, s.seat_number
+                FROM Seats s
+                WHERE s.venue_id = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM PerformanceSeats ps
+                      WHERE ps.performance_id = ?
+                        AND ps.venue_id = s.venue_id
+                        AND ps.section_name = s.section_name
+                        AND ps.row_name = s.row_name
+                        AND ps.seat_number = s.seat_number
+                  )
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(reservedSql)) {
+            statement.setInt(1, performanceId);
+            statement.setInt(2, venueId);
+            statement.setInt(3, performanceId);
+            statement.executeUpdate();
+        }
+
+        String generalSql = """
+                INSERT INTO GeneralAdmissionCapacity
+                    (performance_id, venue_id, section_name, total_capacity, remaining_capacity)
+                SELECT ?, s.venue_id, s.section_name, s.standing_capacity, s.standing_capacity
+                FROM Section s
+                WHERE s.venue_id = ? AND s.section_type = 'general'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM GeneralAdmissionCapacity gac
+                      WHERE gac.performance_id = ?
+                        AND gac.venue_id = s.venue_id
+                        AND gac.section_name = s.section_name
+                  )
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(generalSql)) {
+            statement.setInt(1, performanceId);
+            statement.setInt(2, venueId);
+            statement.setInt(3, performanceId);
+            statement.executeUpdate();
+        }
+    }
+
     private static String normalize(String value) {
         return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static final class PerformanceOwner {
+        private final int venueId;
+        private final int organizerId;
+        private final LocalDateTime dateTime;
+        private final String status;
+
+        private PerformanceOwner(
+                int venueId,
+                int organizerId,
+                LocalDateTime dateTime,
+                String status
+        ) {
+            this.venueId = venueId;
+            this.organizerId = organizerId;
+            this.dateTime = dateTime;
+            this.status = status;
+        }
     }
 }

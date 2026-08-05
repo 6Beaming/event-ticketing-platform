@@ -56,6 +56,7 @@ public final class FoundationSelfTest {
         test("invalid organizer/taxonomy IDs are rejected", this::invalidEventIdsRejected);
         test("invalid pricing setup and unsafe replacement are rejected", this::pricingShapeRejected);
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
+        test("tier-price and seat-state rules are enforced", this::organizerControlsValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -236,6 +237,29 @@ public final class FoundationSelfTest {
                 Set.of("Floor", "Balcony")
         );
         assertTrue(error.contains("Missing"));
+    }
+
+    private void organizerControlsValidated() {
+        assertTrue(PerformancePricingOperations.validateTierPriceUpdate(true, false) == null);
+        assertTrue(PerformancePricingOperations.validateTierPriceUpdate(false, false)
+                .contains("scheduled future"));
+        assertTrue(PerformancePricingOperations.validateTierPriceUpdate(true, true)
+                .contains("already been sold"));
+        assertTrue(operations.inventory.InventoryOperations.validateSeatChange(
+                false,
+                false,
+                true
+        ) == null);
+        assertTrue(operations.inventory.InventoryOperations.validateSeatChange(
+                false,
+                true,
+                true
+        ).contains("sold seat"));
+        assertTrue(operations.inventory.InventoryOperations.validateSeatChange(
+                false,
+                false,
+                false
+        ).contains("not blocked"));
     }
 
     private void dataGenerationDeterministic() {

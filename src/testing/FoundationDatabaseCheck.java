@@ -164,11 +164,14 @@ public final class FoundationDatabaseCheck {
             throw new IllegalStateException("nonexistent taxonomy ID was not rejected");
         }
 
-        OperationResult<Integer> invalidVenue = events.addPerformance(new PerformanceInput(
-                DevelopmentIds.EVENT,
-                999999,
-                LocalDateTime.now(ZoneOffset.UTC).plusDays(60)
-        ));
+        OperationResult<Integer> invalidVenue = events.addPerformance(
+                DevelopmentIds.ORGANIZER,
+                new PerformanceInput(
+                        DevelopmentIds.EVENT,
+                        999999,
+                        LocalDateTime.now(ZoneOffset.UTC).plusDays(60)
+                )
+        );
         if (invalidVenue.getStatus() != OperationStatus.NOT_FOUND) {
             throw new IllegalStateException("nonexistent venue ID was not rejected");
         }
@@ -183,14 +186,18 @@ public final class FoundationDatabaseCheck {
         ));
         requireSuccess(event, "event creation");
 
-        OperationResult<Integer> performance = events.addPerformance(new PerformanceInput(
-                event.getValue().orElseThrow(),
-                DevelopmentIds.VENUE,
-                LocalDateTime.now(ZoneOffset.UTC).plusDays(60)
-        ));
+        OperationResult<Integer> performance = events.addPerformance(
+                organizer.getValue().orElseThrow(),
+                new PerformanceInput(
+                        event.getValue().orElseThrow(),
+                        DevelopmentIds.VENUE,
+                        LocalDateTime.now(ZoneOffset.UTC).plusDays(60)
+                )
+        );
         requireSuccess(performance, "performance creation");
 
         OperationResult<List<String>> venueSections = pricing.getVenueSectionsForPricing(
+                organizer.getValue().orElseThrow(),
                 performance.getValue().orElseThrow()
         );
         requireSuccess(venueSections, "performance venue-section preflight check");
@@ -198,48 +205,117 @@ public final class FoundationDatabaseCheck {
             throw new IllegalStateException("performance venue sections were not loaded");
         }
 
-        OperationResult<?> pricingResult = pricing.configurePricing(new PricingSetupInput(
-                performance.getValue().orElseThrow(),
-                List.of(
-                        new TierInput("P1", new BigDecimal("120.00")),
-                        new TierInput("P2", new BigDecimal("70.00")),
-                        new TierInput("P3", new BigDecimal("50.00"))
-                ),
-                List.of(
-                        new SectionTierInput("Orchestra", "P1"),
-                        new SectionTierInput("Balcony", "P2"),
-                        new SectionTierInput("General Floor", "P3")
+        OperationResult<?> pricingResult = pricing.configurePricing(
+                organizer.getValue().orElseThrow(),
+                new PricingSetupInput(
+                        performance.getValue().orElseThrow(),
+                        List.of(
+                                new TierInput("P1", new BigDecimal("120.00")),
+                                new TierInput("P2", new BigDecimal("70.00")),
+                                new TierInput("P3", new BigDecimal("50.00"))
+                        ),
+                        List.of(
+                                new SectionTierInput("Orchestra", "P1"),
+                                new SectionTierInput("Balcony", "P2"),
+                                new SectionTierInput("General Floor", "P3")
+                        )
                 )
-        ));
+        );
         requireSuccess(pricingResult, "pricing setup");
 
+        OperationResult<List<ReservedSeatAvailability>> createdReserved =
+                inventory.getReservedInventory(performance.getValue().orElseThrow());
+        requireSuccess(createdReserved, "new performance reserved inventory creation");
+        if (createdReserved.getValue().orElseThrow().size() != 42) {
+            throw new IllegalStateException("new performance reserved inventory was not created");
+        }
+        OperationResult<List<GeneralAdmissionAvailability>> createdGeneral =
+                inventory.getGeneralAdmissionInventory(performance.getValue().orElseThrow());
+        requireSuccess(createdGeneral, "new performance general inventory creation");
+        if (createdGeneral.getValue().orElseThrow().size() != 1) {
+            throw new IllegalStateException("new performance general inventory was not created");
+        }
+
         OperationResult<List<String>> replacementPreflight =
-                pricing.getVenueSectionsForPricing(performance.getValue().orElseThrow());
+                pricing.getVenueSectionsForPricing(
+                        organizer.getValue().orElseThrow(),
+                        performance.getValue().orElseThrow()
+                );
         requireSuccess(replacementPreflight, "unsold pricing replacement preflight");
         if (!replacementPreflight.getMessage().contains("already has tiers and section assignments")) {
             throw new IllegalStateException("existing pricing notice was not returned");
         }
 
-        OperationResult<?> replacementPricing = pricing.configurePricing(new PricingSetupInput(
-                performance.getValue().orElseThrow(),
-                List.of(
-                        new TierInput("Q1", new BigDecimal("125.00")),
-                        new TierInput("Q2", new BigDecimal("75.00")),
-                        new TierInput("Q3", new BigDecimal("55.00"))
-                ),
-                List.of(
-                        new SectionTierInput("Orchestra", "Q1"),
-                        new SectionTierInput("Balcony", "Q2"),
-                        new SectionTierInput("General Floor", "Q3")
+        OperationResult<?> replacementPricing = pricing.configurePricing(
+                organizer.getValue().orElseThrow(),
+                new PricingSetupInput(
+                        performance.getValue().orElseThrow(),
+                        List.of(
+                                new TierInput("Q1", new BigDecimal("125.00")),
+                                new TierInput("Q2", new BigDecimal("75.00")),
+                                new TierInput("Q3", new BigDecimal("55.00"))
+                        ),
+                        List.of(
+                                new SectionTierInput("Orchestra", "Q1"),
+                                new SectionTierInput("Balcony", "Q2"),
+                                new SectionTierInput("General Floor", "Q3")
+                        )
                 )
-        ));
+        );
         requireSuccess(replacementPricing, "unsold pricing replacement");
 
         OperationResult<List<String>> soldPricingPreflight =
-                pricing.getVenueSectionsForPricing(DevelopmentIds.PERFORMANCE_RESERVED);
+                pricing.getVenueSectionsForPricing(
+                        DevelopmentIds.ORGANIZER,
+                        DevelopmentIds.PERFORMANCE_RESERVED
+                );
         if (soldPricingPreflight.getStatus() != OperationStatus.CONFLICT
                 || !soldPricingPreflight.getMessage().contains("tickets have already been sold")) {
             throw new IllegalStateException("sold performance pricing replacement was not rejected");
+        }
+
+        requireSuccess(
+                pricing.updateTierPrice(
+                        DevelopmentIds.ORGANIZER,
+                        DevelopmentIds.PERFORMANCE_RESERVED,
+                        "P3",
+                        new BigDecimal("52.00")
+                ),
+                "unsold tier price update"
+        );
+        OperationResult<Void> soldTierUpdate = pricing.updateTierPrice(
+                DevelopmentIds.ORGANIZER,
+                DevelopmentIds.PERFORMANCE_RESERVED,
+                "P1",
+                new BigDecimal("125.00")
+        );
+        if (soldTierUpdate.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("sold tier price update was not rejected");
+        }
+
+        requireSuccess(
+                inventory.blockSeat(
+                        DevelopmentIds.ORGANIZER,
+                        DevelopmentIds.PERFORMANCE_RESERVED,
+                        610001
+                ),
+                "available seat block"
+        );
+        requireSuccess(
+                inventory.unblockSeat(
+                        DevelopmentIds.ORGANIZER,
+                        DevelopmentIds.PERFORMANCE_RESERVED,
+                        610001
+                ),
+                "blocked seat unblock"
+        );
+        OperationResult<Void> soldSeatBlock = inventory.blockSeat(
+                DevelopmentIds.ORGANIZER,
+                DevelopmentIds.PERFORMANCE_RESERVED,
+                610005
+        );
+        if (soldSeatBlock.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("sold seat block was not rejected");
         }
 
         OperationResult<List<ReservedSeatAvailability>> reserved =

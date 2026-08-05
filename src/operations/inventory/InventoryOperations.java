@@ -124,6 +124,120 @@ public final class InventoryOperations {
         });
     }
 
+    public OperationResult<Void> blockSeat(
+            int organizerId,
+            int performanceId,
+            int performanceSeatId
+    ) {
+        return changeSeatBlock(organizerId, performanceId, performanceSeatId, true);
+    }
+
+    public OperationResult<Void> unblockSeat(
+            int organizerId,
+            int performanceId,
+            int performanceSeatId
+    ) {
+        return changeSeatBlock(organizerId, performanceId, performanceSeatId, false);
+    }
+
+    private OperationResult<Void> changeSeatBlock(
+            int organizerId,
+            int performanceId,
+            int performanceSeatId,
+            boolean targetBlocked
+    ) {
+        if (organizerId <= 0 || performanceId <= 0 || performanceSeatId <= 0) {
+            return OperationResult.invalidInput(
+                    "Organizer, performance, and seat IDs must be positive."
+            );
+        }
+
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT ps.blocked_status, p.status, p.date_time, e.organizer_id
+                    FROM PerformanceSeats ps
+                    JOIN Performance p ON p.performance_id = ps.performance_id
+                    JOIN Event e ON e.event_id = p.event_id
+                    WHERE ps.performance_id = ? AND ps.performance_seat_id = ?
+                    FOR UPDATE
+                    """;
+            boolean currentlyBlocked;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                statement.setInt(2, performanceSeatId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound(
+                                "Reserved seat inventory was not found for this performance."
+                        );
+                    }
+                    if (rows.getInt("organizer_id") != organizerId) {
+                        return OperationResult.forbidden(
+                                "Only the event organizer can block or unblock this seat."
+                        );
+                    }
+                    if (!"scheduled".equals(rows.getString("status"))
+                            || !rows.getTimestamp("date_time").toLocalDateTime()
+                            .isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
+                        return OperationResult.conflict(
+                                "Seats can be blocked only for a scheduled future performance."
+                        );
+                    }
+                    currentlyBlocked = rows.getBoolean("blocked_status");
+                }
+            }
+
+            boolean sold = activeTicketExists(connection, performanceSeatId);
+            String rejection = validateSeatChange(currentlyBlocked, sold, targetBlocked);
+            if (rejection != null) {
+                return OperationResult.conflict(rejection);
+            }
+
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE PerformanceSeats SET blocked_status = ? "
+                            + "WHERE performance_id = ? AND performance_seat_id = ?"
+            )) {
+                statement.setBoolean(1, targetBlocked);
+                statement.setInt(2, performanceId);
+                statement.setInt(3, performanceSeatId);
+                statement.executeUpdate();
+            }
+            return OperationResult.success(
+                    targetBlocked ? "Seat blocked." : "Seat unblocked."
+            );
+        });
+    }
+
+    public static String validateSeatChange(
+            boolean currentlyBlocked,
+            boolean sold,
+            boolean targetBlocked
+    ) {
+        if (sold) {
+            return targetBlocked
+                    ? "A sold seat cannot be blocked; it can be freed only through cancellation."
+                    : "A sold seat cannot be unblocked; it can be freed only through cancellation.";
+        }
+        if (targetBlocked && currentlyBlocked) {
+            return "The seat is already blocked.";
+        }
+        if (!targetBlocked && !currentlyBlocked) {
+            return "The seat is not blocked.";
+        }
+        return null;
+    }
+
+    private boolean activeTicketExists(java.sql.Connection connection, int performanceSeatId)
+            throws SQLException {
+        String sql = "SELECT 1 FROM Tickets WHERE active_reserved_seat_ref = ? LIMIT 1";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceSeatId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
+            }
+        }
+    }
+
     private OperationResult<Void> checkSaleablePerformance(
             java.sql.Connection connection,
             int performanceId
