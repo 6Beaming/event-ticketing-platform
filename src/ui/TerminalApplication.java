@@ -173,9 +173,8 @@ public final class TerminalApplication {
     }
 
     private PaymentInput readPayment() {
-        System.out.println("Use fictional payment information only.");
         String cardNumber = readValidatedText(
-                "Fictional card number: ",
+                "Card number: ",
                 ProfileValidator::validateCardNumber
         );
         if (cardNumber == null) {
@@ -327,10 +326,20 @@ public final class TerminalApplication {
     }
 
     private boolean promptToRetry() {
-        String choice = readLine(
-                "Type 'continue' to try again, or press Enter to return: "
-        );
-        return "continue".equalsIgnoreCase(choice);
+        while (running) {
+            String choice = readLine("Try again? (y/n): ");
+            if (!running) {
+                return false;
+            }
+            if ("y".equalsIgnoreCase(choice)) {
+                return true;
+            }
+            if ("n".equalsIgnoreCase(choice)) {
+                return false;
+            }
+            System.out.println("Invalid input. Please type 'y' or 'n'");
+        }
+        return false;
     }
 
     private void viewCustomer() {
@@ -427,7 +436,7 @@ public final class TerminalApplication {
         }
         String description = readLine("Description (optional): ");
         BigDecimal resaleCap = readDecimalWithDefaultRetry(
-                "Resale cap multiplier [1.20]: ",
+                "Resale cap multiplier [default 1.20]: ",
                 new BigDecimal("1.20"),
                 value -> value.compareTo(BigDecimal.ONE) < 0
                         ? Optional.of("Resale cap multiplier must be at least 1.00.")
@@ -572,11 +581,19 @@ public final class TerminalApplication {
         }
 
         System.out.println("Venue sections: " + String.join(", ", venueSections));
+        int requiredAssignments = venueSections.size();
         Integer tierCount = readValidatedInteger(
                 "Number of tiers (minimum 2): ",
-                value -> value < 2
-                        ? Optional.of("A performance must have at least two price tiers.")
-                        : Optional.empty()
+                value -> {
+                    if (value < 2) {
+                        return Optional.of("A performance must have at least two price tiers.");
+                    }
+                    if (value > requiredAssignments) {
+                        return Optional.of("The number of tiers cannot exceed the venue's "
+                                + requiredAssignments + " sections because every tier must be used.");
+                    }
+                    return Optional.empty();
+                }
         );
         if (tierCount == null) {
             return null;
@@ -613,7 +630,6 @@ public final class TerminalApplication {
             tiers.add(new TierInput(code, price));
         }
 
-        int requiredAssignments = venueSections.size();
         Integer assignmentCount = readValidatedInteger(
                 "Number of venue sections to assign: ",
                 value -> value != requiredAssignments
@@ -630,6 +646,7 @@ public final class TerminalApplication {
             validSections.add(normalize(section));
         }
         Set<String> assignedSections = new HashSet<>();
+        Set<String> assignedTierCodes = new HashSet<>();
         List<SectionTierInput> assignments = new ArrayList<>();
         for (int index = 1; index <= assignmentCount; index++) {
             String section = readValidatedText(
@@ -657,15 +674,28 @@ public final class TerminalApplication {
             }
             assignedSections.add(normalize(section));
 
+            int remainingAssignments = assignmentCount - index;
             String tierCode = readValidatedText(
                     "Tier code for " + section + ": ",
-                    value -> tierCodes.contains(normalize(value))
-                            ? Optional.empty()
-                            : Optional.of("Enter one of the supplied tier codes.")
+                    value -> {
+                        String normalized = normalize(value);
+                        if (!tierCodes.contains(normalized)) {
+                            return Optional.of("Enter one of the supplied tier codes.");
+                        }
+                        Set<String> usedAfterSelection = new HashSet<>(assignedTierCodes);
+                        usedAfterSelection.add(normalized);
+                        int unusedTierCount = tierCodes.size() - usedAfterSelection.size();
+                        if (unusedTierCount > remainingAssignments) {
+                            return Optional.of("Every tier must be assigned to at least one section. "
+                                    + "Choose a tier that has not been used yet.");
+                        }
+                        return Optional.empty();
+                    }
             );
             if (tierCode == null) {
                 return null;
             }
+            assignedTierCodes.add(normalize(tierCode));
             assignments.add(new SectionTierInput(section, tierCode));
         }
 

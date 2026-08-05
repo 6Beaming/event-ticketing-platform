@@ -54,7 +54,7 @@ public final class FoundationSelfTest {
         test("inventory calculations are consistent", this::inventoryCalculations);
         test("duplicate artist billing rank is rejected", this::duplicateBillingRejected);
         test("invalid organizer/taxonomy IDs are rejected", this::invalidEventIdsRejected);
-        test("missing and duplicate tier assignments are rejected", this::pricingShapeRejected);
+        test("missing, duplicate, or unused tier assignments are rejected", this::pricingShapeRejected);
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
@@ -92,6 +92,14 @@ public final class FoundationSelfTest {
         PaymentInput payment = new PaymentInput("", "Test User", LocalDate.of(2030, 1, 1), "A1A 1A1");
         assertTrue(ProfileValidator.validatePayment(payment).isPresent());
         assertTrue(ProfileValidator.validateCardNumber(payment.getCardNumber()).isPresent());
+        assertTrue(ProfileValidator.validateExpiryDate(
+                LocalDate.of(2020, 5, 25),
+                LocalDate.of(2026, 8, 5)
+        ).isPresent());
+        assertTrue(ProfileValidator.validateExpiryDate(
+                LocalDate.of(2026, 8, 5),
+                LocalDate.of(2026, 8, 5)
+        ).isEmpty());
     }
 
     private void successfulTransactionCommits() {
@@ -180,6 +188,19 @@ public final class FoundationSelfTest {
                 )
         );
         assertTrue(PricingValidator.validateShape(duplicateSection).contains("only once"));
+
+        PricingSetupInput unusedTier = new PricingSetupInput(
+                1,
+                List.of(
+                        new TierInput("P1", BigDecimal.TEN),
+                        new TierInput("P2", BigDecimal.ONE)
+                ),
+                List.of(
+                        new SectionTierInput("Floor", "P1"),
+                        new SectionTierInput("Balcony", "P1")
+                )
+        );
+        assertTrue(PricingValidator.validateShape(unusedTier).contains("Unused tiers"));
     }
 
     private void pricingCoverageRejected() {

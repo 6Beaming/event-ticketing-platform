@@ -87,7 +87,7 @@ public final class ProfileValidator {
 
     public static Optional<String> validateCardNumber(String cardNumber) {
         return isBlank(cardNumber)
-                ? Optional.of("A fictional card number is required.")
+                ? Optional.of("Card number is required.")
                 : Optional.empty();
     }
 
@@ -98,9 +98,17 @@ public final class ProfileValidator {
     }
 
     public static Optional<String> validateExpiryDate(LocalDate expiryDate) {
-        return expiryDate == null
-                ? Optional.of("Card expiry date is required.")
-                : Optional.empty();
+        return validateExpiryDate(expiryDate, LocalDate.now());
+    }
+
+    public static Optional<String> validateExpiryDate(LocalDate expiryDate, LocalDate today) {
+        if (expiryDate == null) {
+            return Optional.of("Card expiry date is required.");
+        }
+        if (expiryDate.isBefore(today)) {
+            return Optional.of("Card expiry date cannot be in the past.");
+        }
+        return Optional.empty();
     }
 
     public static Optional<String> validateBillingZip(String billingZip) {

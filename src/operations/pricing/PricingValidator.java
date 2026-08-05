@@ -2,6 +2,7 @@ package operations.pricing;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 public final class PricingValidator {
@@ -19,7 +20,7 @@ public final class PricingValidator {
             return "A performance must have at least two price tiers.";
         }
 
-        Set<String> tierCodes = new HashSet<>();
+        Set<String> tierCodes = new LinkedHashSet<>();
         for (TierInput tier : input.getTiers()) {
             if (tier == null || isBlank(tier.getTierCode())) {
                 return "Every tier needs a code.";
@@ -36,6 +37,7 @@ public final class PricingValidator {
             return "Every venue section must be assigned to a tier.";
         }
         Set<String> sectionNames = new HashSet<>();
+        Set<String> assignedTierCodes = new HashSet<>();
         for (SectionTierInput assignment : input.getAssignments()) {
             if (assignment == null || isBlank(assignment.getSectionName())
                     || isBlank(assignment.getTierCode())) {
@@ -47,6 +49,14 @@ public final class PricingValidator {
             if (!tierCodes.contains(normalize(assignment.getTierCode()))) {
                 return "Every section assignment must reference a supplied tier.";
             }
+            assignedTierCodes.add(normalize(assignment.getTierCode()));
+        }
+
+        Set<String> unusedTierCodes = new LinkedHashSet<>(tierCodes);
+        unusedTierCodes.removeAll(assignedTierCodes);
+        if (!unusedTierCodes.isEmpty()) {
+            return "Every tier must be assigned to at least one venue section. Unused tiers: "
+                    + String.join(", ", unusedTierCodes) + ".";
         }
         return null;
     }
