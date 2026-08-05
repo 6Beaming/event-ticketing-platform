@@ -80,23 +80,30 @@ responsibilities, as detailed in `docs/business-logic-constraints.md` and
 - resale ownership and cap calculation;
 - review attendance/recency and customer-restriction checks.
 
-## Stable foundation IDs
+## Stable development-data IDs
 
-The deterministic development-data generator reserves these IDs:
+The complete deterministic sample-data generator reserves these ranges and
+representative edge-case IDs:
 
 | Record | Stable ID |
 |---|---:|
-| Foundation organizer | `1001` |
-| Foundation customers | `2001`, `2002` |
-| Customer payments | `2101`, `2102` |
-| Foundation venue | `3001` |
-| Music segment / Rock genre | `4001` / `4101` |
-| Foundation artist | `4201` |
-| Foundation event | `5001` |
-| Future mixed-inventory performances | `6001`, `6002` |
-| Past performance | `6003` |
-| Reserved and GA development orders | `7001`, `7002` |
-| Reserved and GA development tickets | `8001`, `8002` |
+| Organizers | `1001`-`1005` |
+| Customers | `2001`-`2100` |
+| Customer payments | `2101`-`2200` |
+| Venues | `3001`-`3008` |
+| Segments / genres | `4001`-`4003` / `4101`-`4106` |
+| Artists and teams | `4201`-`4215` |
+| Events | `5001`-`5020` |
+| Performances | `6001`-`6060` |
+| Consecutive/nonconsecutive availability example | `6001` |
+| Fewer-than-seven-days sold example | `6002` |
+| Sold-out examples | `6003`, `6007`, `6019` |
+| Low-sell-through example | `6004` |
+| Organizer-cancelled examples | `6058`, `6060` |
+| Purchase orders | `7001`-`7320` |
+| Tickets | `8001`-`8960` |
+| Reserved and GA representative tickets | `8001`, `8002` |
+| Ticket with two resale transfers | `8007` |
 
 ## Foundation acceptance examples
 

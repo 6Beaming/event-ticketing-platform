@@ -101,39 +101,39 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 
 ### Required sample data
 
-- [ ] Generated data uses plausible real city/postal-code names, sensible coordinates, prices, and dates and loads reasonably quickly.
-- [ ] At least 8 venues across at least 4 cities and 2 countries with realistic coordinates and addresses.
-- [ ] At least 3 nearby venues in the same or adjacent postal codes.
-- [ ] Venues vary in size and every venue has several sections.
-- [ ] At least 2 venues have both reserved and general-admission sections.
-- [ ] At least 20 events managed by at least 5 organizers.
-- [ ] At least 3 segments, 6 genres, and 15 artists or teams.
-- [ ] Some events have multiple artists with different billing orders.
-- [ ] At least 60 past and upcoming performances.
-- [ ] Include a touring event at different venues.
-- [ ] Include a theatre-style event with many performances at one venue.
-- [ ] At least one venue hosts two performances with different tier assignments and prices.
-- [ ] Every performance has at least 2 price tiers.
-- [ ] Include an upcoming tier with no sales and another with sales to test both tier-price outcomes.
-- [ ] Include performance-specific blocked seats.
-- [ ] At least 100 adult customers with fictional personal/card information.
-- [ ] At least 300 orders containing at least 800 tickets across the past 12 months and the future.
-- [ ] Several customers have at least 2 recent orders in more than one city.
-- [ ] Include past sold-out performances across several months/cities.
-- [ ] Include past performances below 25% sell-through across several months/cities.
-- [ ] Include a performance more than 7 days away with reserved and general-admission availability.
-- [ ] Include a row with at least 4 consecutive available seats.
-- [ ] Include a row with only nonconsecutive available seats.
-- [ ] Include a performance fewer than 7 days away with sold tickets.
-- [ ] Include cancellations by several customers.
-- [ ] Include at least 2 organizer-cancelled performances within the past year.
-- [ ] Include sold, withdrawn, and currently active resale listings.
-- [ ] Include listings priced exactly at the resale cap.
-- [ ] Include at least one ticket that changes owners twice.
-- [ ] Include at least 2 customers who bought 10 or more tickets and listed more than half within the past year.
-- [ ] Include several reviews for at least 10 events.
-- [ ] Review comments contain several meaningful sentences for R9.
-- [ ] `sql/load.sql` loads the complete dataset in one execution with no manual preparation.
+- [x] Generated data uses plausible real city/postal-code names, sensible coordinates, prices, and dates and loads reasonably quickly.
+- [x] At least 8 venues across at least 4 cities and 2 countries with realistic coordinates and addresses.
+- [x] At least 3 nearby venues in the same or adjacent postal codes.
+- [x] Venues vary in size and every venue has several sections.
+- [x] At least 2 venues have both reserved and general-admission sections.
+- [x] At least 20 events managed by at least 5 organizers.
+- [x] At least 3 segments, 6 genres, and 15 artists or teams.
+- [x] Some events have multiple artists with different billing orders.
+- [x] At least 60 past and upcoming performances.
+- [x] Include a touring event at different venues.
+- [x] Include a theatre-style event with many performances at one venue.
+- [x] At least one venue hosts two performances with different tier assignments and prices.
+- [x] Every performance has at least 2 price tiers.
+- [x] Include an upcoming tier with no sales and another with sales to test both tier-price outcomes.
+- [x] Include performance-specific blocked seats.
+- [x] At least 100 adult customers with fictional personal/card information.
+- [x] At least 300 orders containing at least 800 tickets across the past 12 months and the future.
+- [x] Several customers have at least 2 recent orders in more than one city.
+- [x] Include past sold-out performances across several months/cities.
+- [x] Include past performances below 25% sell-through across several months/cities.
+- [x] Include a performance more than 7 days away with reserved and general-admission availability.
+- [x] Include a row with at least 4 consecutive available seats.
+- [x] Include a row with only nonconsecutive available seats.
+- [x] Include a performance fewer than 7 days away with sold tickets.
+- [x] Include cancellations by several customers.
+- [x] Include at least 2 organizer-cancelled performances within the past year.
+- [x] Include sold, withdrawn, and currently active resale listings.
+- [x] Include listings priced exactly at the resale cap.
+- [x] Include at least one ticket that changes owners twice.
+- [x] Include at least 2 customers who bought 10 or more tickets and listed more than half within the past year.
+- [x] Include several reviews for at least 10 events.
+- [x] Review comments contain several meaningful sentences for R9.
+- [x] `sql/load.sql` loads the complete dataset in one execution with no manual preparation.
 
 ### Submission and implementation requirements
 
@@ -142,7 +142,7 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 - [ ] Terminal interface exposes every required operation, query, report, and toolkit function.
 - [ ] `sql/schema.sql` creates all tables and constraints in one execution.
 - [ ] `sql/drop.sql` drops the complete schema safely.
-- [ ] `sql/load.sql` loads all sample data in one execution.
+- [x] `sql/load.sql` loads all sample data in one execution.
 - [ ] `run.sh` compiles and runs the application with one command.
 - [ ] The extensionless `README` contains only names, student numbers, and `run.sh`.
 - [ ] Reasonable assumptions are documented and do not conflict with the PDF.

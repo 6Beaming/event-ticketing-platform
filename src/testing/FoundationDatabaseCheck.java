@@ -73,7 +73,7 @@ public final class FoundationDatabaseCheck {
         InventoryOperations inventory = new InventoryOperations(transactions);
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
-                "alice@foundation.test"
+                "customer001@example.test"
         );
         if (duplicateEmail.getStatus() != OperationStatus.CONFLICT) {
             throw new IllegalStateException("an existing email address was not rejected");
@@ -194,7 +194,7 @@ public final class FoundationDatabaseCheck {
                 performance.getValue().orElseThrow()
         );
         requireSuccess(venueSections, "performance venue-section preflight check");
-        if (venueSections.getValue().orElseThrow().size() != 2) {
+        if (venueSections.getValue().orElseThrow().size() != 3) {
             throw new IllegalStateException("performance venue sections were not loaded");
         }
 
@@ -202,11 +202,13 @@ public final class FoundationDatabaseCheck {
                 performance.getValue().orElseThrow(),
                 List.of(
                         new TierInput("P1", new BigDecimal("120.00")),
-                        new TierInput("P2", new BigDecimal("70.00"))
+                        new TierInput("P2", new BigDecimal("70.00")),
+                        new TierInput("P3", new BigDecimal("50.00"))
                 ),
                 List.of(
                         new SectionTierInput("Orchestra", "P1"),
-                        new SectionTierInput("General Floor", "P2")
+                        new SectionTierInput("Balcony", "P2"),
+                        new SectionTierInput("General Floor", "P3")
                 )
         ));
         requireSuccess(pricingResult, "pricing setup");
@@ -222,11 +224,13 @@ public final class FoundationDatabaseCheck {
                 performance.getValue().orElseThrow(),
                 List.of(
                         new TierInput("Q1", new BigDecimal("125.00")),
-                        new TierInput("Q2", new BigDecimal("75.00"))
+                        new TierInput("Q2", new BigDecimal("75.00")),
+                        new TierInput("Q3", new BigDecimal("55.00"))
                 ),
                 List.of(
                         new SectionTierInput("Orchestra", "Q1"),
-                        new SectionTierInput("General Floor", "Q2")
+                        new SectionTierInput("Balcony", "Q2"),
+                        new SectionTierInput("General Floor", "Q3")
                 )
         ));
         requireSuccess(replacementPricing, "unsold pricing replacement");
@@ -242,9 +246,13 @@ public final class FoundationDatabaseCheck {
                 inventory.getReservedInventory(DevelopmentIds.PERFORMANCE_RESERVED);
         requireSuccess(reserved, "reserved inventory lookup");
         List<ReservedSeatAvailability> seats = reserved.getValue().orElseThrow();
-        if (seats.size() != 6
-                || seats.get(0).getState() != InventoryState.SOLD
-                || seats.get(5).getState() != InventoryState.BLOCKED) {
+        long soldSeats = seats.stream()
+                .filter(seat -> seat.getState() == InventoryState.SOLD)
+                .count();
+        long blockedSeats = seats.stream()
+                .filter(seat -> seat.getState() == InventoryState.BLOCKED)
+                .count();
+        if (seats.size() != 42 || soldSeats != 12 || blockedSeats != 7) {
             throw new IllegalStateException("reserved inventory states did not match development data");
         }
 
@@ -252,7 +260,7 @@ public final class FoundationDatabaseCheck {
                 inventory.getGeneralAdmissionInventory(DevelopmentIds.PERFORMANCE_GENERAL);
         requireSuccess(general, "general-admission inventory lookup");
         List<GeneralAdmissionAvailability> sections = general.getValue().orElseThrow();
-        if (sections.size() != 1 || sections.get(0).getSoldQuantity() != 1) {
+        if (sections.size() != 1 || sections.get(0).getSoldQuantity() != 3) {
             throw new IllegalStateException("general-admission inventory did not match development data");
         }
     }

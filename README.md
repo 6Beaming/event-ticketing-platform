@@ -8,25 +8,7 @@ MyTix is a database design project for an event ticketing platform similar to Ti
 - A JDK with `java` and `javac` available.
 - `lib/mysql-connector-java-8.0.29.jar` (MySQL JDBC driver). *Java's standard `java.sql` API does not natively understand the MySQL protocol. Connector/J provides that MySQL-specific implementation so `DriverManager` can open the JDBC connection and send SQL to MySQL.*
 
-
-## Core data requirements
-
 Keeping [business logic constraint map](docs/business-logic-constraints.md) in mind when building and testing the schema and operations without overlooking a rule. 
-
-The final relational design must represent:
-
-- Venues, geographic coordinates, addresses, and postal codes
-- Reserved-seating and general-admission sections
-- Rows and numbered seats for reserved sections
-- Organizers, customers, profiles, addresses, and payment information
-- Events, Ticketmaster segments and genres, artists or teams, and billing order
-- Performances at a venue on a specific date and time
-- Performance-specific price tiers and section-to-tier assignments
-- Performance-specific blocked seats
-- Orders, tickets, face values, and general-admission inventory
-- Customer and organizer cancellations and refunds
-- Resale listings, resale caps, transfers, and complete ticket ownership history
-- Attendance-based event and venue reviews with ratings and comments
 
 ## Required operations
 

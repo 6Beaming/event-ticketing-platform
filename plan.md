@@ -317,15 +317,15 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - [ ] **Finish the R4-R8 terminal screens.**
   - [ ] Add prompts and check date, city, and period inputs.
   - [ ] Use clear headings, money/percentage formatting, and empty-result messages.
-- [ ] **Build the transaction-heavy part of the final sample data.**
-  - [ ] Add reserved and general-admission orders with known face values and inventory totals.
-  - [ ] Add eligible and ineligible customer-cancellation examples.
-  - [ ] Add at least two organizer-cancelled performances with refunded tickets.
-  - [ ] Add active, withdrawn, sold, and exactly-at-cap resale listings.
-  - [ ] Add one ticket that changes owners twice.
-  - [ ] Add two customers who meet the possible-scalper threshold.
-  - [ ] Add the reserved rows needed for the consecutive and nonconsecutive Q7 cases.
-  - [ ] Give Member B the generated records and stable IDs needed by `load.sql`.
+- [x] **Build the transaction-heavy part of the final sample data.**
+  - [x] Add reserved and general-admission orders with known face values and inventory totals.
+  - [x] Add eligible and ineligible customer-cancellation examples.
+  - [x] Add at least two organizer-cancelled performances with refunded tickets.
+  - [x] Add active, withdrawn, sold, and exactly-at-cap resale listings.
+  - [x] Add one ticket that changes owners twice.
+  - [x] Add two customers who meet the possible-scalper threshold.
+  - [x] Add the reserved rows needed for the consecutive and nonconsecutive Q7 cases.
+  - [x] Give Member B the generated records and stable IDs needed by `load.sql`.
 - [ ] **Finish transaction-side terminal integration.**
   - [ ] Check that profile, booking, cancellation, resale, Q6, Q7, and R4-R8 screens accept the documented inputs.
   - [ ] Use consistent headings, money/percentage output, empty results, and validation messages.
@@ -370,12 +370,12 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Provide a fallback when comparable data is insufficient.
   - [ ] Explain which comparable performances influenced the recommendation.
   - [ ] Attempt expected-revenue-change estimation only after all required features pass.
-- [ ] **Finish the repeatable sample-data generator and `sql/load.sql`.**
-  - [ ] Generate every count and edge case in `checklist.md`, including Member A’s transaction records.
-  - [ ] Keep the load order safe for foreign keys and preserve stable IDs.
-  - [ ] Use plausible locations, dates, prices, statuses, and fictional customer/card data.
-  - [ ] Add count checks for venues, events, performances, customers, orders, tickets, cancellations, listings, and reviews.
-  - [ ] Confirm `load.sql` succeeds in one execution on a clean schema.
+- [x] **Finish the repeatable sample-data generator and `sql/load.sql`.**
+  - [x] Generate every count and edge case in `checklist.md`, including Member A’s transaction records.
+  - [x] Keep the load order safe for foreign keys and preserve stable IDs.
+  - [x] Use plausible locations, dates, prices, statuses, and fictional customer/card data.
+  - [x] Add count checks for venues, events, performances, customers, orders, tickets, cancellations, listings, and reviews.
+  - [x] Confirm `load.sql` succeeds in one execution on a clean schema.
 - [ ] **Finish organizer, search, report, and toolkit terminal integration.**
   - [ ] Check that organizer/event/pricing, blocking, review, Q1-Q5, R1-R3, R9, and toolkit screens accept the documented inputs.
   - [ ] Use consistent date/location filters, table headings, empty results, and validation messages.
@@ -410,7 +410,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 - [ ] R1-R9 are complete and verified.
 - [ ] The organizer toolkit produces documented suggestions.
-- [ ] Sample data satisfies every minimum and supports every test case.
+- [x] Sample data satisfies every minimum and supports every test case.
 - [ ] The full terminal application works after a clean schema and data load.
 - [ ] `report.pdf` and `manual.pdf` are complete.
 - [ ] Only final packaging and delivery remain.
