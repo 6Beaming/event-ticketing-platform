@@ -37,6 +37,9 @@ public final class UserProfileOperations {
         }
 
         return transactions.execute(connection -> {
+            if (emailExists(connection, profile.getEmail())) {
+                return OperationResult.conflict("An account already uses that email address.");
+            }
             int userId = insertUser(connection, profile, "customer");
             insertSubtype(connection, "Customer", userId, "customer");
             insertPayment(connection, userId, payment);
@@ -51,9 +54,26 @@ public final class UserProfileOperations {
         }
 
         return transactions.execute(connection -> {
+            if (emailExists(connection, profile.getEmail())) {
+                return OperationResult.conflict("An account already uses that email address.");
+            }
             int userId = insertUser(connection, profile, "organizer");
             insertSubtype(connection, "Organizer", userId, "organizer");
             return OperationResult.success("Organizer profile created.", userId);
+        });
+    }
+
+    public OperationResult<Void> checkEmailAvailability(String email) {
+        Optional<String> emailError = ProfileValidator.validateEmail(email);
+        if (emailError.isPresent()) {
+            return OperationResult.invalidInput(emailError.get());
+        }
+
+        return transactions.execute(connection -> {
+            if (emailExists(connection, email)) {
+                return OperationResult.conflict("An account already uses that email address.");
+            }
+            return OperationResult.success("Email address is available.");
         });
     }
 
@@ -136,6 +156,16 @@ public final class UserProfileOperations {
             statement.setString(5, role);
             statement.executeUpdate();
             return JdbcSupport.requireGeneratedIntKey(statement, role + " user");
+        }
+    }
+
+    private boolean emailExists(Connection connection, String email) throws SQLException {
+        String sql = "SELECT 1 FROM Users WHERE email = ? LIMIT 1";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, email.trim());
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
+            }
         }
     }
 

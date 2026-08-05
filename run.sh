@@ -29,16 +29,20 @@ fi
 
 javac -cp "$CONNECTOR_PATH" -d "$BUILD_DIR" @"$SOURCE_LIST"
 
+# Optional development utilities. [We can remove them when delivery], except --generate-data
+# --generate-data is useful, and the PDF explicitly recommends writing a sample-data generator.
 case "${1:-}" in
     --generate-data)
         java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" data.DevelopmentDataGenerator
         exit 0
         ;;
     --self-test)
+        # Runs quickly without MySQL and checks Java validation, transaction behavior, and calculations.
         java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" testing.FoundationSelfTest
         exit 0
         ;;
     --database-check)
+        # It runs drop.sql -> schema.sql -> load.sql -> tests real JDBC operations
         java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" testing.FoundationDatabaseCheck --reset-database
         exit 0
         ;;

@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -20,6 +21,29 @@ public final class PerformancePricingOperations {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
+    }
+
+    public OperationResult<List<String>> getVenueSectionsForPricing(int performanceId) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            Integer venueId = findPerformanceVenue(connection, performanceId);
+            if (venueId == null) {
+                return OperationResult.notFound("Performance not found.");
+            }
+            Set<String> sections = loadVenueSections(connection, venueId);
+            if (sections.isEmpty()) {
+                return OperationResult.conflict(
+                        "The performance venue has no sections to configure."
+                );
+            }
+            return OperationResult.success(
+                    "Performance venue sections loaded.",
+                    List.copyOf(sections)
+            );
+        });
     }
 
     public OperationResult<PricingSetupSummary> configurePricing(PricingSetupInput input) {
@@ -80,6 +104,17 @@ public final class PerformancePricingOperations {
     private Integer lockPerformanceVenue(Connection connection, int performanceId)
             throws SQLException {
         String sql = "SELECT venue_id FROM Performance WHERE performance_id = ? FOR UPDATE";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? rows.getInt("venue_id") : null;
+            }
+        }
+    }
+
+    private Integer findPerformanceVenue(Connection connection, int performanceId)
+            throws SQLException {
+        String sql = "SELECT venue_id FROM Performance WHERE performance_id = ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, performanceId);
             try (ResultSet rows = statement.executeQuery()) {

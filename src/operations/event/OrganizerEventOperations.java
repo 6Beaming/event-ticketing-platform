@@ -23,6 +23,35 @@ public final class OrganizerEventOperations {
         this.transactions = transactions;
     }
 
+    public OperationResult<Void> checkActiveOrganizer(int organizerId) {
+        if (organizerId <= 0) {
+            return OperationResult.invalidInput("Organizer ID must be positive.");
+        }
+        return transactions.execute(connection -> activeOrganizerExists(connection, organizerId)
+                ? OperationResult.success("Active organizer found.")
+                : OperationResult.notFound("Active organizer not found."));
+    }
+
+    public OperationResult<Void> checkGenre(int genreId) {
+        return checkRecord(genreId, "Genre", "genre_id",
+                "Genre found.", "Genre not found in the configured taxonomy.");
+    }
+
+    public OperationResult<Void> checkArtist(int artistId) {
+        return checkRecord(artistId, "ArtistsTeams", "artist_id",
+                "Artist or team found.", "Artist or team not found.");
+    }
+
+    public OperationResult<Void> checkEvent(int eventId) {
+        return checkRecord(eventId, "Event", "event_id",
+                "Event found.", "Event not found.");
+    }
+
+    public OperationResult<Void> checkVenue(int venueId) {
+        return checkRecord(venueId, "Venue", "venue_id",
+                "Venue found.", "Venue not found.");
+    }
+
     public OperationResult<Integer> createEvent(EventInput input) {
         String validationError = validateEvent(input);
         if (validationError != null) {
@@ -172,6 +201,21 @@ public final class OrganizerEventOperations {
                 return rows.next();
             }
         }
+    }
+
+    private OperationResult<Void> checkRecord(
+            int id,
+            String table,
+            String column,
+            String successMessage,
+            String notFoundMessage
+    ) {
+        if (id <= 0) {
+            return OperationResult.invalidInput(column.replace('_', ' ') + " must be positive.");
+        }
+        return transactions.execute(connection -> recordExists(connection, table, column, id)
+                ? OperationResult.success(successMessage)
+                : OperationResult.notFound(notFoundMessage));
     }
 
     private boolean recordExists(Connection connection, String table, String column, int id)

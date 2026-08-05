@@ -11,26 +11,52 @@ public final class ProfileValidator {
         if (profile == null) {
             return Optional.of("Profile information is required.");
         }
-        if (isBlank(profile.getName())) {
-            return Optional.of("Name is required.");
+        Optional<String> error = validateName(profile.getName());
+        if (error.isPresent()) {
+            return error;
         }
-        if (isBlank(profile.getAddress())) {
-            return Optional.of("Address is required.");
+        error = validateAddress(profile.getAddress());
+        if (error.isPresent()) {
+            return error;
         }
-        if (isBlank(profile.getEmail())) {
+        error = validateEmail(profile.getEmail());
+        if (error.isPresent()) {
+            return error;
+        }
+        error = validateDateOfBirth(profile.getDateOfBirth(), today);
+        if (error.isPresent()) {
+            return error;
+        }
+        return Optional.empty();
+    }
+
+    public static Optional<String> validateName(String name) {
+        return isBlank(name) ? Optional.of("Name is required.") : Optional.empty();
+    }
+
+    public static Optional<String> validateAddress(String address) {
+        return isBlank(address) ? Optional.of("Address is required.") : Optional.empty();
+    }
+
+    public static Optional<String> validateEmail(String email) {
+        if (isBlank(email)) {
             return Optional.of("Email is required.");
         }
-        String email = profile.getEmail().trim();
-        if (!email.contains("@") || email.contains(" ")) {
+        String trimmedEmail = email.trim();
+        if (!trimmedEmail.contains("@") || trimmedEmail.contains(" ")) {
             return Optional.of("Enter a valid email address.");
         }
-        if (profile.getDateOfBirth() == null) {
+        return Optional.empty();
+    }
+
+    public static Optional<String> validateDateOfBirth(LocalDate dateOfBirth, LocalDate today) {
+        if (dateOfBirth == null) {
             return Optional.of("Date of birth is required.");
         }
-        if (profile.getDateOfBirth().isAfter(today)) {
+        if (dateOfBirth.isAfter(today)) {
             return Optional.of("Date of birth cannot be in the future.");
         }
-        if (profile.getDateOfBirth().plusYears(18).isAfter(today)) {
+        if (dateOfBirth.plusYears(18).isAfter(today)) {
             return Optional.of("A MyTix account holder must be at least 18 years old.");
         }
         return Optional.empty();
@@ -40,19 +66,47 @@ public final class ProfileValidator {
         if (payment == null) {
             return Optional.of("Payment information is required for a customer.");
         }
-        if (isBlank(payment.getCardNumber())) {
-            return Optional.of("A fictional card number is required.");
+        Optional<String> error = validateCardNumber(payment.getCardNumber());
+        if (error.isPresent()) {
+            return error;
         }
-        if (isBlank(payment.getCardHolderName())) {
-            return Optional.of("Card holder name is required.");
+        error = validateCardHolderName(payment.getCardHolderName());
+        if (error.isPresent()) {
+            return error;
         }
-        if (payment.getExpiryDate() == null) {
-            return Optional.of("Card expiry date is required.");
+        error = validateExpiryDate(payment.getExpiryDate());
+        if (error.isPresent()) {
+            return error;
         }
-        if (isBlank(payment.getBillingZip())) {
-            return Optional.of("Billing postal or ZIP code is required.");
+        error = validateBillingZip(payment.getBillingZip());
+        if (error.isPresent()) {
+            return error;
         }
         return Optional.empty();
+    }
+
+    public static Optional<String> validateCardNumber(String cardNumber) {
+        return isBlank(cardNumber)
+                ? Optional.of("A fictional card number is required.")
+                : Optional.empty();
+    }
+
+    public static Optional<String> validateCardHolderName(String cardHolderName) {
+        return isBlank(cardHolderName)
+                ? Optional.of("Card holder name is required.")
+                : Optional.empty();
+    }
+
+    public static Optional<String> validateExpiryDate(LocalDate expiryDate) {
+        return expiryDate == null
+                ? Optional.of("Card expiry date is required.")
+                : Optional.empty();
+    }
+
+    public static Optional<String> validateBillingZip(String billingZip) {
+        return isBlank(billingZip)
+                ? Optional.of("Billing postal or ZIP code is required.")
+                : Optional.empty();
     }
 
     private static boolean isBlank(String value) {

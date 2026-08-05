@@ -71,6 +71,7 @@ public final class FoundationSelfTest {
                 LocalDate.of(2000, 1, 1)
         );
         assertTrue(ProfileValidator.validateProfile(profile, LocalDate.of(2026, 8, 3)).isEmpty());
+        assertTrue(ProfileValidator.validateEmail(profile.getEmail()).isEmpty());
     }
 
     private void underAgeProfileRejected() {
@@ -81,11 +82,16 @@ public final class FoundationSelfTest {
                 LocalDate.of(2010, 1, 1)
         );
         assertTrue(ProfileValidator.validateProfile(profile, LocalDate.of(2026, 8, 3)).isPresent());
+        assertTrue(ProfileValidator.validateDateOfBirth(
+                profile.getDateOfBirth(),
+                LocalDate.of(2026, 8, 3)
+        ).isPresent());
     }
 
     private void paymentFieldsChecked() {
         PaymentInput payment = new PaymentInput("", "Test User", LocalDate.of(2030, 1, 1), "A1A 1A1");
         assertTrue(ProfileValidator.validatePayment(payment).isPresent());
+        assertTrue(ProfileValidator.validateCardNumber(payment.getCardNumber()).isPresent());
     }
 
     private void successfulTransactionCommits() {

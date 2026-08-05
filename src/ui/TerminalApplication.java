@@ -18,16 +18,23 @@ import operations.pricing.TierInput;
 import operations.profile.CustomerProfile;
 import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
+import operations.profile.ProfileValidator;
 import operations.profile.UserProfileOperations;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.Scanner;
+import java.util.Set;
+import java.util.function.Function;
 
 public final class TerminalApplication {
     private static final DateTimeFormatter DATE_TIME_FORMAT =
@@ -142,51 +149,188 @@ public final class TerminalApplication {
     }
 
     private void createCustomer() {
-        ProfileInput profile = readProfile();
-        if (profile == null) {
-            pause();
-            return;
-        }
-        System.out.println("Use fictional payment information only.");
-        String cardNumber = readLine("Fictional card number: ");
-        String cardHolder = readLine("Card holder name: ");
-        LocalDate expiry = readDate("Expiry date (YYYY-MM-DD): ");
-        if (expiry == null) {
-            pause();
-            return;
-        }
-        String billingZip = readLine("Billing postal/ZIP code: ");
+        while (running) {
+            ProfileInput profile = readProfile();
+            if (profile == null) {
+                return;
+            }
+            PaymentInput payment = readPayment();
+            if (payment == null) {
+                return;
+            }
 
-        OperationResult<Integer> result = profiles.createCustomer(
-                profile,
-                new PaymentInput(cardNumber, cardHolder, expiry, billingZip)
+            OperationResult<Integer> result = profiles.createCustomer(profile, payment);
+            printResult(result);
+            if (result.isSuccess()) {
+                result.getValue().ifPresent(id -> System.out.println("Customer ID: " + id));
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
+        }
+    }
+
+    private PaymentInput readPayment() {
+        System.out.println("Use fictional payment information only.");
+        String cardNumber = readValidatedText(
+                "Fictional card number: ",
+                ProfileValidator::validateCardNumber
         );
-        printResult(result);
-        result.getValue().ifPresent(id -> System.out.println("Customer ID: " + id));
-        pause();
+        if (cardNumber == null) {
+            return null;
+        }
+        String cardHolder = readValidatedText(
+                "Card holder name: ",
+                ProfileValidator::validateCardHolderName
+        );
+        if (cardHolder == null) {
+            return null;
+        }
+        LocalDate expiry = readValidatedDate(
+                "Expiry date (YYYY-MM-DD): ",
+                ProfileValidator::validateExpiryDate
+        );
+        if (expiry == null) {
+            return null;
+        }
+        String billingZip = readValidatedText(
+                "Billing postal/ZIP code: ",
+                ProfileValidator::validateBillingZip
+        );
+        if (billingZip == null) {
+            return null;
+        }
+        return new PaymentInput(cardNumber, cardHolder, expiry, billingZip);
     }
 
     private void createOrganizer() {
-        ProfileInput profile = readProfile();
-        if (profile == null) {
-            pause();
-            return;
+        while (running) {
+            ProfileInput profile = readProfile();
+            if (profile == null) {
+                return;
+            }
+            OperationResult<Integer> result = profiles.createOrganizer(profile);
+            printResult(result);
+            if (result.isSuccess()) {
+                result.getValue().ifPresent(id -> System.out.println("Organizer ID: " + id));
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
         }
-        OperationResult<Integer> result = profiles.createOrganizer(profile);
-        printResult(result);
-        result.getValue().ifPresent(id -> System.out.println("Organizer ID: " + id));
-        pause();
     }
 
     private ProfileInput readProfile() {
-        String name = readLine("Name: ");
-        String address = readLine("Address: ");
-        String email = readLine("Email: ");
-        LocalDate dateOfBirth = readDate("Date of birth (YYYY-MM-DD): ");
+        String name = readValidatedText("Name: ", ProfileValidator::validateName);
+        if (name == null) {
+            return null;
+        }
+        String address = readValidatedText("Address: ", ProfileValidator::validateAddress);
+        if (address == null) {
+            return null;
+        }
+        String email = readAvailableEmail();
+        if (email == null) {
+            return null;
+        }
+        LocalDate dateOfBirth = readValidatedDate(
+                "Date of birth (YYYY-MM-DD): ",
+                date -> ProfileValidator.validateDateOfBirth(
+                        date,
+                        LocalDate.now(ZoneOffset.UTC)
+                )
+        );
         if (dateOfBirth == null) {
             return null;
         }
         return new ProfileInput(name, address, email, dateOfBirth);
+    }
+
+    private String readAvailableEmail() {
+        while (running) {
+            String email = readValidatedText("Email: ", ProfileValidator::validateEmail);
+            if (email == null) {
+                return null;
+            }
+
+            OperationResult<Void> availability = profiles.checkEmailAvailability(email);
+            if (availability.isSuccess()) {
+                return email;
+            }
+            printResult(availability);
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String readValidatedText(
+            String prompt,
+            Function<String, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            Optional<String> error = validator.apply(value);
+            if (error.isEmpty()) {
+                return value;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private LocalDate readValidatedDate(
+            String prompt,
+            Function<LocalDate, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            LocalDate date;
+            try {
+                date = LocalDate.parse(value);
+            } catch (DateTimeParseException exception) {
+                printInputError("Enter a date in YYYY-MM-DD format.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(date);
+            if (error.isEmpty()) {
+                return date;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private void printInputError(String message) {
+        System.out.println("INVALID_INPUT: " + message);
+    }
+
+    private boolean promptToRetry() {
+        String choice = readLine(
+                "Type 'continue' to try again, or press Enter to return: "
+        );
+        return "continue".equalsIgnoreCase(choice);
     }
 
     private void viewCustomer() {
@@ -218,7 +362,7 @@ public final class TerminalApplication {
             pause();
             return;
         }
-        String confirmation = readLine("Type DEACTIVATE to preserve history and anonymize this profile: ");
+        String confirmation = readLine("Type DEACTIVATE to make this profile anonymous while preserving the history");
         if (!"DEACTIVATE".equals(confirmation)) {
             System.out.println("Deactivation cancelled.");
             pause();
@@ -245,62 +389,122 @@ public final class TerminalApplication {
     }
 
     private void createEvent() {
-        Integer organizerId = readPositiveInt("Organizer ID: ");
-        Integer genreId = readPositiveInt("Genre ID: ");
-        if (organizerId == null || genreId == null) {
-            pause();
-            return;
+        while (running) {
+            EventInput input = readEventInput();
+            if (input == null) {
+                return;
+            }
+            OperationResult<Integer> result = events.createEvent(input);
+            printResult(result);
+            if (result.isSuccess()) {
+                result.getValue().ifPresent(id -> System.out.println("Event ID: " + id));
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
         }
-        String title = readLine("Event title: ");
-        String description = readLine("Description (optional): ");
-        BigDecimal resaleCap = readDecimalWithDefault(
-                "Resale cap multiplier [1.20]: ",
-                new BigDecimal("1.20")
+    }
+
+    private EventInput readEventInput() {
+        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
+        if (organizerId == null) {
+            return null;
+        }
+        Integer genreId = readCheckedId("Genre ID: ", events::checkGenre);
+        if (genreId == null) {
+            return null;
+        }
+        String title = readValidatedText(
+                "Event title: ",
+                value -> value.trim().isEmpty()
+                        ? Optional.of("Event title is required.")
+                        : Optional.empty()
         );
-        Integer artistCount = readPositiveInt("Number of artists/teams: ");
-        if (resaleCap == null || artistCount == null) {
-            pause();
-            return;
+        if (title == null) {
+            return null;
+        }
+        String description = readLine("Description (optional): ");
+        BigDecimal resaleCap = readDecimalWithDefaultRetry(
+                "Resale cap multiplier [1.20]: ",
+                new BigDecimal("1.20"),
+                value -> value.compareTo(BigDecimal.ONE) < 0
+                        ? Optional.of("Resale cap multiplier must be at least 1.00.")
+                        : Optional.empty()
+        );
+        if (resaleCap == null) {
+            return null;
+        }
+        Integer artistCount = readPositiveIntWithRetry("Number of artists/teams: ");
+        if (artistCount == null) {
+            return null;
         }
 
         List<ArtistBillingInput> artists = new ArrayList<>();
+        Set<Integer> artistIds = new HashSet<>();
+        Set<Integer> billingRanks = new HashSet<>();
         for (int index = 1; index <= artistCount; index++) {
-            Integer artistId = readPositiveInt("Artist/team " + index + " ID: ");
-            Integer rank = readPositiveInt("Billing rank for artist/team " + index + ": ");
-            if (artistId == null || rank == null) {
-                pause();
-                return;
+            Integer artistId = readUniqueCheckedId(
+                    "Artist/team " + index + " ID: ",
+                    events::checkArtist,
+                    artistIds,
+                    "An artist or team can appear only once in an event billing order."
+            );
+            if (artistId == null) {
+                return null;
+            }
+            Integer rank = readUniquePositiveInt(
+                    "Billing rank for artist/team " + index + ": ",
+                    billingRanks,
+                    "Billing ranks must be unique within an event."
+            );
+            if (rank == null) {
+                return null;
             }
             artists.add(new ArtistBillingInput(artistId, rank));
         }
 
-        OperationResult<Integer> result = events.createEvent(new EventInput(
+        return new EventInput(
                 organizerId,
                 title,
                 description,
                 resaleCap,
                 genreId,
                 artists
-        ));
-        printResult(result);
-        result.getValue().ifPresent(id -> System.out.println("Event ID: " + id));
-        pause();
+        );
     }
 
     private void addPerformance() {
-        Integer eventId = readPositiveInt("Event ID: ");
-        Integer venueId = readPositiveInt("Venue ID: ");
-        LocalDateTime dateTime = readDateTime("Date and time (YYYY-MM-DD HH:mm): ");
-        if (eventId == null || venueId == null || dateTime == null) {
-            pause();
-            return;
+        while (running) {
+            Integer eventId = readCheckedId("Event ID: ", events::checkEvent);
+            if (eventId == null) {
+                return;
+            }
+            Integer venueId = readCheckedId("Venue ID: ", events::checkVenue);
+            if (venueId == null) {
+                return;
+            }
+            LocalDateTime dateTime = readDateTimeWithRetry(
+                    "Date and time (YYYY-MM-DD HH:mm): "
+            );
+            if (dateTime == null) {
+                return;
+            }
+
+            OperationResult<Integer> result = events.addPerformance(
+                    new PerformanceInput(eventId, venueId, dateTime)
+            );
+            printResult(result);
+            if (result.isSuccess()) {
+                result.getValue().ifPresent(id -> System.out.println("Performance ID: " + id));
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
         }
-        OperationResult<Integer> result = events.addPerformance(
-                new PerformanceInput(eventId, venueId, dateTime)
-        );
-        printResult(result);
-        result.getValue().ifPresent(id -> System.out.println("Performance ID: " + id));
-        pause();
     }
 
     private void showPricingAndInventoryMenu() {
@@ -322,45 +526,150 @@ public final class TerminalApplication {
     }
 
     private void configurePricing() {
-        Integer performanceId = readPositiveInt("Performance ID: ");
-        Integer tierCount = readPositiveInt("Number of tiers (minimum 2): ");
-        if (performanceId == null || tierCount == null) {
-            pause();
-            return;
-        }
-        List<TierInput> tiers = new ArrayList<>();
-        for (int index = 1; index <= tierCount; index++) {
-            String code = readLine("Tier " + index + " code: ");
-            BigDecimal price = readDecimal("Tier " + index + " price: ");
-            if (price == null) {
+        while (running) {
+            PricingSetupInput input = readPricingSetup();
+            if (input == null) {
+                return;
+            }
+            OperationResult<PricingSetupSummary> result = pricing.configurePricing(input);
+            printResult(result);
+            if (result.isSuccess()) {
+                result.getValue().ifPresent(summary -> {
+                    System.out.println("Performance ID: " + summary.getPerformanceId());
+                    System.out.println("Tiers created: " + summary.getTierCount());
+                    System.out.println("Sections assigned: " + summary.getAssignedSectionCount());
+                });
                 pause();
                 return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
+        }
+    }
+
+    private PricingSetupInput readPricingSetup() {
+        Integer performanceId = null;
+        List<String> venueSections = null;
+        while (running) {
+            performanceId = readPositiveIntWithRetry("Performance ID: ");
+            if (performanceId == null) {
+                return null;
+            }
+            OperationResult<List<String>> sectionsResult =
+                    pricing.getVenueSectionsForPricing(performanceId);
+            if (sectionsResult.isSuccess()) {
+                venueSections = sectionsResult.getValue().orElseThrow();
+                break;
+            }
+            printResult(sectionsResult);
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        if (performanceId == null || venueSections == null) {
+            return null;
+        }
+
+        System.out.println("Venue sections: " + String.join(", ", venueSections));
+        Integer tierCount = readValidatedInteger(
+                "Number of tiers (minimum 2): ",
+                value -> value < 2
+                        ? Optional.of("A performance must have at least two price tiers.")
+                        : Optional.empty()
+        );
+        if (tierCount == null) {
+            return null;
+        }
+
+        List<TierInput> tiers = new ArrayList<>();
+        Set<String> tierCodes = new HashSet<>();
+        for (int index = 1; index <= tierCount; index++) {
+            String code = readValidatedText(
+                    "Tier " + index + " code: ",
+                    value -> {
+                        if (value.trim().isEmpty()) {
+                            return Optional.of("Every tier needs a code.");
+                        }
+                        if (tierCodes.contains(normalize(value))) {
+                            return Optional.of("Tier codes must be unique within a performance.");
+                        }
+                        return Optional.empty();
+                    }
+            );
+            if (code == null) {
+                return null;
+            }
+            tierCodes.add(normalize(code));
+            BigDecimal price = readDecimalWithRetry(
+                    "Tier " + index + " price: ",
+                    value -> value.compareTo(BigDecimal.ZERO) <= 0
+                            ? Optional.of("Every tier price must be positive.")
+                            : Optional.empty()
+            );
+            if (price == null) {
+                return null;
             }
             tiers.add(new TierInput(code, price));
         }
 
-        Integer assignmentCount = readPositiveInt("Number of venue sections to assign: ");
+        int requiredAssignments = venueSections.size();
+        Integer assignmentCount = readValidatedInteger(
+                "Number of venue sections to assign: ",
+                value -> value != requiredAssignments
+                        ? Optional.of("This venue has " + requiredAssignments
+                                + " sections; enter " + requiredAssignments + " assignments.")
+                        : Optional.empty()
+        );
         if (assignmentCount == null) {
-            pause();
-            return;
+            return null;
         }
+
+        Set<String> validSections = new HashSet<>();
+        for (String section : venueSections) {
+            validSections.add(normalize(section));
+        }
+        Set<String> assignedSections = new HashSet<>();
         List<SectionTierInput> assignments = new ArrayList<>();
         for (int index = 1; index <= assignmentCount; index++) {
-            String section = readLine("Section " + index + " name: ");
-            String tierCode = readLine("Tier code for " + section + ": ");
+            String section = readValidatedText(
+                    "Section " + index + " name: ",
+                    value -> {
+                        String normalized = normalize(value);
+                        if (normalized.isEmpty()) {
+                            return Optional.of("A section name is required.");
+                        }
+                        if (!validSections.contains(normalized)) {
+                            return Optional.of(
+                                    "Enter a section belonging to the performance venue."
+                            );
+                        }
+                        if (assignedSections.contains(normalized)) {
+                            return Optional.of(
+                                    "A section can be assigned only once for a performance."
+                            );
+                        }
+                        return Optional.empty();
+                    }
+            );
+            if (section == null) {
+                return null;
+            }
+            assignedSections.add(normalize(section));
+
+            String tierCode = readValidatedText(
+                    "Tier code for " + section + ": ",
+                    value -> tierCodes.contains(normalize(value))
+                            ? Optional.empty()
+                            : Optional.of("Enter one of the supplied tier codes.")
+            );
+            if (tierCode == null) {
+                return null;
+            }
             assignments.add(new SectionTierInput(section, tierCode));
         }
 
-        OperationResult<PricingSetupSummary> result = pricing.configurePricing(
-                new PricingSetupInput(performanceId, tiers, assignments)
-        );
-        printResult(result);
-        result.getValue().ifPresent(summary -> {
-            System.out.println("Performance ID: " + summary.getPerformanceId());
-            System.out.println("Tiers created: " + summary.getTierCount());
-            System.out.println("Sections assigned: " + summary.getAssignedSectionCount());
-        });
-        pause();
+        return new PricingSetupInput(performanceId, tiers, assignments);
     }
 
     private void viewReservedInventory() {
@@ -497,48 +806,196 @@ public final class TerminalApplication {
         }
     }
 
-    private BigDecimal readDecimal(String prompt) {
-        String value = readLine(prompt);
-        try {
-            return new BigDecimal(value);
-        } catch (NumberFormatException exception) {
-            System.out.println("Enter a valid decimal number.");
-            return null;
-        }
+    private Integer readPositiveIntWithRetry(String prompt) {
+        return readValidatedInteger(
+                prompt,
+                value -> value <= 0
+                        ? Optional.of("Enter a positive whole number.")
+                        : Optional.empty()
+        );
     }
 
-    private BigDecimal readDecimalWithDefault(String prompt, BigDecimal defaultValue) {
-        String value = readLine(prompt);
-        return value.isEmpty() ? defaultValue : parseDecimal(value);
+    private Integer readValidatedInteger(
+            String prompt,
+            Function<Integer, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            int parsed;
+            try {
+                parsed = Integer.parseInt(value);
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a whole number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(parsed);
+            if (error.isEmpty()) {
+                return parsed;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
     }
 
-    private BigDecimal parseDecimal(String value) {
-        try {
-            return new BigDecimal(value);
-        } catch (NumberFormatException exception) {
-            System.out.println("Enter a valid decimal number.");
-            return null;
+    private Integer readCheckedId(
+            String prompt,
+            Function<Integer, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            Integer id = readPositiveIntWithRetry(prompt);
+            if (id == null) {
+                return null;
+            }
+            OperationResult<Void> result = checker.apply(id);
+            if (result.isSuccess()) {
+                return id;
+            }
+            printResult(result);
+            if (!promptToRetry()) {
+                return null;
+            }
         }
+        return null;
     }
 
-    private LocalDate readDate(String prompt) {
-        String value = readLine(prompt);
-        try {
-            return LocalDate.parse(value);
-        } catch (DateTimeParseException exception) {
-            System.out.println("Enter a date in YYYY-MM-DD format.");
-            return null;
+    private Integer readUniqueCheckedId(
+            String prompt,
+            Function<Integer, OperationResult<Void>> checker,
+            Set<Integer> usedValues,
+            String duplicateMessage
+    ) {
+        while (running) {
+            Integer id = readCheckedId(prompt, checker);
+            if (id == null) {
+                return null;
+            }
+            if (usedValues.add(id)) {
+                return id;
+            }
+            printInputError(duplicateMessage);
+            if (!promptToRetry()) {
+                return null;
+            }
         }
+        return null;
     }
 
-    private LocalDateTime readDateTime(String prompt) {
-        String value = readLine(prompt);
-        try {
-            return LocalDateTime.parse(value, DATE_TIME_FORMAT);
-        } catch (DateTimeParseException exception) {
-            System.out.println("Enter date and time in YYYY-MM-DD HH:mm format.");
-            return null;
+    private Integer readUniquePositiveInt(
+            String prompt,
+            Set<Integer> usedValues,
+            String duplicateMessage
+    ) {
+        while (running) {
+            Integer value = readPositiveIntWithRetry(prompt);
+            if (value == null) {
+                return null;
+            }
+            if (usedValues.add(value)) {
+                return value;
+            }
+            printInputError(duplicateMessage);
+            if (!promptToRetry()) {
+                return null;
+            }
         }
+        return null;
+    }
+
+    private BigDecimal readDecimalWithRetry(
+            String prompt,
+            Function<BigDecimal, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            BigDecimal parsed;
+            try {
+                parsed = new BigDecimal(value);
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid decimal number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(parsed);
+            if (error.isEmpty()) {
+                return parsed;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal readDecimalWithDefaultRetry(
+            String prompt,
+            BigDecimal defaultValue,
+            Function<BigDecimal, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            BigDecimal parsed;
+            try {
+                parsed = value.isEmpty() ? defaultValue : new BigDecimal(value);
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid decimal number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(parsed);
+            if (error.isEmpty()) {
+                return parsed;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private LocalDateTime readDateTimeWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            try {
+                return LocalDateTime.parse(value, DATE_TIME_FORMAT);
+            } catch (DateTimeParseException exception) {
+                printInputError("Enter date and time in YYYY-MM-DD HH:mm format.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String normalize(String value) {
+        return value.trim().toLowerCase(Locale.ROOT);
     }
 
     private String readLine(String prompt) {

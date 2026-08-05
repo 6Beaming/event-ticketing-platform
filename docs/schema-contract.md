@@ -24,6 +24,9 @@ by both members because it can affect every layer of the project.
   operation result or SQL failure rolls back the entire transaction.
 - Stored payment details and all development card values are fictional. Full
   card numbers are never displayed by the terminal.
+- The assignment requires an email but does not define duplicate-email behavior.
+  MyTix treats email as a unique account contact value, checks availability
+  during entry, and keeps the `Users.email` constraint as final protection.
 - A customer is an adult when their eighteenth birthday is not after the
   current date.
 

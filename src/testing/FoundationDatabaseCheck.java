@@ -72,6 +72,24 @@ public final class FoundationDatabaseCheck {
         PerformancePricingOperations pricing = new PerformancePricingOperations(transactions);
         InventoryOperations inventory = new InventoryOperations(transactions);
 
+        OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
+                "alice@foundation.test"
+        );
+        if (duplicateEmail.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("an existing email address was not rejected");
+        }
+        OperationResult<Void> availableEmail = profiles.checkEmailAvailability(
+                "available-database-check@example.test"
+        );
+        requireSuccess(availableEmail, "available email address check");
+        requireSuccess(
+                events.checkActiveOrganizer(DevelopmentIds.ORGANIZER),
+                "active organizer preflight check"
+        );
+        if (events.checkArtist(999999).getStatus() != OperationStatus.NOT_FOUND) {
+            throw new IllegalStateException("nonexistent artist preflight check was not rejected");
+        }
+
         OperationResult<Integer> customer = profiles.createCustomer(
                 new ProfileInput(
                         "Database Check Customer",
@@ -171,6 +189,14 @@ public final class FoundationDatabaseCheck {
                 LocalDateTime.now(ZoneOffset.UTC).plusDays(60)
         ));
         requireSuccess(performance, "performance creation");
+
+        OperationResult<List<String>> venueSections = pricing.getVenueSectionsForPricing(
+                performance.getValue().orElseThrow()
+        );
+        requireSuccess(venueSections, "performance venue-section preflight check");
+        if (venueSections.getValue().orElseThrow().size() != 2) {
+            throw new IllegalStateException("performance venue sections were not loaded");
+        }
 
         OperationResult<?> pricingResult = pricing.configurePricing(new PricingSetupInput(
                 performance.getValue().orElseThrow(),
