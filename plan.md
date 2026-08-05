@@ -26,7 +26,6 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - Customer ticket cancellation and refunds
 - Organizer performance cancellation and refunds
 - Resale listing, withdrawal, purchase, and ownership transfer
-- Possible-scalper prohibition
 - Q6 seat-map summary and Q7 best consecutive seats
 - R4 possible scalpers, R5 customer orders, R6 cancellations, R7 sell-through, and R8 resale
 - Primary author of `manual.pdf`
@@ -58,7 +57,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 | Work block | Member A focus | Member B focus |
 |---|---|---|
 | July 29-31 | JDBC transactions, customer operations, inventory lookups, and transaction-side development data | Data dictionary, generator foundation, organizer/event operations, and pricing foundation |
-| August 1-3 | Booking, cancellation, resale, scalper control, Q6, and Q7 | Event/pricing completion, blocking, reviews, and Q1-Q5 |
+| August 1-3 | Booking, cancellation, resale, Q6, and Q7 | Event/pricing completion, blocking, reviews, and Q1-Q5 |
 | August 4-6 | R4-R8, transaction-heavy final data, transaction/report terminal integration, manual lead, and assigned report sections | R1-R3/R9, toolkit, base data/load integration, organizer/search terminal integration, report lead, and assigned manual sections |
 | August 7 | Terminal/manual verification | Database/report/data verification |
 
@@ -175,7 +174,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 - [x] **Build reserved-seat booking as one transaction.**
   - [x] Accept customer, performance, and one or more requested seat IDs.
-  - [x] Reject cancelled or past performances and prohibited customers.
+  - [x] Reject cancelled or past performances.
   - [x] Lock requested seats in a consistent order so two customers cannot buy the same seat.
   - [x] Check that every seat is available and not blocked before creating the order.
   - [x] Save the order, payment snapshot, tickets, original prices, and first ownership records.
@@ -201,10 +200,6 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Allow the seller to withdraw only an active unsold listing.
   - [x] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
   - [x] Ensure two buyers cannot complete the same listing.
-- [x] **Add the possible-scalper check.**
-  - [x] Calculate the past-year purchased and listed counts.
-  - [x] Flag customers who bought at least 10 tickets and listed more than half.
-  - [x] Block the prohibited actions chosen by the design and show a clear terminal message.
 - [ ] **Build Q6: seat-map summary.**
   - [ ] Accept a performance ID.
   - [ ] Return every section with tier, price, available/remaining capacity, sold, and blocked counts.
@@ -285,7 +280,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - [x] All required operations are implemented and reachable from the terminal.
 - [x] Reserved and general-admission inventory cannot be oversold.
 - [x] Cancellation, resale, and ownership-history rules work.
-- [x] Review and possible-scalper restrictions work.
+- [x] Review eligibility and duplicate-review restrictions work.
 - [ ] Q1-Q7 return verified results.
 
 ## August 4-6 — reports, toolkit, sample data, integration, and documents
@@ -296,7 +291,8 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Group by venue city.
   - [ ] Use the past-year purchase/listing window.
   - [ ] Return customers who purchased at least 10 tickets and listed more than half.
-  - [ ] Make sure the result matches the application’s scalper flag/prohibition logic.
+  - [ ] Flag the identified customers and prohibit the actions chosen by the design.
+  - [ ] Add the R4 report and prohibition result to terminal option 8.
 - [ ] **Build R5: customer order rankings.**
   - [ ] Rank customers by order count for a requested period.
   - [ ] Rank customers by the city of the performance venue.

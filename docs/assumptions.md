@@ -6,5 +6,3 @@ Updating one unsold tier’s price is a separate operation from replacing the co
 - The PDF requires an email but does not define duplicate-email behavior. MyTix treats email as a unique account contact value, checks availability during entry, and keeps the `Users.email` constraint as final protection.
 
 - “Recently attended” means a completed performance within the previous 365 days. A reviewer must have held a non-cancelled ticket when that performance occurred, and can review that performance only once.
-
-- The PDF identifies possible scalpers per city but does not list the prohibited actions. MyTix automatically creates a restriction when, in any city during the rolling year, a customer purchased at least 10 tickets and listed more than half of them. The restriction blocks new bookings, resale listings, and resale purchases. It does not block cancellations, listing withdrawals, or attendance reviews.

@@ -3,8 +3,6 @@ package operations.booking;
 import common.OperationResult;
 import database.JdbcSupport;
 import database.TransactionManager;
-import operations.restriction.CustomerRestrictionGuard;
-import operations.restriction.CustomerRestrictionOperations;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -23,14 +21,12 @@ import java.util.Set;
 
 public final class BookingOperations {
     private final TransactionManager transactions;
-    private final CustomerRestrictionOperations restrictions;
 
     public BookingOperations(TransactionManager transactions) {
         if (transactions == null) {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
-        this.restrictions = new CustomerRestrictionOperations(transactions);
     }
 
     public OperationResult<BookingSummary> bookReservedSeats(
@@ -47,15 +43,6 @@ public final class BookingOperations {
             return OperationResult.invalidInput(validationError);
         }
 
-        OperationResult<Boolean> restrictionStatus =
-                restrictions.refreshPossibleScalperStatus(customerId);
-        if (!restrictionStatus.isSuccess()) {
-            return copyFailure(restrictionStatus);
-        }
-        if (restrictionStatus.getValue().orElse(false)) {
-            return OperationResult.forbidden(restrictionStatus.getMessage());
-        }
-
         List<Integer> sortedSeatIds = requestedSeatIds.stream().sorted().toList();
         return transactions.execute(connection -> {
             PaymentSnapshot payment = lockCustomerPayment(connection, customerId);
@@ -63,13 +50,6 @@ public final class BookingOperations {
                 return OperationResult.notFound(
                         "An active customer with saved payment information was not found."
                 );
-            }
-            String restriction = CustomerRestrictionGuard.findExistingRestriction(
-                    connection,
-                    customerId
-            );
-            if (restriction != null) {
-                return OperationResult.forbidden(restriction);
             }
             OperationResult<Void> performance = lockSaleablePerformance(connection, performanceId);
             if (!performance.isSuccess()) {
@@ -145,28 +125,12 @@ public final class BookingOperations {
             return OperationResult.invalidInput(validationError);
         }
 
-        OperationResult<Boolean> restrictionStatus =
-                restrictions.refreshPossibleScalperStatus(customerId);
-        if (!restrictionStatus.isSuccess()) {
-            return copyFailure(restrictionStatus);
-        }
-        if (restrictionStatus.getValue().orElse(false)) {
-            return OperationResult.forbidden(restrictionStatus.getMessage());
-        }
-
         return transactions.execute(connection -> {
             PaymentSnapshot payment = lockCustomerPayment(connection, customerId);
             if (payment == null) {
                 return OperationResult.notFound(
                         "An active customer with saved payment information was not found."
                 );
-            }
-            String restriction = CustomerRestrictionGuard.findExistingRestriction(
-                    connection,
-                    customerId
-            );
-            if (restriction != null) {
-                return OperationResult.forbidden(restriction);
             }
             OperationResult<Void> performance = lockSaleablePerformance(connection, performanceId);
             if (!performance.isSuccess()) {

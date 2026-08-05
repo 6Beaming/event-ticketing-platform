@@ -23,7 +23,6 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - List an owned ticket for resale at or below the event cap, withdraw a listing, and purchase another customer's listing.
 - Preserve every ticket ownership transfer.
 - Submit one eligible event and venue review per attended performance.
-- Flag and prohibit customers who meet the project's possible-scalper rule.
 
 ## Required queries
 
@@ -116,7 +115,7 @@ sh run.sh --database-check
 
 - `--generate-data` deterministically rewrites `data/development-data.sql`.
 - `--self-test` checks validation, commit/rollback behavior, inventory math,
-  organizer controls, booking/cancellation/resale rules, reviews, restrictions,
+  organizer controls, booking/cancellation/resale rules, reviews,
   and deterministic generation without MySQL.
 - `--database-check` drops and recreates only the configured MyTix tables,
   executes `schema.sql` and `load.sql`, exercises all required operations,

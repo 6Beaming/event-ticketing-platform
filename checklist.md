@@ -59,7 +59,6 @@ The dated work blocks below are complete only when every item in this section is
 - [x] Withdraw an unsold resale listing.
 - [x] Purchase another customer’s active listing and transfer ownership atomically.
 - [x] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
-- [x] Flag and prohibit customers who satisfy the possible-scalper rule.
 
 ### Queries Q1-Q7
 
@@ -82,6 +81,7 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 - [ ] **R2:** Event/performance totals per segment and genre at country, country/city, and country/city/venue levels.
 - [ ] **R3:** Organizer gross-revenue rankings overall, per country, and optionally by city.
 - [ ] **R4:** For every city, customers who bought at least 10 tickets and listed more than half within the past year.
+- [ ] **R4:** Flag and prohibit customers identified as possible scalpers.
 - [ ] **R5:** Customer order rankings for a time period and by venue city; city ranking includes customers with at least two orders in the year.
 - [ ] **R6:** Customers with the most cancelled tickets and organizers with the most cancelled performances within a year.
 - [ ] **R7:** Performance and tier sell-through using sellable capacity, excluding blocked seats and including general-admission capacity.

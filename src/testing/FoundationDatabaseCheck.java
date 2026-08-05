@@ -30,7 +30,6 @@ import operations.profile.UserProfileOperations;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
-import operations.restriction.CustomerRestrictionOperations;
 import operations.review.ReviewOperations;
 
 import java.math.BigDecimal;
@@ -95,8 +94,6 @@ public final class FoundationDatabaseCheck {
         BookingOperations bookings = new BookingOperations(transactions);
         CancellationOperations cancellations = new CancellationOperations(transactions);
         ResaleOperations resale = new ResaleOperations(transactions);
-        CustomerRestrictionOperations restrictions =
-                new CustomerRestrictionOperations(transactions);
         ReviewOperations reviews = new ReviewOperations(transactions);
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
@@ -611,21 +608,6 @@ public final class FoundationDatabaseCheck {
         List<GeneralAdmissionAvailability> sections = general.getValue().orElseThrow();
         if (sections.size() != 1 || sections.get(0).getSoldQuantity() != 3) {
             throw new IllegalStateException("general-admission inventory did not match development data");
-        }
-
-        OperationResult<Boolean> seededRestriction =
-                restrictions.refreshPossibleScalperStatus(DevelopmentIds.CUSTOMER_ALICE);
-        requireSuccess(seededRestriction, "seeded possible-scalper restriction check");
-        if (!seededRestriction.getValue().orElseThrow()) {
-            throw new IllegalStateException("known possible scalper was not prohibited");
-        }
-        OperationResult<Boolean> ordinaryCustomerRestriction =
-                restrictions.refreshPossibleScalperStatus(
-                        bookingCustomerOne.getValue().orElseThrow()
-                );
-        requireSuccess(ordinaryCustomerRestriction, "ordinary customer restriction check");
-        if (ordinaryCustomerRestriction.getValue().orElseThrow()) {
-            throw new IllegalStateException("ordinary booking customer was incorrectly prohibited");
         }
 
         requireSuccess(

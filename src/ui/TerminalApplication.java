@@ -27,7 +27,6 @@ import operations.profile.UserProfileOperations;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
-import operations.restriction.CustomerRestrictionOperations;
 import operations.review.ReviewOperations;
 
 import java.math.BigDecimal;
@@ -58,7 +57,6 @@ public final class TerminalApplication {
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
     private final ResaleOperations resale;
-    private final CustomerRestrictionOperations restrictions;
     private final ReviewOperations reviews;
     private boolean running;
 
@@ -76,7 +74,6 @@ public final class TerminalApplication {
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
         this.resale = new ResaleOperations(transactions);
-        this.restrictions = new CustomerRestrictionOperations(transactions);
         this.reviews = new ReviewOperations(transactions);
     }
 
@@ -146,14 +143,12 @@ public final class TerminalApplication {
             System.out.println("2. Create organizer profile");
             System.out.println("3. View customer profile");
             System.out.println("4. Deactivate user profile");
-            System.out.println("5. Refresh possible-scalper restriction");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createCustomer);
                 case "2" -> runOnlineAction(this::createOrganizer);
                 case "3" -> runOnlineAction(this::viewCustomer);
                 case "4" -> runOnlineAction(this::deactivateUser);
-                case "5" -> runOnlineAction(this::refreshCustomerRestriction);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown profile option.");
             }
@@ -557,20 +552,6 @@ public final class TerminalApplication {
             return;
         }
         printResult(events.updateResaleCap(organizerId, eventId, cap));
-        pause();
-    }
-
-    private void refreshCustomerRestriction() {
-        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
-        if (customerId == null) {
-            return;
-        }
-        OperationResult<Boolean> result = restrictions.refreshPossibleScalperStatus(customerId);
-        printResult(result);
-        result.getValue().ifPresent(restricted -> System.out.println(
-                "Prohibited from booking and resale purchases/listings: "
-                        + (restricted ? "yes" : "no")
-        ));
         pause();
     }
 
