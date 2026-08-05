@@ -43,6 +43,16 @@ public final class DatabaseConfig {
         );
     }
 
+    public static DatabaseConfig fromValues(String url, String user, String password) {
+        if (url == null || url.trim().isEmpty()) {
+            throw new IllegalArgumentException("Database URL is required");
+        }
+        if (user == null || user.trim().isEmpty()) {
+            throw new IllegalArgumentException("Database user is required");
+        }
+        return new DatabaseConfig(url.trim(), user.trim(), password == null ? "" : password);
+    }
+
     public String getUrl() {
         return url;
     }

@@ -94,7 +94,7 @@ public final class TerminalApplication {
         System.out.println();
         System.out.println("============================================================");
         System.out.println("                         MyTix");
-        System.out.println("        Event ticketing database terminal foundation");
+        System.out.println("             Event ticketing database terminal");
         System.out.println("============================================================");
     }
 

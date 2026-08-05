@@ -214,7 +214,8 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Find consecutive numeric seats in the same row.
   - [ ] Exclude sold and blocked seats.
   - [ ] Return the qualifying group with the lowest total tier price, or a clear no-result message.
-- [ ] Demonstrate the required booking, cancellation, resale, Q6, and Q7 success/rejection behavior before marking each operation complete.
+- [x] Demonstrate the required booking, cancellation, and resale success/rejection behavior before marking each operation complete.
+- [ ] Demonstrate the required Q6 and Q7 success/rejection behavior.
 
 ### Member B
 
@@ -262,11 +263,13 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Support city, segment, genre, date range, cheapest-ticket price range, minimum availability, reserved seating, and general admission in any combination.
   - [ ] Use prepared parameters for values and safely add only the selected filters.
   - [ ] Ensure cheapest price and availability include both reserved and general-admission inventory.
-- [ ] **Check event setup, pricing, blocking, reviews, and each Q1-Q5 sort/filter path with known data.**
+- [x] **Check event setup, pricing, blocking, and reviews with known data.**
+- [ ] **Check each Q1-Q5 sort/filter path with known data.**
 
 ### Shared work
 
-- [ ] Integrate every operation and query into the terminal.
+- [x] Integrate every required operation into the terminal.
+- [ ] Integrate every Q1-Q7 query into the terminal.
 - [x] Test two customers attempting to buy the same reserved seat.
 - [x] Test general-admission requests below, equal to, and above remaining capacity.
 - [x] Test failed multi-seat booking and confirm the entire order rolls back.
@@ -279,10 +282,10 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Block exit criteria
 
-- [ ] All required operations are implemented and reachable from the terminal.
-- [ ] Reserved and general-admission inventory cannot be oversold.
-- [ ] Cancellation, resale, and ownership-history rules work.
-- [ ] Review and possible-scalper restrictions work.
+- [x] All required operations are implemented and reachable from the terminal.
+- [x] Reserved and general-admission inventory cannot be oversold.
+- [x] Cancellation, resale, and ownership-history rules work.
+- [x] Review and possible-scalper restrictions work.
 - [ ] Q1-Q7 return verified results.
 
 ## August 4-6 — reports, toolkit, sample data, integration, and documents

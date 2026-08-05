@@ -52,7 +52,7 @@ public final class FoundationDatabaseCheck {
             System.exit(2);
         }
 
-        DatabaseConfig config = DatabaseConfig.defaults();
+        DatabaseConfig config = databaseCheckConfig();
         try (DatabaseConnection database = new DatabaseConnection(config)) {
             Connection connection = database.connect();
             resetDatabase(connection);
@@ -65,6 +65,18 @@ public final class FoundationDatabaseCheck {
                     + (message == null ? exception.getClass().getSimpleName() : message));
             System.exit(1);
         }
+    }
+
+    private static DatabaseConfig databaseCheckConfig() {
+        String overrideUrl = System.getProperty("mytix.databaseCheck.url");
+        if (overrideUrl == null || overrideUrl.isBlank()) {
+            return DatabaseConfig.defaults();
+        }
+        return DatabaseConfig.fromValues(
+                overrideUrl,
+                System.getProperty("mytix.databaseCheck.user", "root"),
+                System.getProperty("mytix.databaseCheck.password", "")
+        );
     }
 
     private static void resetDatabase(Connection connection) throws Exception {
@@ -401,7 +413,7 @@ public final class FoundationDatabaseCheck {
         OperationResult<ResaleListingSummary> listing = resale.listTicket(
                 bookingCustomerOne.getValue().orElseThrow(),
                 secondBookedTicket,
-                new BigDecimal("100.00")
+                new BigDecimal("80.00")
         );
         requireSuccess(listing, "owned ticket resale listing");
         int listingId = listing.getValue().orElseThrow().getListingId();

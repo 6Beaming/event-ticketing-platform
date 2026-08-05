@@ -78,7 +78,7 @@ mytix/
 └── src/                    # Full Java source code of your application
     ├── Main.java           # Entry point for the application
     ├── database/           # JDBC configuration and connection lifecycle
-    ├── operations/         # Future user, organizer, customer, and booking logic
+    ├── operations/         # Profile, organizer, booking, cancellation, resale, and review logic
     ├── queries/            # Q1–Q7 SQL search query implementations
     ├── reports/            # R1–R9 SQL report generators and text analysis
     └── ui/                 # Persistent text-based terminal loop
@@ -106,7 +106,7 @@ The application defaults to the local `mytix` database with the username
 `config.properties` copied from `config.properties.example`. If the initial
 connection fails, the terminal starts in offline mode and option 10 can retry.
 
-### Foundation development commands
+### Development commands
 
 ```sh
 sh run.sh --generate-data
@@ -116,8 +116,9 @@ sh run.sh --database-check
 
 - `--generate-data` deterministically rewrites `data/development-data.sql`.
 - `--self-test` checks validation, commit/rollback behavior, inventory math,
-  event/pricing rejection rules, and deterministic generation without MySQL.
+  organizer controls, booking/cancellation/resale rules, reviews, restrictions,
+  and deterministic generation without MySQL.
 - `--database-check` drops and recreates only the configured MyTix tables,
-  executes `schema.sql` and `load.sql`, exercises the foundation operations,
+  executes `schema.sql` and `load.sql`, exercises all required operations,
   and restores the deterministic dataset. Use it only against the development
   MyTix database.
