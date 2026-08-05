@@ -5,6 +5,7 @@ import common.OperationStatus;
 import data.DevelopmentDataGenerator;
 import database.ConnectionProvider;
 import database.TransactionManager;
+import operations.booking.BookingOperations;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -57,6 +58,7 @@ public final class FoundationSelfTest {
         test("invalid pricing setup and unsafe replacement are rejected", this::pricingShapeRejected);
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
         test("tier-price and seat-state rules are enforced", this::organizerControlsValidated);
+        test("booking request shapes are validated", this::bookingRequestsValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -260,6 +262,17 @@ public final class FoundationSelfTest {
                 false,
                 false
         ).contains("not blocked"));
+    }
+
+    private void bookingRequestsValidated() {
+        assertTrue(BookingOperations.validateReservedRequest(1, 1, List.of(10, 11)) == null);
+        assertTrue(BookingOperations.validateReservedRequest(1, 1, List.of(10, 10))
+                .contains("only once"));
+        assertTrue(BookingOperations.validateReservedRequest(1, 1, List.of())
+                .contains("At least one"));
+        assertTrue(BookingOperations.validateGeneralRequest(1, 1, "Floor", 2) == null);
+        assertTrue(BookingOperations.validateGeneralRequest(1, 1, "Floor", 0)
+                .contains("positive"));
     }
 
     private void dataGenerationDeterministic() {

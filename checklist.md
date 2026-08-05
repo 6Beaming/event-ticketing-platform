@@ -47,9 +47,9 @@ The dated work blocks below are complete only when every item in this section is
 - [x] Inform the organizer when a tier-price change is rejected.
 - [x] Block only an available seat for a performance and unblock it later.
 - [x] Reject blocking a sold seat.
-- [ ] Book available reserved seats without double-selling.
-- [ ] Book general-admission tickets without exceeding capacity.
-- [ ] Reject the entire booking if any requested inventory is unavailable.
+- [x] Book available reserved seats without double-selling.
+- [x] Book general-admission tickets without exceeding capacity.
+- [x] Reject the entire booking if any requested inventory is unavailable.
 - [ ] Allow only the customer who placed the order to cancel its eligible tickets.
 - [ ] Enforce the seven-day customer cancellation deadline and full refund.
 - [ ] Allow only the event organizer to cancel its performance.

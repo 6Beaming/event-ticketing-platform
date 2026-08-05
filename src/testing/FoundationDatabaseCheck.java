@@ -7,6 +7,8 @@ import database.DatabaseConfig;
 import database.DatabaseConnection;
 import database.SqlScriptRunner;
 import database.TransactionManager;
+import operations.booking.BookingOperations;
+import operations.booking.BookingSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -71,6 +73,7 @@ public final class FoundationDatabaseCheck {
         OrganizerEventOperations events = new OrganizerEventOperations(transactions);
         PerformancePricingOperations pricing = new PerformancePricingOperations(transactions);
         InventoryOperations inventory = new InventoryOperations(transactions);
+        BookingOperations bookings = new BookingOperations(transactions);
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"
@@ -263,6 +266,117 @@ public final class FoundationDatabaseCheck {
                 )
         );
         requireSuccess(replacementPricing, "unsold pricing replacement");
+
+        OperationResult<Integer> bookingCustomerOne = profiles.createCustomer(
+                new ProfileInput(
+                        "Booking Customer One",
+                        "20 Test Street",
+                        "database-check-booking-one@example.test",
+                        LocalDate.of(1991, 2, 3)
+                ),
+                new PaymentInput(
+                        "4000000000000028",
+                        "Booking Customer One",
+                        LocalDate.of(2032, 12, 31),
+                        "M5V 2A1"
+                )
+        );
+        requireSuccess(bookingCustomerOne, "first booking customer creation");
+        OperationResult<Integer> bookingCustomerTwo = profiles.createCustomer(
+                new ProfileInput(
+                        "Booking Customer Two",
+                        "21 Test Street",
+                        "database-check-booking-two@example.test",
+                        LocalDate.of(1992, 3, 4)
+                ),
+                new PaymentInput(
+                        "4000000000000036",
+                        "Booking Customer Two",
+                        LocalDate.of(2032, 12, 31),
+                        "M5V 2A2"
+                )
+        );
+        requireSuccess(bookingCustomerTwo, "second booking customer creation");
+
+        List<ReservedSeatAvailability> newSeats = createdReserved.getValue().orElseThrow();
+        int firstSeatId = newSeats.get(0).getPerformanceSeatId();
+        int secondSeatId = newSeats.get(1).getPerformanceSeatId();
+        int rollbackSeatId = newSeats.get(2).getPerformanceSeatId();
+        int restrictedSeatId = newSeats.get(3).getPerformanceSeatId();
+        OperationResult<BookingSummary> reservedBooking = bookings.bookReservedSeats(
+                bookingCustomerOne.getValue().orElseThrow(),
+                performance.getValue().orElseThrow(),
+                List.of(firstSeatId, secondSeatId)
+        );
+        requireSuccess(reservedBooking, "atomic reserved-seat booking");
+        if (reservedBooking.getValue().orElseThrow().getTicketIds().size() != 2) {
+            throw new IllegalStateException("reserved booking did not create two tickets");
+        }
+        OperationResult<BookingSummary> duplicateSeatSale = bookings.bookReservedSeats(
+                bookingCustomerTwo.getValue().orElseThrow(),
+                performance.getValue().orElseThrow(),
+                List.of(firstSeatId)
+        );
+        if (duplicateSeatSale.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("a sold reserved seat was sold twice");
+        }
+        OperationResult<BookingSummary> failedMultiSeat = bookings.bookReservedSeats(
+                bookingCustomerTwo.getValue().orElseThrow(),
+                performance.getValue().orElseThrow(),
+                List.of(rollbackSeatId, firstSeatId)
+        );
+        if (failedMultiSeat.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("mixed-availability booking was not rejected");
+        }
+        OperationResult<List<ReservedSeatAvailability>> afterFailedBooking =
+                inventory.getReservedInventory(performance.getValue().orElseThrow());
+        requireSuccess(afterFailedBooking, "reserved rollback inventory check");
+        boolean rollbackSeatStillAvailable = afterFailedBooking.getValue().orElseThrow().stream()
+                .anyMatch(seat -> seat.getPerformanceSeatId() == rollbackSeatId
+                        && seat.getState() == InventoryState.AVAILABLE);
+        if (!rollbackSeatStillAvailable) {
+            throw new IllegalStateException("failed multi-seat booking did not roll back");
+        }
+        OperationResult<BookingSummary> restrictedBooking = bookings.bookReservedSeats(
+                DevelopmentIds.CUSTOMER_ALICE,
+                performance.getValue().orElseThrow(),
+                List.of(restrictedSeatId)
+        );
+        if (restrictedBooking.getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("restricted customer booking was not rejected");
+        }
+
+        requireSuccess(
+                bookings.bookGeneralAdmission(
+                        bookingCustomerOne.getValue().orElseThrow(),
+                        performance.getValue().orElseThrow(),
+                        "General Floor",
+                        2
+                ),
+                "general-admission booking below capacity"
+        );
+        OperationResult<List<GeneralAdmissionAvailability>> afterSmallGaBooking =
+                inventory.getGeneralAdmissionInventory(performance.getValue().orElseThrow());
+        requireSuccess(afterSmallGaBooking, "general inventory after small booking");
+        int remaining = afterSmallGaBooking.getValue().orElseThrow().get(0).getRemainingCapacity();
+        requireSuccess(
+                bookings.bookGeneralAdmission(
+                        bookingCustomerTwo.getValue().orElseThrow(),
+                        performance.getValue().orElseThrow(),
+                        "General Floor",
+                        remaining
+                ),
+                "general-admission booking equal to remaining capacity"
+        );
+        OperationResult<BookingSummary> aboveCapacity = bookings.bookGeneralAdmission(
+                bookingCustomerOne.getValue().orElseThrow(),
+                performance.getValue().orElseThrow(),
+                "General Floor",
+                1
+        );
+        if (aboveCapacity.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("general admission was oversold");
+        }
 
         OperationResult<List<String>> soldPricingPreflight =
                 pricing.getVenueSectionsForPricing(

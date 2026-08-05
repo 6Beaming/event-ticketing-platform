@@ -3,6 +3,8 @@ package ui;
 import common.OperationResult;
 import database.DatabaseConnection;
 import database.TransactionManager;
+import operations.booking.BookingOperations;
+import operations.booking.BookingSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -43,6 +45,7 @@ public final class TerminalApplication {
     private final Scanner input;
     private final DatabaseConnection database;
     private final UserProfileOperations profiles;
+    private final BookingOperations bookings;
     private final OrganizerEventOperations events;
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
@@ -56,6 +59,7 @@ public final class TerminalApplication {
         this.database = database;
         TransactionManager transactions = new TransactionManager(database);
         this.profiles = new UserProfileOperations(transactions);
+        this.bookings = new BookingOperations(transactions);
         this.events = new OrganizerEventOperations(transactions);
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
@@ -101,10 +105,7 @@ public final class TerminalApplication {
             case "1" -> showProfileMenu();
             case "2" -> showEventMenu();
             case "3" -> showPricingAndInventoryMenu();
-            case "4" -> showLaterModule(
-                    "Ticket booking and cancellations",
-                    "Reserved/GA booking and cancellation are scheduled for August 1-3."
-            );
+            case "4" -> showBookingAndCancellationMenu();
             case "5" -> showLaterModule(
                     "Ticket resale",
                     "Listing, withdrawal, purchase, and ownership transfer are scheduled for August 1-3."
@@ -867,6 +868,87 @@ public final class TerminalApplication {
         pause();
     }
 
+    private void showBookingAndCancellationMenu() {
+        boolean inMenu = true;
+        while (running && inMenu) {
+            printHeading("Ticket booking and cancellations");
+            System.out.println("1. Book reserved seats");
+            System.out.println("2. Book general-admission tickets");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::bookReservedSeats);
+                case "2" -> runOnlineAction(this::bookGeneralAdmission);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown booking/cancellation option.");
+            }
+        }
+    }
+
+    private void bookReservedSeats() {
+        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        if (customerId == null) {
+            return;
+        }
+        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        if (performanceId == null) {
+            return;
+        }
+        List<Integer> seatIds = readPositiveIntListWithRetry(
+                "Reserved seat inventory IDs (comma-separated): "
+        );
+        if (seatIds == null) {
+            return;
+        }
+        OperationResult<BookingSummary> result = bookings.bookReservedSeats(
+                customerId,
+                performanceId,
+                seatIds
+        );
+        printBookingResult(result);
+        pause();
+    }
+
+    private void bookGeneralAdmission() {
+        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        if (customerId == null) {
+            return;
+        }
+        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        if (performanceId == null) {
+            return;
+        }
+        String sectionName = readValidatedText(
+                "General-admission section name: ",
+                value -> value.trim().isEmpty()
+                        ? Optional.of("General-admission section name is required.")
+                        : Optional.empty()
+        );
+        if (sectionName == null) {
+            return;
+        }
+        Integer quantity = readPositiveIntWithRetry("Quantity: ");
+        if (quantity == null) {
+            return;
+        }
+        OperationResult<BookingSummary> result = bookings.bookGeneralAdmission(
+                customerId,
+                performanceId,
+                sectionName,
+                quantity
+        );
+        printBookingResult(result);
+        pause();
+    }
+
+    private void printBookingResult(OperationResult<BookingSummary> result) {
+        printResult(result);
+        result.getValue().ifPresent(summary -> {
+            System.out.println("Transaction ID: " + summary.getTransactionId());
+            System.out.println("Ticket IDs: " + summary.getTicketIds());
+            System.out.println("Total: $" + summary.getTotal().toPlainString());
+        });
+    }
+
     private void showLaterModule(String title, String message) {
         printHeading(title);
         System.out.println(message);
@@ -1039,6 +1121,41 @@ public final class TerminalApplication {
                 return value;
             }
             printInputError(duplicateMessage);
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<Integer> readPositiveIntListWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            List<Integer> values = new ArrayList<>();
+            Set<Integer> unique = new HashSet<>();
+            boolean valid = !value.isEmpty();
+            if (valid) {
+                for (String part : value.split(",")) {
+                    try {
+                        int parsed = Integer.parseInt(part.trim());
+                        if (parsed <= 0 || !unique.add(parsed)) {
+                            valid = false;
+                            break;
+                        }
+                        values.add(parsed);
+                    } catch (NumberFormatException exception) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if (valid) {
+                return values;
+            }
+            printInputError("Enter unique positive IDs separated by commas.");
             if (!promptToRetry()) {
                 return null;
             }

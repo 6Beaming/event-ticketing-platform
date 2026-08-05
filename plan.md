@@ -173,18 +173,18 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member A
 
-- [ ] **Build reserved-seat booking as one transaction.**
-  - [ ] Accept customer, performance, and one or more requested seat IDs.
-  - [ ] Reject cancelled or past performances and prohibited customers.
-  - [ ] Lock requested seats in a consistent order so two customers cannot buy the same seat.
-  - [ ] Check that every seat is available and not blocked before creating the order.
-  - [ ] Save the order, payment snapshot, tickets, original prices, and first ownership records.
-  - [ ] Mark every requested seat sold; roll back the whole booking if one seat fails.
-- [ ] **Build general-admission booking as one transaction.**
-  - [ ] Accept customer, performance, section, and requested quantity.
-  - [ ] Lock the performance-section inventory row.
-  - [ ] Check the requested quantity against the remaining capacity.
-  - [ ] Save the order, tickets, and ownership records and update capacity together.
+- [x] **Build reserved-seat booking as one transaction.**
+  - [x] Accept customer, performance, and one or more requested seat IDs.
+  - [x] Reject cancelled or past performances and prohibited customers.
+  - [x] Lock requested seats in a consistent order so two customers cannot buy the same seat.
+  - [x] Check that every seat is available and not blocked before creating the order.
+  - [x] Save the order, payment snapshot, tickets, original prices, and first ownership records.
+  - [x] Mark every requested seat sold; roll back the whole booking if one seat fails.
+- [x] **Build general-admission booking as one transaction.**
+  - [x] Accept customer, performance, section, and requested quantity.
+  - [x] Lock the performance-section inventory row.
+  - [x] Check the requested quantity against the remaining capacity.
+  - [x] Save the order, tickets, and ownership records and update capacity together.
 - [ ] **Build customer ticket cancellation.**
   - [ ] Lock the order, ticket, current ownership, performance, active listing, and inventory rows involved.
   - [ ] Confirm the customer placed the order and the performance is at least seven days away.
@@ -267,9 +267,9 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 ### Shared work
 
 - [ ] Integrate every operation and query into the terminal.
-- [ ] Test two customers attempting to buy the same reserved seat.
-- [ ] Test general-admission requests below, equal to, and above remaining capacity.
-- [ ] Test failed multi-seat booking and confirm the entire order rolls back.
+- [x] Test two customers attempting to buy the same reserved seat.
+- [x] Test general-admission requests below, equal to, and above remaining capacity.
+- [x] Test failed multi-seat booking and confirm the entire order rolls back.
 - [ ] Test customer cancellation more than and fewer than seven days before the performance.
 - [ ] Verify a cancelled performance cannot accept new bookings.
 - [ ] Test two buyers attempting to purchase the same resale listing.
