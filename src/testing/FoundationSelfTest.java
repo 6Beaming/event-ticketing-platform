@@ -21,6 +21,8 @@ import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
 import operations.resale.ResaleOperations;
+import operations.restriction.CustomerRestrictionGuard;
+import operations.review.ReviewOperations;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -64,6 +66,7 @@ public final class FoundationSelfTest {
         test("booking request shapes are validated", this::bookingRequestsValidated);
         test("customer cancellation deadline is inclusive", this::cancellationDeadlineValidated);
         test("resale cap uses decimal money", this::resaleCapValidated);
+        test("review and scalper rules are validated", this::reviewAndRestrictionRulesValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -300,6 +303,17 @@ public final class FoundationSelfTest {
                         new BigDecimal("1.15")
                 )
         );
+    }
+
+    private void reviewAndRestrictionRulesValidated() {
+        assertTrue(ReviewOperations.validateReview(1, 1, 5, 1, "A useful comment.") == null);
+        assertTrue(ReviewOperations.validateReview(1, 1, 0, 5, "A useful comment.")
+                .contains("1 to 5"));
+        assertTrue(ReviewOperations.validateReview(1, 1, 5, 5, " ")
+                .contains("required"));
+        assertTrue(CustomerRestrictionGuard.qualifiesAsPossibleScalper(10, 6));
+        assertTrue(!CustomerRestrictionGuard.qualifiesAsPossibleScalper(10, 5));
+        assertTrue(!CustomerRestrictionGuard.qualifiesAsPossibleScalper(9, 9));
     }
 
     private void dataGenerationDeterministic() {

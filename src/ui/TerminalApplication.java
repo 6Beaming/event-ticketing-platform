@@ -27,6 +27,8 @@ import operations.profile.UserProfileOperations;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
+import operations.restriction.CustomerRestrictionOperations;
+import operations.review.ReviewOperations;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -56,6 +58,8 @@ public final class TerminalApplication {
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
     private final ResaleOperations resale;
+    private final CustomerRestrictionOperations restrictions;
+    private final ReviewOperations reviews;
     private boolean running;
 
     public TerminalApplication(Scanner input, DatabaseConnection database) {
@@ -72,6 +76,8 @@ public final class TerminalApplication {
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
         this.resale = new ResaleOperations(transactions);
+        this.restrictions = new CustomerRestrictionOperations(transactions);
+        this.reviews = new ReviewOperations(transactions);
     }
 
     public void run() {
@@ -116,10 +122,7 @@ public final class TerminalApplication {
             case "3" -> showPricingAndInventoryMenu();
             case "4" -> showBookingAndCancellationMenu();
             case "5" -> showResaleMenu();
-            case "6" -> showLaterModule(
-                    "Attendance reviews",
-                    "Attendance-based reviews are scheduled for August 1-3."
-            );
+            case "6" -> showReviewMenu();
             case "7" -> showSearches();
             case "8" -> showReports();
             case "9" -> showLaterModule(
@@ -143,12 +146,14 @@ public final class TerminalApplication {
             System.out.println("2. Create organizer profile");
             System.out.println("3. View customer profile");
             System.out.println("4. Deactivate user profile");
+            System.out.println("5. Refresh possible-scalper restriction");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createCustomer);
                 case "2" -> runOnlineAction(this::createOrganizer);
                 case "3" -> runOnlineAction(this::viewCustomer);
                 case "4" -> runOnlineAction(this::deactivateUser);
+                case "5" -> runOnlineAction(this::refreshCustomerRestriction);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown profile option.");
             }
@@ -552,6 +557,20 @@ public final class TerminalApplication {
             return;
         }
         printResult(events.updateResaleCap(organizerId, eventId, cap));
+        pause();
+    }
+
+    private void refreshCustomerRestriction() {
+        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        if (customerId == null) {
+            return;
+        }
+        OperationResult<Boolean> result = restrictions.refreshPossibleScalperStatus(customerId);
+        printResult(result);
+        result.getValue().ifPresent(restricted -> System.out.println(
+                "Prohibited from booking and resale purchases/listings: "
+                        + (restricted ? "yes" : "no")
+        ));
         pause();
     }
 
@@ -1092,6 +1111,66 @@ public final class TerminalApplication {
             System.out.println("Purchase price: $"
                     + purchase.getPurchasePrice().toPlainString());
         });
+        pause();
+    }
+
+    private void showReviewMenu() {
+        boolean inMenu = true;
+        while (running && inMenu) {
+            printHeading("Attendance reviews");
+            System.out.println("1. Submit an event and venue review");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::submitReview);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown review option.");
+            }
+        }
+    }
+
+    private void submitReview() {
+        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        if (customerId == null) {
+            return;
+        }
+        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        if (performanceId == null) {
+            return;
+        }
+        Integer eventRating = readValidatedInteger(
+                "Event rating (1-5): ",
+                value -> value < 1 || value > 5
+                        ? Optional.of("Event rating must be from 1 to 5.")
+                        : Optional.empty()
+        );
+        if (eventRating == null) {
+            return;
+        }
+        Integer venueRating = readValidatedInteger(
+                "Venue rating (1-5): ",
+                value -> value < 1 || value > 5
+                        ? Optional.of("Venue rating must be from 1 to 5.")
+                        : Optional.empty()
+        );
+        if (venueRating == null) {
+            return;
+        }
+        String comment = readValidatedText(
+                "Comment: ",
+                value -> value.trim().isEmpty()
+                        ? Optional.of("Review comment is required.")
+                        : Optional.empty()
+        );
+        if (comment == null) {
+            return;
+        }
+        printResult(reviews.submitReview(
+                customerId,
+                performanceId,
+                eventRating,
+                venueRating,
+                comment
+        ));
         pause();
     }
 

@@ -4,6 +4,7 @@ import common.OperationResult;
 import database.JdbcSupport;
 import database.TransactionManager;
 import operations.restriction.CustomerRestrictionGuard;
+import operations.restriction.CustomerRestrictionOperations;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,12 +19,14 @@ import java.time.ZoneOffset;
 
 public final class ResaleOperations {
     private final TransactionManager transactions;
+    private final CustomerRestrictionOperations restrictions;
 
     public ResaleOperations(TransactionManager transactions) {
         if (transactions == null) {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
+        this.restrictions = new CustomerRestrictionOperations(transactions);
     }
 
     public OperationResult<ResaleListingSummary> listTicket(
@@ -38,11 +41,20 @@ public final class ResaleOperations {
             return OperationResult.invalidInput("Listing price must be positive.");
         }
 
+        OperationResult<Boolean> restrictionStatus =
+                restrictions.refreshPossibleScalperStatus(sellerId);
+        if (!restrictionStatus.isSuccess()) {
+            return copyFailure(restrictionStatus);
+        }
+        if (restrictionStatus.getValue().orElse(false)) {
+            return OperationResult.forbidden(restrictionStatus.getMessage());
+        }
+
         return transactions.execute(connection -> {
             if (!lockActiveCustomer(connection, sellerId)) {
                 return OperationResult.notFound("Active seller account not found.");
             }
-            String restriction = CustomerRestrictionGuard.findCurrentRestriction(
+            String restriction = CustomerRestrictionGuard.findExistingRestriction(
                     connection,
                     sellerId
             );
@@ -160,6 +172,15 @@ public final class ResaleOperations {
             return OperationResult.invalidInput("Buyer and listing IDs must be positive.");
         }
 
+        OperationResult<Boolean> restrictionStatus =
+                restrictions.refreshPossibleScalperStatus(buyerId);
+        if (!restrictionStatus.isSuccess()) {
+            return copyFailure(restrictionStatus);
+        }
+        if (restrictionStatus.getValue().orElse(false)) {
+            return OperationResult.forbidden(restrictionStatus.getMessage());
+        }
+
         return transactions.execute(connection -> {
             PaymentSnapshot payment = lockCustomerPayment(connection, buyerId);
             if (payment == null) {
@@ -167,7 +188,7 @@ public final class ResaleOperations {
                         "An active buyer with saved payment information was not found."
                 );
             }
-            String restriction = CustomerRestrictionGuard.findCurrentRestriction(
+            String restriction = CustomerRestrictionGuard.findExistingRestriction(
                     connection,
                     buyerId
             );
@@ -412,6 +433,17 @@ public final class ResaleOperations {
             statement.executeUpdate();
             return JdbcSupport.requireGeneratedIntKey(statement, "resale transaction");
         }
+    }
+
+    private <T> OperationResult<T> copyFailure(OperationResult<?> result) {
+        return switch (result.getStatus()) {
+            case INVALID_INPUT -> OperationResult.invalidInput(result.getMessage());
+            case NOT_FOUND -> OperationResult.notFound(result.getMessage());
+            case FORBIDDEN -> OperationResult.forbidden(result.getMessage());
+            case CONFLICT -> OperationResult.conflict(result.getMessage());
+            case DATABASE_FAILURE -> OperationResult.databaseFailure(result.getMessage());
+            case SUCCESS -> throw new IllegalArgumentException("Cannot copy a successful result");
+        };
     }
 
     private static final class PaymentSnapshot {

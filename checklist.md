@@ -58,8 +58,8 @@ The dated work blocks below are complete only when every item in this section is
 - [x] List only a currently owned ticket at or below its resale cap.
 - [x] Withdraw an unsold resale listing.
 - [x] Purchase another customer’s active listing and transfer ownership atomically.
-- [ ] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
-- [ ] Flag and prohibit customers who satisfy the possible-scalper rule.
+- [x] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
+- [x] Flag and prohibit customers who satisfy the possible-scalper rule.
 
 ### Queries Q1-Q7
 

@@ -30,6 +30,8 @@ import operations.profile.UserProfileOperations;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
+import operations.restriction.CustomerRestrictionOperations;
+import operations.review.ReviewOperations;
 
 import java.math.BigDecimal;
 import java.nio.file.Paths;
@@ -81,6 +83,9 @@ public final class FoundationDatabaseCheck {
         BookingOperations bookings = new BookingOperations(transactions);
         CancellationOperations cancellations = new CancellationOperations(transactions);
         ResaleOperations resale = new ResaleOperations(transactions);
+        CustomerRestrictionOperations restrictions =
+                new CustomerRestrictionOperations(transactions);
+        ReviewOperations reviews = new ReviewOperations(transactions);
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"
@@ -594,6 +599,52 @@ public final class FoundationDatabaseCheck {
         List<GeneralAdmissionAvailability> sections = general.getValue().orElseThrow();
         if (sections.size() != 1 || sections.get(0).getSoldQuantity() != 3) {
             throw new IllegalStateException("general-admission inventory did not match development data");
+        }
+
+        OperationResult<Boolean> seededRestriction =
+                restrictions.refreshPossibleScalperStatus(DevelopmentIds.CUSTOMER_ALICE);
+        requireSuccess(seededRestriction, "seeded possible-scalper restriction check");
+        if (!seededRestriction.getValue().orElseThrow()) {
+            throw new IllegalStateException("known possible scalper was not prohibited");
+        }
+        OperationResult<Boolean> ordinaryCustomerRestriction =
+                restrictions.refreshPossibleScalperStatus(
+                        bookingCustomerOne.getValue().orElseThrow()
+                );
+        requireSuccess(ordinaryCustomerRestriction, "ordinary customer restriction check");
+        if (ordinaryCustomerRestriction.getValue().orElseThrow()) {
+            throw new IllegalStateException("ordinary booking customer was incorrectly prohibited");
+        }
+
+        requireSuccess(
+                reviews.submitReview(
+                        2011,
+                        DevelopmentIds.PERFORMANCE_PAST,
+                        5,
+                        4,
+                        "The performance was engaging and the venue service was helpful."
+                ),
+                "eligible attendance review"
+        );
+        OperationResult<Void> duplicateReview = reviews.submitReview(
+                2011,
+                DevelopmentIds.PERFORMANCE_PAST,
+                4,
+                4,
+                "A duplicate review should not be saved."
+        );
+        if (duplicateReview.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("duplicate attendance review was not rejected");
+        }
+        OperationResult<Void> ineligibleReview = reviews.submitReview(
+                bookingCustomerOne.getValue().orElseThrow(),
+                DevelopmentIds.PERFORMANCE_PAST,
+                4,
+                4,
+                "This customer did not attend the performance."
+        );
+        if (ineligibleReview.getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("non-attendee review was not rejected");
         }
     }
 

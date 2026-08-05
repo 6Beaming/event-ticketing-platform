@@ -201,10 +201,10 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Allow the seller to withdraw only an active unsold listing.
   - [x] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
   - [x] Ensure two buyers cannot complete the same listing.
-- [ ] **Add the possible-scalper check.**
-  - [ ] Calculate the past-year purchased and listed counts.
-  - [ ] Flag customers who bought at least 10 tickets and listed more than half.
-  - [ ] Block the prohibited actions chosen by the design and show a clear terminal message.
+- [x] **Add the possible-scalper check.**
+  - [x] Calculate the past-year purchased and listed counts.
+  - [x] Flag customers who bought at least 10 tickets and listed more than half.
+  - [x] Block the prohibited actions chosen by the design and show a clear terminal message.
 - [ ] **Build Q6: seat-map summary.**
   - [ ] Accept a performance ID.
   - [ ] Return every section with tier, price, available/remaining capacity, sold, and blocked counts.
@@ -238,12 +238,12 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Lock the performance-seat inventory row.
   - [x] Block only an available seat, reject a sold seat, and allow only a blocked seat to be unblocked.
   - [x] Retain performance-specific status so the physical seat can differ across performances.
-- [ ] **Build attendance reviews.**
-  - [ ] Accept customer, performance, event rating, venue rating, and free-form comment.
-  - [ ] Confirm the performance occurred within the documented “recent” period.
-  - [ ] Confirm the customer held a non-cancelled ticket for that performance.
-  - [ ] Enforce ratings from 1-5 and one review per customer/performance.
-  - [ ] Save the event rating, venue rating, and comment together.
+- [x] **Build attendance reviews.**
+  - [x] Accept customer, performance, event rating, venue rating, and free-form comment.
+  - [x] Confirm the performance occurred within the documented “recent” period.
+  - [x] Confirm the customer held a non-cancelled ticket for that performance.
+  - [x] Enforce ratings from 1-5 and one review per customer/performance.
+  - [x] Save the event rating, venue rating, and comment together.
 - [ ] **Build Q1: nearby performances.**
   - [ ] Accept latitude, longitude, optional search distance, and sort choice.
   - [ ] Apply the documented default distance when none is supplied.
