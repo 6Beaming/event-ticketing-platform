@@ -50,11 +50,11 @@ The dated work blocks below are complete only when every item in this section is
 - [x] Book available reserved seats without double-selling.
 - [x] Book general-admission tickets without exceeding capacity.
 - [x] Reject the entire booking if any requested inventory is unavailable.
-- [ ] Allow only the customer who placed the order to cancel its eligible tickets.
-- [ ] Enforce the seven-day customer cancellation deadline and full refund.
-- [ ] Allow only the event organizer to cancel its performance.
-- [ ] Refund every active ticket when a performance is cancelled.
-- [ ] Restore or close inventory consistently and retain cancellation history.
+- [x] Allow only the customer who placed the order to cancel its eligible tickets.
+- [x] Enforce the seven-day customer cancellation deadline and full refund.
+- [x] Allow only the event organizer to cancel its performance.
+- [x] Refund every active ticket when a performance is cancelled.
+- [x] Restore or close inventory consistently and retain cancellation history.
 - [ ] List only a currently owned ticket at or below its resale cap.
 - [ ] Withdraw an unsold resale listing.
 - [ ] Purchase another customer’s active listing and transfer ownership atomically.

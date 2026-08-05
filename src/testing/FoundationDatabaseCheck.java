@@ -9,6 +9,8 @@ import database.SqlScriptRunner;
 import database.TransactionManager;
 import operations.booking.BookingOperations;
 import operations.booking.BookingSummary;
+import operations.cancellation.CancellationOperations;
+import operations.cancellation.CancellationSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -74,6 +76,7 @@ public final class FoundationDatabaseCheck {
         PerformancePricingOperations pricing = new PerformancePricingOperations(transactions);
         InventoryOperations inventory = new InventoryOperations(transactions);
         BookingOperations bookings = new BookingOperations(transactions);
+        CancellationOperations cancellations = new CancellationOperations(transactions);
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"
@@ -346,15 +349,13 @@ public final class FoundationDatabaseCheck {
             throw new IllegalStateException("restricted customer booking was not rejected");
         }
 
-        requireSuccess(
-                bookings.bookGeneralAdmission(
-                        bookingCustomerOne.getValue().orElseThrow(),
-                        performance.getValue().orElseThrow(),
-                        "General Floor",
-                        2
-                ),
-                "general-admission booking below capacity"
+        OperationResult<BookingSummary> smallGaBooking = bookings.bookGeneralAdmission(
+                bookingCustomerOne.getValue().orElseThrow(),
+                performance.getValue().orElseThrow(),
+                "General Floor",
+                2
         );
+        requireSuccess(smallGaBooking, "general-admission booking below capacity");
         OperationResult<List<GeneralAdmissionAvailability>> afterSmallGaBooking =
                 inventory.getGeneralAdmissionInventory(performance.getValue().orElseThrow());
         requireSuccess(afterSmallGaBooking, "general inventory after small booking");
@@ -376,6 +377,74 @@ public final class FoundationDatabaseCheck {
         );
         if (aboveCapacity.getStatus() != OperationStatus.CONFLICT) {
             throw new IllegalStateException("general admission was oversold");
+        }
+
+        int firstBookedTicket = reservedBooking.getValue().orElseThrow().getTicketIds().get(0);
+        int secondBookedTicket = reservedBooking.getValue().orElseThrow().getTicketIds().get(1);
+        OperationResult<CancellationSummary> wrongCustomerCancellation =
+                cancellations.cancelCustomerTickets(
+                        bookingCustomerTwo.getValue().orElseThrow(),
+                        List.of(secondBookedTicket),
+                        "Wrong customer check"
+                );
+        if (wrongCustomerCancellation.getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("non-owner customer cancellation was not rejected");
+        }
+        OperationResult<CancellationSummary> customerCancellation =
+                cancellations.cancelCustomerTickets(
+                        bookingCustomerOne.getValue().orElseThrow(),
+                        List.of(firstBookedTicket),
+                        "Database check cancellation"
+                );
+        requireSuccess(customerCancellation, "eligible customer ticket cancellation");
+        if (customerCancellation.getValue().orElseThrow().getCancelledTicketCount() != 1) {
+            throw new IllegalStateException("customer cancellation count was incorrect");
+        }
+        OperationResult<List<ReservedSeatAvailability>> afterCancellation =
+                inventory.getReservedInventory(performance.getValue().orElseThrow());
+        requireSuccess(afterCancellation, "released reserved inventory check");
+        boolean cancelledSeatAvailable = afterCancellation.getValue().orElseThrow().stream()
+                .anyMatch(seat -> seat.getPerformanceSeatId() == firstSeatId
+                        && seat.getState() == InventoryState.AVAILABLE);
+        if (!cancelledSeatAvailable) {
+            throw new IllegalStateException("customer cancellation did not release the seat");
+        }
+        OperationResult<CancellationSummary> lateCancellation =
+                cancellations.cancelCustomerTickets(
+                        DevelopmentIds.CUSTOMER_BOB,
+                        List.of(DevelopmentIds.TICKET_GENERAL),
+                        "Too late check"
+                );
+        if (lateCancellation.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("fewer-than-seven-day cancellation was not rejected");
+        }
+
+        OperationResult<CancellationSummary> wrongOrganizerCancellation =
+                cancellations.cancelPerformance(
+                        1002,
+                        performance.getValue().orElseThrow(),
+                        "Wrong organizer check"
+                );
+        if (wrongOrganizerCancellation.getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("non-owner performance cancellation was not rejected");
+        }
+        OperationResult<CancellationSummary> performanceCancellation =
+                cancellations.cancelPerformance(
+                        organizer.getValue().orElseThrow(),
+                        performance.getValue().orElseThrow(),
+                        "Database check performance cancellation"
+                );
+        requireSuccess(performanceCancellation, "organizer performance cancellation");
+        if (performanceCancellation.getValue().orElseThrow().getCancelledTicketCount() < 1) {
+            throw new IllegalStateException("performance cancellation refunded no active tickets");
+        }
+        OperationResult<BookingSummary> cancelledPerformanceBooking = bookings.bookReservedSeats(
+                bookingCustomerOne.getValue().orElseThrow(),
+                performance.getValue().orElseThrow(),
+                List.of(firstSeatId)
+        );
+        if (cancelledPerformanceBooking.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("cancelled performance accepted a new booking");
         }
 
         OperationResult<List<String>> soldPricingPreflight =

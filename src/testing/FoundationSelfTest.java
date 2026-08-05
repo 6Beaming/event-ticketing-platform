@@ -6,6 +6,7 @@ import data.DevelopmentDataGenerator;
 import database.ConnectionProvider;
 import database.TransactionManager;
 import operations.booking.BookingOperations;
+import operations.cancellation.CancellationOperations;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -59,6 +61,7 @@ public final class FoundationSelfTest {
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
         test("tier-price and seat-state rules are enforced", this::organizerControlsValidated);
         test("booking request shapes are validated", this::bookingRequestsValidated);
+        test("customer cancellation deadline is inclusive", this::cancellationDeadlineValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -273,6 +276,18 @@ public final class FoundationSelfTest {
         assertTrue(BookingOperations.validateGeneralRequest(1, 1, "Floor", 2) == null);
         assertTrue(BookingOperations.validateGeneralRequest(1, 1, "Floor", 0)
                 .contains("positive"));
+    }
+
+    private void cancellationDeadlineValidated() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 5, 12, 0);
+        assertTrue(CancellationOperations.meetsSevenDayDeadline(now, now.plusDays(7)));
+        assertTrue(!CancellationOperations.meetsSevenDayDeadline(
+                now,
+                now.plusDays(7).minusMinutes(1)
+        ));
+        assertTrue(CancellationOperations.validateCustomerCancellation(1, List.of(7, 8)) == null);
+        assertTrue(CancellationOperations.validateCustomerCancellation(1, List.of(7, 7))
+                .contains("only once"));
     }
 
     private void dataGenerationDeterministic() {

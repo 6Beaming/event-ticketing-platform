@@ -5,6 +5,8 @@ import database.DatabaseConnection;
 import database.TransactionManager;
 import operations.booking.BookingOperations;
 import operations.booking.BookingSummary;
+import operations.cancellation.CancellationOperations;
+import operations.cancellation.CancellationSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -46,6 +48,7 @@ public final class TerminalApplication {
     private final DatabaseConnection database;
     private final UserProfileOperations profiles;
     private final BookingOperations bookings;
+    private final CancellationOperations cancellations;
     private final OrganizerEventOperations events;
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
@@ -60,6 +63,7 @@ public final class TerminalApplication {
         TransactionManager transactions = new TransactionManager(database);
         this.profiles = new UserProfileOperations(transactions);
         this.bookings = new BookingOperations(transactions);
+        this.cancellations = new CancellationOperations(transactions);
         this.events = new OrganizerEventOperations(transactions);
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
@@ -874,10 +878,14 @@ public final class TerminalApplication {
             printHeading("Ticket booking and cancellations");
             System.out.println("1. Book reserved seats");
             System.out.println("2. Book general-admission tickets");
+            System.out.println("3. Cancel customer tickets");
+            System.out.println("4. Cancel an organizer's performance");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::bookReservedSeats);
                 case "2" -> runOnlineAction(this::bookGeneralAdmission);
+                case "3" -> runOnlineAction(this::cancelCustomerTickets);
+                case "4" -> runOnlineAction(this::cancelPerformance);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown booking/cancellation option.");
             }
@@ -946,6 +954,54 @@ public final class TerminalApplication {
             System.out.println("Transaction ID: " + summary.getTransactionId());
             System.out.println("Ticket IDs: " + summary.getTicketIds());
             System.out.println("Total: $" + summary.getTotal().toPlainString());
+        });
+    }
+
+    private void cancelCustomerTickets() {
+        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        if (customerId == null) {
+            return;
+        }
+        List<Integer> ticketIds = readPositiveIntListWithRetry(
+                "Ticket IDs to cancel (comma-separated): "
+        );
+        if (ticketIds == null) {
+            return;
+        }
+        String reason = readLine("Cancellation reason (optional): ");
+        OperationResult<CancellationSummary> result = cancellations.cancelCustomerTickets(
+                customerId,
+                ticketIds,
+                reason
+        );
+        printCancellationResult(result);
+        pause();
+    }
+
+    private void cancelPerformance() {
+        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
+        if (organizerId == null) {
+            return;
+        }
+        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        if (performanceId == null) {
+            return;
+        }
+        String reason = readLine("Cancellation reason (optional): ");
+        OperationResult<CancellationSummary> result = cancellations.cancelPerformance(
+                organizerId,
+                performanceId,
+                reason
+        );
+        printCancellationResult(result);
+        pause();
+    }
+
+    private void printCancellationResult(OperationResult<CancellationSummary> result) {
+        printResult(result);
+        result.getValue().ifPresent(summary -> {
+            System.out.println("Tickets cancelled: " + summary.getCancelledTicketCount());
+            System.out.println("Refund total: $" + summary.getRefundTotal().toPlainString());
         });
     }
 

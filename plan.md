@@ -185,16 +185,16 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Lock the performance-section inventory row.
   - [x] Check the requested quantity against the remaining capacity.
   - [x] Save the order, tickets, and ownership records and update capacity together.
-- [ ] **Build customer ticket cancellation.**
-  - [ ] Lock the order, ticket, current ownership, performance, active listing, and inventory rows involved.
-  - [ ] Confirm the customer placed the order and the performance is at least seven days away.
-  - [ ] Record the cancellation and full refund instead of deleting history.
-  - [ ] Withdraw any active listing and return reserved or general-admission inventory.
-- [ ] **Build organizer performance cancellation.**
-  - [ ] Confirm the organizer manages the event.
-  - [ ] Lock and mark the performance cancelled.
-  - [ ] Close active resale listings and refund every active ticket.
-  - [ ] Preserve cancellation history and keep the cancelled performance unsellable.
+- [x] **Build customer ticket cancellation.**
+  - [x] Lock the order, ticket, current ownership, performance, active listing, and inventory rows involved.
+  - [x] Confirm the customer placed the order and the performance is at least seven days away.
+  - [x] Record the cancellation and full refund instead of deleting history.
+  - [x] Withdraw any active listing and return reserved or general-admission inventory.
+- [x] **Build organizer performance cancellation.**
+  - [x] Confirm the organizer manages the event.
+  - [x] Lock and mark the performance cancelled.
+  - [x] Close active resale listings and refund every active ticket.
+  - [x] Preserve cancellation history and keep the cancelled performance unsellable.
 - [ ] **Build the complete resale workflow.**
   - [ ] List only a currently owned, active, non-cancelled ticket.
   - [ ] Calculate the maximum listing price from face value and the event resale cap.
@@ -270,8 +270,8 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - [x] Test two customers attempting to buy the same reserved seat.
 - [x] Test general-admission requests below, equal to, and above remaining capacity.
 - [x] Test failed multi-seat booking and confirm the entire order rolls back.
-- [ ] Test customer cancellation more than and fewer than seven days before the performance.
-- [ ] Verify a cancelled performance cannot accept new bookings.
+- [x] Test customer cancellation more than and fewer than seven days before the performance.
+- [x] Verify a cancelled performance cannot accept new bookings.
 - [ ] Test two buyers attempting to purchase the same resale listing.
 - [ ] Verify Q6 totals against raw inventory counts.
 - [ ] Test Q7 success, budget failure, insufficient quantity, and nonconsecutive-seat cases.
