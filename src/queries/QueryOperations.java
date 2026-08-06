@@ -163,165 +163,81 @@ ORDER BY
 
 
 
-    /*************************************************************************************************************
-     QUERY-1A
-     Upcoming performances ranked by distance
-     *************************************************************************************************************/
-    public OperationResult<List<UpcomingPerformanceQuery>> query1a(
-            double latitude,
-            double longitude,
-            double maxDistanceKm
-    ) {
+/*************************************************************************************************************
+ QUERY-2
+ Upcoming performances by postal code
+ *************************************************************************************************************/
+public OperationResult<List<PostalCodePerformanceQuery>> query2(
+        String postalCode
+) {
 
-        return transactions.execute(connection -> {
+    return transactions.execute(connection -> {
 
-            String sql = """
-                    -- SQL HERE
-                    """;
+        String sql = """
+                SELECT p.performance_id,
+                       e.title,
+                       v.name AS venue_name,
+                       v.postal_code,
+                       v.city,
+                       p.date_time
 
-            List<UpcomingPerformanceQuery> queries =
-                    new ArrayList<>();
+                FROM Performance p
 
-            try (PreparedStatement statement =
-                         connection.prepareStatement(sql)) {
+                JOIN Event e
+                    ON e.event_id = p.event_id
 
-                // Parameters
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
 
-                try (ResultSet rows =
-                             statement.executeQuery()) {
+                WHERE p.status = 'scheduled'
+                  AND p.date_time > NOW()
+                  AND LEFT(v.postal_code, 3) = LEFT(?, 3)
 
-                    while (rows.next()) {
+                ORDER BY v.postal_code, p.date_time
+                """;
 
-                        queries.add(new UpcomingPerformanceQuery(
-                                0,
-                                "",
-                                "",
-                                null,
-                                0.0,
-                                0.0
-                        ));
-                    }
+
+        List<PostalCodePerformanceQuery> results =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setString(
+                    1,
+                    postalCode
+            );
+
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+
+                while (rows.next()) {
+
+                    results.add(new PostalCodePerformanceQuery(
+                            rows.getInt("performance_id"),
+                            rows.getString("title"),
+                            rows.getString("venue_name"),
+                            rows.getString("postal_code"),
+                            rows.getString("city"),
+                            rows.getTimestamp("date_time")
+                                 .toLocalDateTime()
+                    ));
                 }
             }
-
-            return OperationResult.success(
-                    "Upcoming performances retrieved.",
-                    List.copyOf(queries)
-            );
-        });
-    }
-
-    /*************************************************************************************************************
-     QUERY-1B
-     Upcoming performances ranked by cheapest ticket price (ascending)
-     *************************************************************************************************************/
-    public OperationResult<List<UpcomingPerformanceQuery>> query1b(
-            double latitude,
-            double longitude,
-            double maxDistanceKm
-    ) {
-
-        return transactions.execute(connection -> {
-
-            String sql = """
-                    -- SQL HERE
-                    """;
-
-            List<UpcomingPerformanceQuery> queries =
-                    new ArrayList<>();
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement(sql)) {
-
-                try (ResultSet rows =
-                             statement.executeQuery()) {
-
-                    while (rows.next()) {
-
-                        queries.add(new UpcomingPerformanceQuery(
-                                0,
-                                "",
-                                "",
-                                null,
-                                0.0,
-                                0.0
-                        ));
-                    }
-                }
-            }
-
-            return OperationResult.success(
-                    "Upcoming performances retrieved.",
-                    List.copyOf(queries)
-            );
-        });
-    }
-
-    /*************************************************************************************************************
-     QUERY-1C
-     Upcoming performances ranked by cheapest ticket price (descending)
-     *************************************************************************************************************/
-    public OperationResult<List<UpcomingPerformanceQuery>> query1c(
-            double latitude,
-            double longitude,
-            double maxDistanceKm
-    ) {
-
-        return transactions.execute(connection -> {
-
-            String sql = """
-                    -- SQL HERE
-                    """;
-
-            List<UpcomingPerformanceQuery> queries =
-                    new ArrayList<>();
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement(sql)) {
-
-                try (ResultSet rows =
-                             statement.executeQuery()) {
-
-                    while (rows.next()) {
-
-                        queries.add(new UpcomingPerformanceQuery(
-                                0,
-                                "",
-                                "",
-                                null,
-                                0.0,
-                                0.0
-                        ));
-                    }
-                }
-            }
-
-            return OperationResult.success(
-                    "Upcoming performances retrieved.",
-                    List.copyOf(queries)
-            );
-        });
-    }
+        }
 
 
-    /*************************************************************************************************************
-     QUERY-2
-     *************************************************************************************************************/
-    public OperationResult<?> query2(/* parameters */) {
+        return OperationResult.success(
+                "Postal code performance search completed.",
+                List.copyOf(results)
+        );
 
-        return transactions.execute(connection -> {
-
-            String sql = """
-                    SELECT ...
-                    """;
-
-            return OperationResult.success(
-                    "Query completed successfully.",
-                    null
-            );
-        });
-    }
-
+    });
+}
     /*************************************************************************************************************
      QUERY-3
      *************************************************************************************************************/

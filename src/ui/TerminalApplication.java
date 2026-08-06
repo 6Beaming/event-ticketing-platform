@@ -37,6 +37,7 @@ import reports.SellThroughBucketReport;
 
 import queries.QueryOperations;
 import queries.UpcomingPerformanceQuery;
+import queries.PostalCodePerformanceQuery;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -929,9 +930,58 @@ private void showSearches() {
 
     pause();
 }
+
+
 private void query2() {
-    printHeading("Search by Postal Code");
-    System.out.println("Query 2 is not yet implemented.");
+
+    printHeading("Search Performances By Postal Code");
+
+
+    String postalCode =
+            readLine("Enter postal code: ");
+
+
+    OperationResult<List<PostalCodePerformanceQuery>> result =
+            queries.query2(postalCode);
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No performances found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-8s %-25s %-20s %-12s %-15s %-20s%n",
+                "ID",
+                "Event",
+                "Venue",
+                "Postal",
+                "City",
+                "Date"
+        );
+
+
+        for (PostalCodePerformanceQuery row : rows) {
+
+            System.out.printf(
+                    "%-8d %-25s %-20s %-12s %-15s %-20s%n",
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getVenueName(),
+                    row.getPostalCode(),
+                    row.getCity(),
+                    row.getDateTime()
+            );
+        }
+    });
+
+
     pause();
 }
 
