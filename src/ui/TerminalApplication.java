@@ -29,6 +29,20 @@ import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
 import operations.review.ReviewOperations;
 
+import reports.ReportOperations;
+import reports.TicketRevenueReport;
+import reports.EventPerformanceReport;
+import reports.OrganizerRevenueReport;
+import reports.ScalperDetectionReport;
+import reports.CustomerOrderRankingReport;
+import reports.CancellationReport;
+import reports.ResaleReport;
+import reports.EventNounPhraseReport;
+import reports.NounPhraseCount;
+import reports.SellThroughReport;
+import reports.SellThroughTierReport;
+import reports.SellThroughBucketReport;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -58,6 +72,8 @@ public final class TerminalApplication {
     private final InventoryOperations inventory;
     private final ResaleOperations resale;
     private final ReviewOperations reviews;
+    private final ReportOperations reports;
+
     private boolean running;
 
     public TerminalApplication(Scanner input, DatabaseConnection database) {
@@ -75,6 +91,7 @@ public final class TerminalApplication {
         this.inventory = new InventoryOperations(transactions);
         this.resale = new ResaleOperations(transactions);
         this.reviews = new ReviewOperations(transactions);
+        this.reports = new ReportOperations(transactions);
     }
 
     public void run() {
@@ -327,6 +344,17 @@ public final class TerminalApplication {
         }
         return null;
     }
+
+    private LocalDateTime readDateTime(String prompt) {
+    String value = readLine(prompt);
+
+    try {
+        return LocalDateTime.parse(value, DATE_TIME_FORMAT);
+    } catch (DateTimeParseException exception) {
+        System.out.println("Enter date and time in YYYY-MM-DD HH:mm format.");
+        return null;
+    }
+}
 
     private void printInputError(String message) {
         System.out.println("INVALID_INPUT: " + message);
@@ -1167,11 +1195,860 @@ public final class TerminalApplication {
         pause();
     }
 
-    private void showReports() {
-        printHeading("Required reports");
-        System.out.println("R1-R9 implementation is scheduled for August 4-6.");
-        pause();
+private void showReports() {
+    boolean inMenu = true;
+
+    while (running && inMenu) {
+        printHeading("Required Reports");
+
+        System.out.println("1. Ticket revenue report");
+        System.out.println("2. Events and performances report");
+        System.out.println("3. Organizer revenue ranking");
+        System.out.println("4. Potential ticket scalpers");
+        System.out.println("5. Customer order rankings");
+        System.out.println("6. Cancellation report");
+        System.out.println("7. Sell-through report");
+        System.out.println("8. Resale report");
+        System.out.println("9. Event word cloud report");
+        System.out.println("0. Back");
+
+        switch (readLine("Select an option: ")) {
+            case "1" -> runOnlineAction(this::report1);
+            case "2" -> runOnlineAction(this::report2);
+            case "3" -> runOnlineAction(this::report3);
+            case "4" -> runOnlineAction(this::report4);
+            case "5" -> runOnlineAction(this::report5);
+            case "6" -> runOnlineAction(this::report6);
+            case "7" -> runOnlineAction(this::report7);
+            case "8" -> runOnlineAction(this::report8);
+            case "9" -> runOnlineAction(this::report9);
+            case "0" -> inMenu = false;
+            default -> System.out.println("Unknown report option.");
+        }
     }
+}
+
+
+private LocalDateTime[] readReportDateRange() {
+
+    LocalDateTime startDate = readDateTime(
+            "Start date/time (YYYY-MM-DD HH:mm): "
+    );
+
+    LocalDateTime endDate = readDateTime(
+            "End date/time (YYYY-MM-DD HH:mm): "
+    );
+
+    if (startDate == null || endDate == null) {
+        return null;
+    }
+
+    if (!startDate.isBefore(endDate)) {
+        System.out.println(
+                "Start date/time must be before end date/time."
+        );
+        return null;
+    }
+
+    if (endDate.isAfter(LocalDateTime.now())) {
+        System.out.println(
+                "End date/time cannot be in the future."
+        );
+        return null;
+    }
+
+    return new LocalDateTime[]{startDate, endDate};
+}
+
+
+private void printTicketRevenueRows(
+        OperationResult<List<TicketRevenueReport>> result
+) {
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+        System.out.printf(
+                "%-20s %-20s %-15s %-15s%n",
+                "City",
+                "Venue",
+                "Tickets Sold",
+                "Gross Revenue"
+        );
+
+        for (TicketRevenueReport row : rows) {
+
+            System.out.printf(
+                    "%-20s %-20s %-15d $%-15s%n",
+                    row.getCity(),
+                    row.getVenueName(),
+                    row.getTicketsSold(),
+                    row.getGrossRevenue().toPlainString()
+            );
+        }
+    });
+}
+
+
+private void report1() {
+
+    printHeading("Ticket Revenue Report");
+
+    System.out.println("1. Revenue by city");
+    System.out.println("2. Revenue by venue within a city");
+    String choice = readLine("Select option: ");
+
+
+    OperationResult<List<TicketRevenueReport>> result;
+    LocalDateTime[] dates = readReportDateRange();
+    if (dates == null) {
+    pause();
+    return;
+}
+
+    switch (choice) {
+        case "1" -> {
+            result = reports.report1a(
+                    dates[0],
+                    dates[1]
+            );}
+
+        case "2" -> {
+            String city = readLine(
+                    "City: "
+            );
+            if (city.isBlank()) {
+                System.out.println("City is required.");
+                pause();
+                return;
+            }
+
+            result = reports.report1b(
+                    city,
+                    dates[0],
+                    dates[1]
+            );}
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-20s %-25s %-15s %-15s%n",
+                "City",
+                "Venue",
+                "Tickets Sold",
+                "Gross Revenue"
+        );
+
+
+        for (TicketRevenueReport row : rows) {
+
+            System.out.printf(
+                    "%-20s %-25s %-15d $%-15s%n",
+                    row.getCity(),
+                    row.getVenueName() == null
+                            ? "-"
+                            : row.getVenueName(),
+                    row.getTicketsSold(),
+                    row.getGrossRevenue().toPlainString()
+            );
+        }
+    });
+    pause();
+}
+
+
+private void report2() {
+
+    printHeading("Events and Performances Report");
+
+    System.out.println("1. By segment and genre");
+    System.out.println("2. By country");
+    System.out.println("3. By country and city");
+    System.out.println("4. By country, city and venue");
+
+
+    OperationResult<List<EventPerformanceReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> result = reports.report2a();
+
+        case "2" -> result = reports.report2b();
+
+        case "3" -> result = reports.report2c();
+
+        case "4" -> result = reports.report2d();
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-15s %-15s %-15s %-15s %-25s %-15s %-15s%n",
+                "Segment",
+                "Genre",
+                "Country",
+                "City",
+                "Venue",
+                "Events",
+                "Performances"
+        );
+
+
+        for (EventPerformanceReport row : rows) {
+
+            System.out.printf(
+                    "%-15s %-15s %-15s %-15s %-25s %-15d %-15d%n",
+                    safe(row.getSegmentName()),
+                    safe(row.getGenreName()),
+                    safe(row.getCountry()),
+                    safe(row.getCity()),
+                    safe(row.getVenueName()),
+                    row.getEventCount(),
+                    row.getPerformanceCount()
+            );
+        }
+    });
+
+
+    pause();
+}
+
+private String safe(String value) {
+    return value == null ? "-" : value;
+}
+
+private void report3() {
+
+    printHeading("Organizer Revenue Ranking");
+
+    System.out.println("1. Overall organizer ranking");
+    System.out.println("2. Organizer ranking by country");
+    System.out.println("3. Organizer ranking by city");
+
+
+    OperationResult<List<OrganizerRevenueReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> result = reports.report3a();
+
+        case "2" -> result = reports.report3b();
+
+        case "3" -> result = reports.report3c();
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s %-20s %-15s%n",
+                "ID",
+                "Organizer",
+                "Country",
+                "City",
+                "Revenue"
+        );
+
+
+        for (OrganizerRevenueReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20s %-20s $%-15s%n",
+                    row.getOrganizerId(),
+                    row.getOrganizerName(),
+                    safe(row.getCountry()),
+                    safe(row.getCity()),
+                    row.getGrossRevenue().toPlainString()
+            );
+        }
+    });
+
+
+    pause();
+}
+
+private void report4() {
+
+    printHeading("Potential Ticket Scalpers");
+
+
+    LocalDateTime oneYearAgo =
+            LocalDateTime.now().minusYears(1);
+
+
+    OperationResult<List<ScalperDetectionReport>> result =
+            reports.report4(oneYearAgo);
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+
+        if (rows.isEmpty()) {
+            System.out.println("No potential scalpers found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s %-20s %-15s%n",
+                "ID",
+                "Customer",
+                "City",
+                "Purchased",
+                "Listed"
+        );
+
+
+        for (ScalperDetectionReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20s %-20d %-15d%n",
+                    row.getCustomerId(),
+                    row.getCustomerName(),
+                    row.getCity(),
+                    row.getTicketsPurchased(),
+                    row.getTicketsListed()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report5() {
+
+    printHeading("Customer Order Rankings");
+
+    System.out.println("1. Ranking by order count in period");
+    System.out.println("2. Ranking by city (past year)");
+
+
+    OperationResult<List<CustomerOrderRankingReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> {
+
+            LocalDateTime[] dates = readReportDateRange();
+
+            if (dates == null) {
+                pause();
+                return;
+            }
+
+            result = reports.report5a(
+                    dates[0],
+                    dates[1]
+            );
+        }
+
+
+        case "2" -> {
+
+            result = reports.report5b(
+                    LocalDateTime.now().minusYears(1)
+            );
+        }
+
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s %-15s%n",
+                "ID",
+                "Customer",
+                "City",
+                "Orders"
+        );
+
+
+        for (CustomerOrderRankingReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20s %-15d%n",
+                    row.getCustomerId(),
+                    row.getCustomerName(),
+                    safe(row.getCity()),
+                    row.getNumberOfOrders()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report6() {
+
+    printHeading("Cancellation Reports");
+
+    System.out.println("1. Customers with most cancelled tickets");
+    System.out.println("2. Organizers with most cancelled performances");
+
+
+    OperationResult<List<CancellationReport>> result;
+
+
+    LocalDateTime oneYearAgo =
+            LocalDateTime.now().minusYears(1);
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> result = reports.report6a(oneYearAgo);
+
+        case "2" -> result = reports.report6b(oneYearAgo);
+
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s%n",
+                "ID",
+                "Name",
+                "Cancelled"
+        );
+
+
+        for (CancellationReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20d%n",
+                    row.getId(),
+                    row.getName(),
+                    row.getCount()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report7() {
+
+    printHeading("Sell-Through Report");
+
+    System.out.println("1. Sell-through by performance");
+    System.out.println("2. Sell-through by tier");
+    System.out.println("3. Sold-out / under 25% by city");
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> report7a();
+
+        case "2" -> report7b();
+
+        case "3" -> report7c();
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+        }
+    }
+}
+
+
+private void report7a() {
+
+    printHeading("Sell-through by Performance");
+
+
+    OperationResult<List<SellThroughReport>> result =
+            reports.report7a();
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-12s %-25s %-20s %-12s %-12s %-15s%n",
+                "Performance",
+                "Event",
+                "City",
+                "Capacity",
+                "Sold",
+                "Rate"
+        );
+
+
+        for (SellThroughReport row : rows) {
+
+            System.out.printf(
+                    "%-12d %-25s %-20s %-12d %-12d %-15s%n",
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getCity(),
+                    row.getCapacity(),
+                    row.getNumSold(),
+                    row.getSellThroughRate()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report7b() {
+
+    printHeading("Sell-through by Tier");
+
+
+    OperationResult<List<SellThroughTierReport>> result =
+            reports.report7b();
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-12s %-12s %-12s %-12s %-15s%n",
+                "Performance",
+                "Tier",
+                "Capacity",
+                "Sold",
+                "Rate"
+        );
+
+
+        for (SellThroughTierReport row : rows) {
+
+            System.out.printf(
+                    "%-12d %-12s %-12d %-12d %-15s%n",
+                    row.getPerformanceId(),
+                    row.getTierCode(),
+                    row.getCapacity(),
+                    row.getNumSold(),
+                    row.getSellThroughRate()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report7c() {
+
+    printHeading("Sold-out / Under 25% Sell-through");
+
+
+    int year = Integer.parseInt(
+            readLine("Year: ")
+    );
+
+    int month = Integer.parseInt(
+            readLine("Month: ")
+    );
+
+
+    OperationResult<List<SellThroughBucketReport>> result =
+            reports.report7c(
+                    year,
+                    month
+            );
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-20s %-12s %-25s %-15s %-15s%n",
+                "City",
+                "Performance",
+                "Event",
+                "Rate",
+                "Bucket"
+        );
+
+
+        for (SellThroughBucketReport row : rows) {
+
+            System.out.printf(
+                    "%-20s %-12d %-25s %-15s %-15s%n",
+                    safe(row.getCity()),
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getSellThroughRate(),
+                    row.getBucket()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report8() {
+
+    printHeading("Resale Reports");
+
+
+    System.out.println("1. Resale statistics per event");
+    System.out.println("2. Top 10 events by resale volume");
+
+
+    OperationResult<List<ResaleReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+
+        case "1" -> result = reports.report8a();
+
+
+        case "2" -> {
+
+            LocalDateTime[] dates = readReportDateRange();
+
+            if (dates == null) {
+                pause();
+                return;
+            }
+
+            result = reports.report8b(
+                    dates[0],
+                    dates[1]
+            );
+        }
+
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-30s %-15s %-15s %-15s%n",
+                "ID",
+                "Event",
+                "Resales",
+                "Avg Markup",
+                "At Cap"
+        );
+
+
+        for (ResaleReport row : rows) {
+
+
+            System.out.printf(
+                    "%-10d %-30s %-15d %-15s %-15s%n",
+                    row.getEventId(),
+                    row.getEventTitle(),
+                    row.getResaleCount(),
+                    row.getAvgMarkupPct() == null
+                            ? "-"
+                            : row.getAvgMarkupPct(),
+                    row.getPctAtCap() == null
+                            ? "-"
+                            : row.getPctAtCap()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report9() {
+
+    printHeading("Event Word Cloud Report");
+
+
+    OperationResult<List<EventNounPhraseReport>> result =
+            reports.report9();
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+
+        if (rows.isEmpty()) {
+
+            System.out.println(
+                    "No review data found."
+            );
+
+            return;
+        }
+
+
+        for (EventNounPhraseReport report : rows) {
+
+
+            System.out.println();
+            System.out.println(
+                    "Event: "
+                            + report.getEventTitle()
+            );
+
+
+            System.out.printf(
+                    "%-30s %-10s%n",
+                    "Noun Phrase",
+                    "Count"
+            );
+
+
+            for (NounPhraseCount phrase :
+                    report.getPhrases()) {
+
+
+                System.out.printf(
+                        "%-30s %-10d%n",
+                        phrase.getPhrase(),
+                        phrase.getCount()
+                );
+            }
+        }
+
+    });
+
+
+    pause();
+}
+
 
     private void showDatabaseMenu() {
         printHeading("Database connection");

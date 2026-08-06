@@ -289,30 +289,30 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 - [ ] **Build R4: possible scalpers by city.**
   - [ ] Group by venue city.
-  - [ ] Use the past-year purchase/listing window.
-  - [ ] Return customers who purchased at least 10 tickets and listed more than half.
+  - [x] Use the past-year purchase/listing window.
+  - [x] Return customers who purchased at least 10 tickets and listed more than half.
   - [ ] Flag the identified customers and prohibit the actions chosen by the design.
   - [ ] Add the R4 report and prohibition result to terminal option 8.
 - [ ] **Build R5: customer order rankings.**
-  - [ ] Rank customers by order count for a requested period.
-  - [ ] Rank customers by the city of the performance venue.
-  - [ ] Apply the at-least-two-orders-in-the-year rule to the city ranking.
+  - [x] Rank customers by order count for a requested period.
+  - [x] Rank customers by the city of the performance venue.
+  - [x] Apply the at-least-two-orders-in-the-year rule to the city ranking.
   - [ ] Add terminal period/city inputs, headings, and empty-result handling.
-- [ ] **Build R6: cancellation rankings.**
-  - [ ] Use the required one-year reporting window.
-  - [ ] Rank customers by cancelled-ticket count.
-  - [ ] Rank organizers by cancelled-performance count.
-  - [ ] Keep customer and organizer results clearly separated.
+- [x] **Build R6: cancellation rankings.**
+  - [x] Use the required one-year reporting window.
+  - [x] Rank customers by cancelled-ticket count.
+  - [x] Rank organizers by cancelled-performance count.
+  - [x] Keep customer and organizer results clearly separated.
 - [ ] **Build R7: sell-through reports.**
-  - [ ] Calculate sellable capacity with blocked reserved seats excluded and general-admission capacity included.
-  - [ ] Report sell-through per performance and per performance tier.
+  - [x] Calculate sellable capacity with blocked reserved seats excluded and general-admission capacity included.
+  - [x] Report sell-through per performance and per performance tier.
   - [ ] Accept month and city for sold-out and below-25% performance results.
   - [ ] Handle zero-capacity cases safely.
-- [ ] **Build R8: resale reports.**
-  - [ ] Report completed resale count per event.
-  - [ ] Calculate average markup over face value.
-  - [ ] Calculate the fraction of listings priced exactly at the cap.
-  - [ ] Accept a period for the top 10 events by resale volume.
+- [x] **Build R8: resale reports.**
+  - [x] Report completed resale count per event.
+  - [x] Calculate average markup over face value.
+  - [x] Calculate the fraction of listings priced exactly at the cap.
+  - [x] Accept a period for the top 10 events by resale volume.
 - [ ] **Finish the R4-R8 terminal screens.**
   - [ ] Add prompts and check date, city, and period inputs.
   - [ ] Use clear headings, money/percentage formatting, and empty-result messages.
@@ -344,24 +344,24 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member B
 
-- [ ] **Build R1: sales and revenue.**
-  - [ ] Accept a date range.
-  - [ ] Return total sold-ticket count and gross revenue by city.
-  - [ ] Support the venue-within-city breakdown.
-- [ ] **Build R2: event and performance counts.**
-  - [ ] Count events and performances per segment and genre.
-  - [ ] Produce country, country/city, and country/city/venue rollups.
-- [ ] **Build R3: organizer revenue rankings.**
-  - [ ] Rank organizers by gross revenue overall and per country.
-  - [ ] Support optional city refinement.
-- [ ] **Build R9: popular noun phrases.**
-  - [ ] Query comments grouped by event.
-  - [ ] Extract noun phrases with the chosen Java text-processing approach.
-  - [ ] Rank or count phrases and display the most popular set per event.
-  - [ ] Do not spend time building a visualization.
-- [ ] **Finish the R1-R3 and R9 terminal screens.**
-  - [ ] Add prompts and check date, location, and grouping inputs.
-  - [ ] Use clear headings, money formatting, and empty-result messages.
+- [x] **Build R1: sales and revenue.**
+  - [x] Accept a date range.
+  - [x] Return total sold-ticket count and gross revenue by city.
+  - [x] Support the venue-within-city breakdown.
+- [x] **Build R2: event and performance counts.**
+  - [x] Count events and performances per segment and genre.
+  - [x] Produce country, country/city, and country/city/venue rollups.
+- [x] **Build R3: organizer revenue rankings.**
+  - [x] Rank organizers by gross revenue overall and per country.
+  - [x] Support optional city refinement.
+- [x] **Build R9: popular noun phrases.**
+  - [x] Query comments grouped by event.
+  - [x] Extract noun phrases with the chosen Java text-processing approach.
+  - [x] Rank or count phrases and display the most popular set per event.
+  - [x] Do not spend time building a visualization.
+- [x] **Finish the R1-R3 and R9 terminal screens.**
+  - [x] Add prompts and check date, location, and grouping inputs.
+  - [x] Use clear headings, money formatting, and empty-result messages.
 - [ ] **Build the organizer toolkit.**
   - [ ] Find comparable performances using genre, venue capacity, city, and recent dates.
   - [ ] Suggest tier count, a price for each tier, and capacity share per tier.

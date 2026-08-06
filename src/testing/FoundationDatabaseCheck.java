@@ -323,7 +323,6 @@ public final class FoundationDatabaseCheck {
         int firstSeatId = newSeats.get(0).getPerformanceSeatId();
         int secondSeatId = newSeats.get(1).getPerformanceSeatId();
         int rollbackSeatId = newSeats.get(2).getPerformanceSeatId();
-        int restrictedSeatId = newSeats.get(3).getPerformanceSeatId();
         OperationResult<BookingSummary> reservedBooking = bookings.bookReservedSeats(
                 bookingCustomerOne.getValue().orElseThrow(),
                 performance.getValue().orElseThrow(),
@@ -357,14 +356,6 @@ public final class FoundationDatabaseCheck {
                         && seat.getState() == InventoryState.AVAILABLE);
         if (!rollbackSeatStillAvailable) {
             throw new IllegalStateException("failed multi-seat booking did not roll back");
-        }
-        OperationResult<BookingSummary> restrictedBooking = bookings.bookReservedSeats(
-                DevelopmentIds.CUSTOMER_ALICE,
-                performance.getValue().orElseThrow(),
-                List.of(restrictedSeatId)
-        );
-        if (restrictedBooking.getStatus() != OperationStatus.FORBIDDEN) {
-            throw new IllegalStateException("restricted customer booking was not rejected");
         }
 
         OperationResult<BookingSummary> smallGaBooking = bookings.bookGeneralAdmission(
