@@ -14,6 +14,8 @@ public final class DevelopmentIds {
     public static final int PERFORMANCE_RESERVED = 6001;
     public static final int PERFORMANCE_GENERAL = 6002;
     public static final int PERFORMANCE_PAST = 6003;
+    public static final int PERFORMANCE_CONFIGURABLE_MIXED = 6006;
+    public static final int PERFORMANCE_CONFIGURABLE_RESERVED = 6013;
     public static final int PERFORMANCE_SOLD_OUT_TWO = 6007;
     public static final int PERFORMANCE_SOLD_OUT_THREE = 6019;
     public static final int PERFORMANCE_LOW_SELL_THROUGH = 6004;

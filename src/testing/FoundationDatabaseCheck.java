@@ -199,6 +199,23 @@ public final class FoundationDatabaseCheck {
             throw new IllegalStateException("nonexistent venue ID was not rejected");
         }
 
+        for (int performanceId : List.of(
+                DevelopmentIds.PERFORMANCE_CONFIGURABLE_MIXED,
+                DevelopmentIds.PERFORMANCE_CONFIGURABLE_RESERVED
+        )) {
+            OperationResult<List<String>> configurable =
+                    pricing.getVenueSectionsForPricing(performanceId);
+            requireSuccess(configurable, "sample pricing-configuration preflight");
+            if (!configurable.getMessage().contains(
+                    "already has tiers and section assignments"
+            )) {
+                throw new IllegalStateException(
+                        "sample performance " + performanceId
+                                + " was not ready for pricing replacement"
+                );
+            }
+        }
+
         OperationResult<Integer> event = events.createEvent(new EventInput(
                 organizer.getValue().orElseThrow(),
                 "Database Check Event",

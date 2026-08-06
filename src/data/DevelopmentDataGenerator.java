@@ -47,6 +47,8 @@ public final class DevelopmentDataGenerator {
             Arrays.asList(6004, 6022, 6025));
     private static final Set<Integer> CANCELLED_PERFORMANCES = new LinkedHashSet<>(
             Arrays.asList(6058, 6060));
+    private static final Set<Integer> CONFIGURABLE_PERFORMANCES = new LinkedHashSet<>(
+            Arrays.asList(6006, 6013));
 
     private static final String[] ORGANIZER_NAMES = {
         "Northstar Live", "Maple Stage Productions", "Continental Sports Group",
@@ -395,6 +397,9 @@ public final class DevelopmentDataGenerator {
         orderCounts.put(6025, 3);
         orderCounts.put(6058, 5);
         orderCounts.put(6060, 5);
+        for (int performanceId : CONFIGURABLE_PERFORMANCES) {
+            orderCounts.put(performanceId, 0);
+        }
 
         int assigned = orderCounts.values().stream().mapToInt(Integer::intValue).sum();
         int remainingWithFive = PURCHASE_COUNT - assigned - ((PERFORMANCE_COUNT - orderCounts.size()) * 4);
@@ -712,6 +717,17 @@ public final class DevelopmentDataGenerator {
                 "The two Toronto performances must use different prices and tier mappings.");
         require(dataset.seatInventory.stream().anyMatch(seat -> seat.blocked),
                 "Performance-specific blocked seats are required.");
+
+        for (int performanceId : CONFIGURABLE_PERFORMANCES) {
+            PerformanceSpec performance = performanceById(dataset, performanceId);
+            require("scheduled".equals(performance.status) && performance.offsetDays > 0,
+                    "Configurable performance " + performanceId
+                            + " must be scheduled in the future.");
+            require(dataset.tickets.stream().noneMatch(ticket ->
+                            ticket.performanceId == performanceId),
+                    "Configurable performance " + performanceId
+                            + " must not have sold tickets.");
+        }
 
         require(dataset.purchases.size() == PURCHASE_COUNT,
                 "Exactly 320 purchase orders are required.");

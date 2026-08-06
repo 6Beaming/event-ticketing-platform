@@ -5,35 +5,23 @@ Generate the dataset from the repository root with:
 ```sh
 sh run.sh --generate-data
 ```
+or 
+```
+mysql -u root -p database_name < sql/load.sql
+```
 
 The command rewrites `data/development-data.sql`, which `sql/load.sql` loads in
-one execution. Dates are relative to `UTC_TIMESTAMP()` so the past-year,
-upcoming, seven-day cancellation, and recent-review cases remain testable.
-Every generated identity is stable, and the generator stops without writing a
-file if one of its requirement assertions fails.
+one execution. 
 
-## Exact generated counts
 
-| Record | Count |
-|---|---:|
-| Organizers | 5 |
-| Adult customers and fictional payment records | 100 each |
-| Venues | 8 |
-| Cities / countries | 6 / 2 |
-| Segments / genres / artists or teams | 3 / 6 / 15 |
-| Events / performances | 20 / 60 |
-| Purchase orders / tickets | 320 / 960 |
-| Ticket cancellations and refunds | 42 each |
-| Organizer-cancelled performances | 2 |
-| Resale listings | 16: 8 sold, 4 withdrawn, 4 active |
-| Reviews | 30 across 10 events |
 
-The generated SQL ends with count queries for the core PDF minimums.
 
-## Stable development-data IDs
 
-The complete deterministic sample-data generator reserves these ranges and
-representative edge-case IDs:
+## Sample data IDs
+
+The deterministic generator reserves the following entity ranges.
+
+### Entity ID ranges
 
 | Record | Stable ID |
 |---|---:|
@@ -45,15 +33,44 @@ representative edge-case IDs:
 | Artists and teams | `4201`-`4215` |
 | Events | `5001`-`5020` |
 | Performances | `6001`-`6060` |
-| Consecutive/nonconsecutive availability example | `6001` |
-| Fewer-than-seven-days sold example | `6002` |
-| Sold-out examples | `6003`, `6007`, `6019` |
-| Low-sell-through example | `6004` |
-| Organizer-cancelled examples | `6058`, `6060` |
 | Purchase orders | `7001`-`7320` |
 | Tickets | `8001`-`8960` |
-| Reserved and GA representative tickets | `8001`, `8002` |
-| Ticket with two resale transfers | `8007` |
+
+### Performance IDs category
+
+| Category | Stable ID | Testing purpose |
+|---|---:|---|
+| Pricing configuration, mixed reserved/GA venue | `6006` | Future scheduled performance with existing tiers but no tickets; option **3 -> 1** can safely replace its pricing and section assignments. |
+| Pricing configuration, reserved-only venue | `6013` | Future scheduled performance with existing tiers but no tickets; option **3 -> 1** can safely replace its pricing and section assignments. |
+| Tier-price and seat-availability controls | `6001` | More than seven days away; tiers `P1` and `P2` have sales while `P3` has no sales; also provides consecutive and nonconsecutive reserved-seat availability. |
+| Near-deadline booking/cancellation rejection | `6002` | Scheduled five days away with sold reserved and general-admission tickets. |
+| Completed and sold out | `6003`, `6007`, `6019` | Historical sell-through and inventory examples across different cities and months. |
+| Completed with low sell-through | `6004`, `6022`, `6025` | Historical performances below 25% sell-through across different cities and months. |
+| Organizer-cancelled | `6058`, `6060` | Cancelled-performance, refund, and historical inventory examples. |
+
+### Ticket IDs category
+
+| Category | Stable ID |
+|---|---:|
+| Representative reserved ticket | `8001` |
+| Representative general-admission ticket | `8002` |
+| Ticket with two completed resale transfers | `8007` |
+
+## Generated counts
+
+| Record | Count |
+|---|---:|
+| Organizers | 5 |
+| Adult customers and payment records | 100 each |
+| Venues | 8 |
+| Cities / countries | 6 / 2 |
+| Segments / genres / artists or teams | 3 / 6 / 15 |
+| Events / performances | 20 / 60 |
+| Purchase orders / tickets | 320 / 960 |
+| Ticket cancellations and refunds | 42 each |
+| Organizer-cancelled performances | 2 |
+| Resale listings | 16: 8 sold, 4 withdrawn, 4 active |
+| Reviews | 30 across 10 events |
 
 ## Venues and seating
 
