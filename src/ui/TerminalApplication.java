@@ -21,6 +21,9 @@ import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
 import operations.profile.UserProfileOperations;
 
+import reports.ReportOperations;
+import reports.TicketRevenueReport;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -46,6 +49,7 @@ public final class TerminalApplication {
     private final OrganizerEventOperations events;
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
+    private final ReportOperations reports;
     private boolean running;
 
     public TerminalApplication(Scanner input, DatabaseConnection database) {
@@ -59,6 +63,7 @@ public final class TerminalApplication {
         this.events = new OrganizerEventOperations(transactions);
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
+        this.reports = new ReportOperations(transactions);
     }
 
     public void run() {
@@ -775,11 +780,113 @@ public final class TerminalApplication {
         pause();
     }
 
-    private void showReports() {
-        printHeading("Required reports");
-        System.out.println("R1-R9 implementation is scheduled for August 4-6.");
-        pause();
+private void showReports() {
+    boolean inMenu = true;
+
+    while (running && inMenu) {
+        printHeading("Required Reports");
+
+        System.out.println("1. Ticket revenue report");
+        System.out.println("2. Events and performances report");
+        System.out.println("3. Organizer revenue ranking");
+        System.out.println("4. Potential ticket scalpers");
+        System.out.println("5. Customer order rankings");
+        System.out.println("6. Cancellation report");
+        System.out.println("7. Sell-through report");
+        System.out.println("8. Resale report");
+        System.out.println("9. Event word cloud report");
+        System.out.println("0. Back");
+
+        switch (readLine("Select an option: ")) {
+            case "1" -> runOnlineAction(this::report1);
+            case "2" -> runOnlineAction(this::report2);
+            case "3" -> runOnlineAction(this::report3);
+            case "4" -> runOnlineAction(this::report4);
+            case "5" -> runOnlineAction(this::report5);
+            case "6" -> runOnlineAction(this::report6);
+            case "7" -> runOnlineAction(this::report7);
+            case "8" -> runOnlineAction(this::report8);
+            case "9" -> runOnlineAction(this::report9);
+            case "0" -> inMenu = false;
+            default -> System.out.println("Unknown report option.");
+        }
     }
+}
+
+private void report1() {
+
+    OperationResult<List<TicketRevenueReport>> result = reports.report1();
+
+    printResult(result);
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+        System.out.printf(
+                "%-20s %-15s %-15s%n",
+                "City",
+                "Tickets Sold",
+                "Gross Revenue"
+        );
+
+        for (TicketRevenueReport row : rows) {
+
+            System.out.printf(
+                    "%-20s %-15d $%-15s%n",
+                    row.getCity(),
+                    row.getTicketsSold(),
+                    row.getGrossRevenue().toPlainString()
+            );
+        }
+    });
+
+    pause();
+}
+
+private void report2() {
+    System.out.println("Report 2 not implemented yet.");
+    pause();
+}
+
+private void report3() {
+    System.out.println("Report 3 not implemented yet.");
+    pause();
+}
+
+private void report4() {
+    System.out.println("Report 4 not implemented yet.");
+    pause();
+}
+
+private void report5() {
+    System.out.println("Report 5 not implemented yet.");
+    pause();
+}
+
+private void report6() {
+    System.out.println("Report 6 not implemented yet.");
+    pause();
+}
+
+private void report7() {
+    System.out.println("Report 7 not implemented yet.");
+    pause();
+}
+
+private void report8() {
+    System.out.println("Report 8 not implemented yet.");
+    pause();
+}
+
+private void report9() {
+    System.out.println("Report 9 not implemented yet.");
+    pause();
+}
+
 
     private void showDatabaseMenu() {
         printHeading("Database connection");
