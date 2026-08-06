@@ -41,6 +41,8 @@ import queries.PostalCodePerformanceQuery;
 import queries.AddressPerformanceQuery;
 import queries.DateRangePerformanceQuery;
 import queries.FilteredPerformanceQuery;
+import queries.SeatMapSummaryQuery;
+import queries.BestAvailableQuery;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1211,14 +1213,119 @@ private void query5() {
 }
 
 private void query6() {
+
     printHeading("Seat Map Summary");
-    System.out.println("Query 6 is not yet implemented.");
+
+
+    int performanceId =
+            Integer.parseInt(
+                    readLine("Performance ID: ")
+            );
+
+
+    OperationResult<List<SeatMapSummaryQuery>> result =
+            queries.query6(performanceId);
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-20s %-10s %-10s %-10s %-10s %-10s%n",
+                "Section",
+                "Tier",
+                "Price",
+                "Available",
+                "Sold",
+                "Blocked"
+        );
+
+
+        for (SeatMapSummaryQuery row : rows) {
+
+            System.out.printf(
+                    "%-20s %-10s %-10.2f %-10d %-10d %-10d%n",
+                    row.getSectionName(),
+                    row.getTierCode(),
+                    row.getPrice(),
+                    row.getAvailable(),
+                    row.getSold(),
+                    row.getBlocked()
+            );
+        }
+
+    });
+
+
     pause();
 }
 
 private void query7() {
+
     printHeading("Best Available Seats");
-    System.out.println("Query 7 is not yet implemented.");
+
+
+    int performanceId =
+            Integer.parseInt(
+                    readLine("Performance ID: ")
+            );
+
+
+    int quantity =
+            Integer.parseInt(
+                    readLine("Number of seats required: ")
+            );
+
+
+    String budgetInput =
+            readLine("Budget (optional): ");
+
+
+    Double budget = null;
+
+    if (!budgetInput.isBlank()) {
+        budget = Double.parseDouble(budgetInput);
+    }
+
+
+    OperationResult<BestAvailableQuery> result =
+            queries.query7(
+                    performanceId,
+                    quantity,
+                    budget
+            );
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(row -> {
+
+        System.out.println();
+
+        System.out.printf(
+                "Section: %s%n" +
+                "Row: %s%n" +
+                "Seats: %d - %d%n" +
+                "Total Price: %.2f%n",
+                row.getSectionName(),
+                row.getRowName(),
+                row.getStartSeat(),
+                row.getEndSeat(),
+                row.getTotalPrice()
+        );
+
+    });
+
+
     pause();
 }
 

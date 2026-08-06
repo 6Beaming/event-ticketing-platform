@@ -643,5 +643,253 @@ public OperationResult<List<FilteredPerformanceQuery>> query5(
     });
 }
 
+/*************************************************************************************************************
+ QUERY-6
+ Seat map summary
+ *************************************************************************************************************/
+public OperationResult<List<SeatMapSummaryQuery>> query6(
+        int performanceId
+) {
 
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT sta.section_name,
+                       sta.tier_code,
+                       pt.price,
+                       SUM(CASE WHEN ps.blocked_status = FALSE
+                                 AND ps.performance_seat_id NOT IN (
+                                     SELECT performance_seats_ref
+                                     FROM Tickets
+                                     WHERE status='active'
+                                       AND performance_seats_ref IS NOT NULL)
+                                THEN 1 ELSE 0 END) AS available,
+                       SUM(CASE WHEN ps.performance_seat_id IN (
+                                     SELECT performance_seats_ref
+                                     FROM Tickets
+                                     WHERE status='active'
+                                       AND performance_seats_ref IS NOT NULL)
+                                THEN 1 ELSE 0 END) AS sold,
+                       SUM(CASE WHEN ps.blocked_status = TRUE
+                                THEN 1 ELSE 0 END) AS blocked
+                FROM SectionTierAssignment sta
+                JOIN PriceTier pt
+                    ON pt.performance_id = sta.performance_id
+                   AND pt.tier_code = sta.tier_code
+                JOIN Section s
+                    ON s.venue_id = sta.venue_id
+                   AND s.section_name = sta.section_name
+                   AND s.section_type = 'reserved'
+                JOIN PerformanceSeats ps
+                    ON ps.performance_id = sta.performance_id
+                   AND ps.venue_id = sta.venue_id
+                   AND ps.section_name = sta.section_name
+                WHERE sta.performance_id = ?
+                GROUP BY sta.section_name,
+                         sta.tier_code,
+                         pt.price
+
+                UNION ALL
+
+                SELECT sta.section_name,
+                       sta.tier_code,
+                       pt.price,
+                       ga.remaining_capacity AS available,
+                       ga.total_capacity - ga.remaining_capacity AS sold,
+                       0 AS blocked
+                FROM SectionTierAssignment sta
+                JOIN PriceTier pt
+                    ON pt.performance_id = sta.performance_id
+                   AND pt.tier_code = sta.tier_code
+                JOIN Section s
+                    ON s.venue_id = sta.venue_id
+                   AND s.section_name = sta.section_name
+                   AND s.section_type = 'general'
+                JOIN GeneralAdmissionCapacity ga
+                    ON ga.performance_id = sta.performance_id
+                   AND ga.venue_id = sta.venue_id
+                   AND ga.section_name = sta.section_name
+                WHERE sta.performance_id = ?
+                """;
+
+
+        List<SeatMapSummaryQuery> results =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setInt(1, performanceId);
+            statement.setInt(2, performanceId);
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    results.add(
+                            new SeatMapSummaryQuery(
+                                    rows.getString("section_name"),
+                                    rows.getString("tier_code"),
+                                    rows.getDouble("price"),
+                                    rows.getInt("available"),
+                                    rows.getInt("sold"),
+                                    rows.getInt("blocked")
+                            )
+                    );
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Seat map summary generated.",
+                List.copyOf(results)
+        );
+
+    });
+
+}
+/*************************************************************************************************************
+ QUERY-7
+ Best available consecutive seats
+ *************************************************************************************************************/
+public OperationResult<BestAvailableQuery> query7(
+        int performanceId,
+        int q,
+        Double budget
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                WITH available_seats AS (
+
+                    SELECT ps.performance_id,
+                           ps.venue_id,
+                           ps.section_name,
+                           ps.row_name,
+                           ps.seat_number,
+                           pt.price,
+
+                           ps.seat_number - ROW_NUMBER() OVER (
+                               PARTITION BY ps.venue_id,
+                                            ps.section_name,
+                                            ps.row_name
+                               ORDER BY ps.seat_number
+                           ) AS grp
+
+                    FROM PerformanceSeats ps
+
+                    JOIN SectionTierAssignment sta
+                        ON sta.performance_id = ps.performance_id
+                       AND sta.venue_id = ps.venue_id
+                       AND sta.section_name = ps.section_name
+
+                    JOIN PriceTier pt
+                        ON pt.performance_id = sta.performance_id
+                       AND pt.tier_code = sta.tier_code
+
+                    WHERE ps.performance_id = ?
+                      AND ps.blocked_status = FALSE
+                      AND ps.performance_seat_id NOT IN (
+                          SELECT performance_seats_ref
+                          FROM Tickets
+                          WHERE status='active'
+                            AND performance_seats_ref IS NOT NULL
+                      )
+                ),
+
+                runs AS (
+
+                    SELECT venue_id,
+                           section_name,
+                           row_name,
+                           grp,
+                           price,
+                           MIN(seat_number) AS start_seat,
+                           COUNT(*) AS run_length,
+                           COUNT(*) * price AS total_price
+
+                    FROM available_seats
+
+                    GROUP BY venue_id,
+                             section_name,
+                             row_name,
+                             grp,
+                             price
+
+                    HAVING COUNT(*) >= ?
+                )
+
+                SELECT section_name,
+                       row_name,
+                       start_seat,
+                       start_seat + ? - 1 AS end_seat,
+                       ? * price AS total_price
+
+                FROM runs
+
+                WHERE (? IS NULL OR ? * price <= ?)
+
+                ORDER BY total_price ASC
+
+                LIMIT 1
+                """;
+
+
+        BestAvailableQuery result = null;
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setInt(1, performanceId);
+
+            statement.setInt(2, q);
+
+            statement.setInt(3, q);
+
+            statement.setInt(4, q);
+
+
+            if (budget == null) {
+                statement.setNull(5, java.sql.Types.DOUBLE);
+                statement.setNull(6, java.sql.Types.INTEGER);
+                statement.setNull(7, java.sql.Types.DOUBLE);
+            }
+            else {
+                statement.setDouble(5, budget);
+                statement.setInt(6, q);
+                statement.setDouble(7, budget);
+            }
+
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+
+                if (rows.next()) {
+
+                    result = new BestAvailableQuery(
+                            rows.getString("section_name"),
+                            rows.getString("row_name"),
+                            rows.getInt("start_seat"),
+                            rows.getInt("end_seat"),
+                            rows.getDouble("total_price")
+                    );
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Best available seat search completed.",
+                result
+        );
+
+    });
+}
 }
