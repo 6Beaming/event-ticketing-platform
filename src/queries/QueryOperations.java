@@ -458,7 +458,190 @@ public OperationResult<List<DateRangePerformanceQuery>> query4(
     });
 }
 
+/*************************************************************************************************************
+ QUERY-5
+ Filtered performance search
+ *************************************************************************************************************/
+public OperationResult<List<FilteredPerformanceQuery>> query5(
+        String city,
+        String segment,
+        String genre,
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        double minPrice,
+        double maxPrice,
+        int minAvailable,
+        String sectionType
+) {
 
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT p.performance_id, e.title, v.city, sg.segment_name, g.genre_name,
+                       cheapest.min_price AS cheapest_available_price,
+                       avail.total_available
+                FROM Performance p
+                JOIN Event e    ON e.event_id = p.event_id
+                JOIN Genre g    ON g.genre_id = e.genre_id
+                JOIN Segment sg ON sg.segment_id = g.segment_id
+                JOIN Venue v    ON v.venue_id = p.venue_id
+                JOIN (
+                    SELECT pt.performance_id, MIN(pt.price) AS min_price
+                    FROM PriceTier pt
+                    JOIN SectionTierAssignment sta
+                        ON sta.performance_id = pt.performance_id
+                       AND sta.tier_code = pt.tier_code
+                    JOIN Section s
+                        ON s.venue_id = sta.venue_id
+                       AND s.section_name = sta.section_name
+                    LEFT JOIN (
+                        SELECT performance_id, venue_id, section_name,
+                               SUM(
+                                   CASE
+                                       WHEN blocked_status = FALSE
+                                        AND performance_seat_id NOT IN (
+                                            SELECT performance_seats_ref
+                                            FROM Tickets
+                                            WHERE status = 'active'
+                                              AND performance_seats_ref IS NOT NULL
+                                        )
+                                       THEN 1
+                                       ELSE 0
+                                   END
+                               ) AS avail_count
+                        FROM PerformanceSeats
+                        GROUP BY performance_id, venue_id, section_name
+                    ) seat_avail
+                        ON seat_avail.performance_id = sta.performance_id
+                       AND seat_avail.venue_id = sta.venue_id
+                       AND seat_avail.section_name = sta.section_name
+                    LEFT JOIN GeneralAdmissionCapacity ga
+                        ON ga.performance_id = sta.performance_id
+                       AND ga.venue_id = sta.venue_id
+                       AND ga.section_name = sta.section_name
+                    WHERE (? IS NULL OR s.section_type = ?)
+                      AND (
+                            (s.section_type = 'reserved'
+                             AND COALESCE(seat_avail.avail_count, 0) > 0)
+                         OR (s.section_type = 'general'
+                             AND ga.remaining_capacity > 0)
+                      )
+                    GROUP BY pt.performance_id
+                ) cheapest
+                    ON cheapest.performance_id = p.performance_id
+                JOIN (
+                    SELECT p2.performance_id,
+                           COALESCE(seats.avail, 0)
+                           + COALESCE(ga.avail, 0) AS total_available
+                    FROM Performance p2
+                    LEFT JOIN (
+                        SELECT ps.performance_id,
+                               SUM(
+                                   CASE
+                                       WHEN ps.blocked_status = FALSE
+                                        AND ps.performance_seat_id NOT IN (
+                                            SELECT performance_seats_ref
+                                            FROM Tickets
+                                            WHERE status = 'active'
+                                              AND performance_seats_ref IS NOT NULL
+                                        )
+                                       THEN 1
+                                       ELSE 0
+                                   END
+                               ) AS avail
+                        FROM PerformanceSeats ps
+                        JOIN Section s2
+                            ON s2.venue_id = ps.venue_id
+                           AND s2.section_name = ps.section_name
+                        WHERE (? IS NULL OR s2.section_type = ?)
+                        GROUP BY ps.performance_id
+                    ) seats
+                        ON seats.performance_id = p2.performance_id
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               SUM(remaining_capacity) AS avail
+                        FROM GeneralAdmissionCapacity
+                        WHERE (? IS NULL OR section_type = ?)
+                        GROUP BY performance_id
+                    ) ga
+                        ON ga.performance_id = p2.performance_id
+                ) avail
+                    ON avail.performance_id = p.performance_id
+                WHERE p.status = 'scheduled'
+                  AND v.city = ?
+                  AND sg.segment_name = ?
+                  AND g.genre_name = ?
+                  AND p.date_time BETWEEN ? AND ?
+                  AND cheapest.min_price BETWEEN ? AND ?
+                  AND avail.total_available >= ?
+                ORDER BY p.date_time
+                """;
+
+
+        List<FilteredPerformanceQuery> results =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, sectionType);
+            statement.setString(2, sectionType);
+
+            statement.setString(3, sectionType);
+            statement.setString(4, sectionType);
+
+            statement.setString(5, sectionType);
+            statement.setString(6, sectionType);
+
+            statement.setString(7, city);
+            statement.setString(8, segment);
+            statement.setString(9, genre);
+
+            statement.setTimestamp(
+                    10,
+                    Timestamp.valueOf(startDate)
+            );
+
+            statement.setTimestamp(
+                    11,
+                    Timestamp.valueOf(endDate)
+            );
+
+            statement.setDouble(12, minPrice);
+            statement.setDouble(13, maxPrice);
+
+            statement.setInt(14, minAvailable);
+
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    results.add(
+                            new FilteredPerformanceQuery(
+                                    rows.getInt("performance_id"),
+                                    rows.getString("title"),
+                                    rows.getString("city"),
+                                    rows.getString("segment_name"),
+                                    rows.getString("genre_name"),
+                                    rows.getDouble("cheapest_available_price"),
+                                    rows.getInt("total_available")
+                            )
+                    );
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Filtered performance search completed.",
+                List.copyOf(results)
+        );
+
+    });
+}
 
 
 }

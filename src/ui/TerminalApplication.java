@@ -40,6 +40,7 @@ import queries.UpcomingPerformanceQuery;
 import queries.PostalCodePerformanceQuery;
 import queries.AddressPerformanceQuery;
 import queries.DateRangePerformanceQuery;
+import queries.FilteredPerformanceQuery;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1114,8 +1115,98 @@ private void query4() {
 }
 
 private void query5() {
-    printHeading("Performance Filter Search");
-    System.out.println("Query 5 is not yet implemented.");
+
+    printHeading("Filtered Performance Search");
+
+
+    String city =
+            readLine("City: ");
+
+    String segment =
+            readLine("Segment: ");
+
+    String genre =
+            readLine("Genre: ");
+
+     LocalDateTime[] dates = readReportDateRange();
+    if (dates == null) {
+                pause();
+                return;
+            }
+
+    double minPrice =
+            Double.parseDouble(
+                    readLine("Minimum price: ")
+            );
+
+    double maxPrice =
+            Double.parseDouble(
+                    readLine("Maximum price: ")
+            );
+
+    int minAvailable =
+            Integer.parseInt(
+                    readLine("Minimum available tickets: ")
+            );
+
+    String sectionType =
+            readLine("Section type (reserved/general): ");
+
+
+    OperationResult<List<FilteredPerformanceQuery>> result =
+            queries.query5(
+                    city,
+                    segment,
+                    genre,
+                    dates[0],
+                    dates[1],
+                    minPrice,
+                    maxPrice,
+                    minAvailable,
+                    sectionType
+            );
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No performances found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-8s %-25s %-15s %-15s %-15s %-12s %-12s%n",
+                "ID",
+                "Event",
+                "City",
+                "Segment",
+                "Genre",
+                "Price",
+                "Available"
+        );
+
+
+        for (FilteredPerformanceQuery row : rows) {
+
+            System.out.printf(
+                    "%-8d %-25s %-15s %-15s %-15s %-12.2f %-12d%n",
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getCity(),
+                    row.getSegment(),
+                    row.getGenre(),
+                    row.getCheapestPrice(),
+                    row.getAvailableTickets()
+            );
+        }
+
+    });
+
+
     pause();
 }
 
