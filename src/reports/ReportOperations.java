@@ -5,7 +5,11 @@ import database.TransactionManager;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 public final class ReportOperations {
 
     private final TransactionManager transactions;
@@ -18,74 +22,122 @@ public final class ReportOperations {
     }
 
 
-   public OperationResult<List<TicketRevenueReport>> report1() {
+// REPORT-1
+public OperationResult<List<TicketRevenueReport>> report1a(
+        LocalDateTime startDate,
+        LocalDateTime endDate
+) {
 
-        return transactions.execute(connection -> {
+    return transactions.execute(connection -> {
 
-            String sql = """
-                    -- SQL goes here
-                    """;
+        String sql = """
+                SELECT v.city,
+                       COUNT(*) AS tickets_sold,
+                       SUM(t.face_value) AS gross_revenue
+                FROM Tickets t
+                JOIN Performance p
+                    ON p.performance_id = t.performance_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                WHERE t.status = 'active'
+                  AND p.date_time BETWEEN ? AND ?
+                GROUP BY v.city
+                ORDER BY gross_revenue DESC
+                """;
 
-            List<TicketRevenueReport> reports = new ArrayList<>();
+        List<TicketRevenueReport> reports = new ArrayList<>();
 
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
 
-                try (ResultSet rows = statement.executeQuery()) {
+            statement.setObject(1, startDate);
+            statement.setObject(2, endDate);
 
-                    while (rows.next()) {
+            try (ResultSet rows = statement.executeQuery()) {
 
-                        reports.add(new TicketRevenueReport(
-                                rows.getString("city"),
-                                rows.getInt("tickets_sold"),
-                                rows.getBigDecimal("gross_revenue")
-                        ));
-                    }
+                while (rows.next()) {
+
+                    reports.add(new TicketRevenueReport(
+                    rows.getString("city"),
+                    null,
+                    rows.getInt("tickets_sold"),
+                    rows.getBigDecimal("gross_revenue")
+            ));
                 }
             }
+        }
 
-            return OperationResult.success(
+        return OperationResult.success(
+                "R1a ticket revenue report generated.",
+                List.copyOf(reports)
+        );
+    });
+}
 
-                reports.add(new TicketRevenueReport(
-                        "Toronto",
-                        500,
-                        new BigDecimal("25000.00")
-                ));
 
-                reports.add(new TicketRevenueReport(
-                        "Ottawa",
-                        200,
-                        new BigDecimal("10000.00")
-                ));
+public OperationResult<List<TicketRevenueReport>> report1b(
+        String city,
+        LocalDateTime startDate,
+        LocalDateTime endDate
+) {
 
-                return OperationResult.success(
-                        "Ticket revenue report generated.",
-                        List.copyOf(reports)
-                );
-        
+    if (city == null || city.isBlank()) {
+        return OperationResult.invalidInput(
+                "City is required."
+        );
     }
 
-//     public OperationResult<List<TicketRevenueReport>> report1() {
+    return transactions.execute(connection -> {
 
-//     return transactions.execute(connection -> {
+        String sql = """
+                SELECT v.city,
+                       v.name AS venue_name,
+                       COUNT(*) AS tickets_sold,
+                       SUM(t.face_value) AS gross_revenue
+                FROM Tickets t
+                JOIN Performance p
+                    ON p.performance_id = t.performance_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                WHERE t.status = 'active'
+                  AND v.city = ?
+                  AND p.date_time BETWEEN ? AND ?
+                GROUP BY v.city, v.name
+                ORDER BY gross_revenue DESC
+                """;
 
-//         List<TicketRevenueReport> reports = new ArrayList<>();
+        List<TicketRevenueReport> reports = new ArrayList<>();
 
-//         reports.add(new TicketRevenueReport(
-//                 "Toronto",
-//                 500,
-//                 new BigDecimal("25000.00")
-//         ));
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
 
-//         reports.add(new TicketRevenueReport(
-//                 "Ottawa",
-//                 200,
-//                 new BigDecimal("10000.00")
-//         ));
+            statement.setString(1, city);
+            statement.setObject(2, startDate);
+            statement.setObject(3, endDate);
 
-//         return OperationResult.success(
-//                 "Ticket revenue report generated.",
-//                 List.copyOf(reports)
-//         );
-//     });
-// }
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new TicketRevenueReport(
+        rows.getString("city"),
+        rows.getString("venue_name"),
+        rows.getInt("tickets_sold"),
+        rows.getBigDecimal("gross_revenue")
+));
+                }
+            }
+        }
+
+        return OperationResult.success(
+                "R1b ticket revenue report generated.",
+                List.copyOf(reports)
+        );
+    });
+}
+
+
+
+
+
+
+
 }

@@ -50,6 +50,7 @@ public final class TerminalApplication {
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
     private final ReportOperations reports;
+
     private boolean running;
 
     public TerminalApplication(Scanner input, DatabaseConnection database) {
@@ -325,6 +326,17 @@ public final class TerminalApplication {
         }
         return null;
     }
+
+    private LocalDateTime readDateTime(String prompt) {
+    String value = readLine(prompt);
+
+    try {
+        return LocalDateTime.parse(value, DATE_TIME_FORMAT);
+    } catch (DateTimeParseException exception) {
+        System.out.println("Enter date and time in YYYY-MM-DD HH:mm format.");
+        return null;
+    }
+}
 
     private void printInputError(String message) {
         System.out.println("INVALID_INPUT: " + message);
@@ -813,11 +825,42 @@ private void showReports() {
     }
 }
 
-private void report1() {
 
-    OperationResult<List<TicketRevenueReport>> result = reports.report1();
+private LocalDateTime[] readReportDateRange() {
 
-    printResult(result);
+    LocalDateTime startDate = readDateTime(
+            "Start date/time (YYYY-MM-DD HH:mm): "
+    );
+
+    LocalDateTime endDate = readDateTime(
+            "End date/time (YYYY-MM-DD HH:mm): "
+    );
+
+    if (startDate == null || endDate == null) {
+        return null;
+    }
+
+    if (!startDate.isBefore(endDate)) {
+        System.out.println(
+                "Start date/time must be before end date/time."
+        );
+        return null;
+    }
+
+    if (endDate.isAfter(LocalDateTime.now())) {
+        System.out.println(
+                "End date/time cannot be in the future."
+        );
+        return null;
+    }
+
+    return new LocalDateTime[]{startDate, endDate};
+}
+
+
+private void printTicketRevenueRows(
+        OperationResult<List<TicketRevenueReport>> result
+) {
 
     result.getValue().ifPresent(rows -> {
 
@@ -827,8 +870,9 @@ private void report1() {
         }
 
         System.out.printf(
-                "%-20s %-15s %-15s%n",
+                "%-20s %-20s %-15s %-15s%n",
                 "City",
+                "Venue",
                 "Tickets Sold",
                 "Gross Revenue"
         );
@@ -836,16 +880,98 @@ private void report1() {
         for (TicketRevenueReport row : rows) {
 
             System.out.printf(
-                    "%-20s %-15d $%-15s%n",
+                    "%-20s %-20s %-15d $%-15s%n",
                     row.getCity(),
+                    row.getVenueName(),
                     row.getTicketsSold(),
                     row.getGrossRevenue().toPlainString()
             );
         }
     });
+}
 
+
+private void report1() {
+
+    printHeading("Ticket Revenue Report");
+
+    System.out.println("1. Revenue by city");
+    System.out.println("2. Revenue by venue within a city");
+    String choice = readLine("Select option: ");
+
+
+    OperationResult<List<TicketRevenueReport>> result;
+    LocalDateTime[] dates = readReportDateRange();
+    if (dates == null) {
+    pause();
+    return;
+}
+
+    switch (choice) {
+        case "1" -> {
+            result = reports.report1a(
+                    dates[0],
+                    dates[1]
+            );}
+
+        case "2" -> {
+            String city = readLine(
+                    "City: "
+            );
+            if (city.isBlank()) {
+                System.out.println("City is required.");
+                pause();
+                return;
+            }
+
+            result = reports.report1b(
+                    city,
+                    dates[0],
+                    dates[1]
+            );}
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-20s %-25s %-15s %-15s%n",
+                "City",
+                "Venue",
+                "Tickets Sold",
+                "Gross Revenue"
+        );
+
+
+        for (TicketRevenueReport row : rows) {
+
+            System.out.printf(
+                    "%-20s %-25s %-15d $%-15s%n",
+                    row.getCity(),
+                    row.getVenueName() == null
+                            ? "-"
+                            : row.getVenueName(),
+                    row.getTicketsSold(),
+                    row.getGrossRevenue().toPlainString()
+            );
+        }
+    });
     pause();
 }
+
 
 private void report2() {
     System.out.println("Report 2 not implemented yet.");
