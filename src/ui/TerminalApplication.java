@@ -39,6 +39,7 @@ import queries.QueryOperations;
 import queries.UpcomingPerformanceQuery;
 import queries.PostalCodePerformanceQuery;
 import queries.AddressPerformanceQuery;
+import queries.DateRangePerformanceQuery;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1044,8 +1045,71 @@ private void query3() {
 }
 
 private void query4() {
-    printHeading("Date Range and Ticket Availability");
-    System.out.println("Query 4 is not yet implemented.");
+
+    printHeading("Search Performances By Date Range");
+
+
+    String postalCode =
+            readLine("Enter postal code: ");
+
+
+    LocalDateTime[] dates = readReportDateRange();
+    if (dates == null) {
+                pause();
+                return;
+            }
+
+
+    int minTickets =
+            Integer.parseInt(
+                    readLine("Minimum available tickets: ")
+            );
+
+
+    OperationResult<List<DateRangePerformanceQuery>> result =
+            queries.query4(
+                    postalCode,
+                    dates[0],
+                    dates[1],
+                    minTickets
+            );
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No performances found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-8s %-25s %-20s %-12s %-12s%n",
+                "ID",
+                "Event",
+                "Venue",
+                "Postal",
+                "Available"
+        );
+
+
+        for (DateRangePerformanceQuery row : rows) {
+
+            System.out.printf(
+                    "%-8d %-25s %-20s %-12s %-12d%n",
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getVenueName(),
+                    row.getPostalCode(),
+                    row.getAvailableTickets()
+            );
+        }
+    });
+
+
     pause();
 }
 

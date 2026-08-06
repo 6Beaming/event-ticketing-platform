@@ -325,5 +325,140 @@ public OperationResult<List<AddressPerformanceQuery>> query3(
 }
 
 
+/*************************************************************************************************************
+ QUERY-4
+ Date range and minimum available tickets refinement
+ *************************************************************************************************************/
+public OperationResult<List<DateRangePerformanceQuery>> query4(
+        String postalCode,
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        int minTickets
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT p.performance_id,
+                       e.title,
+                       v.name AS venue_name,
+                       v.postal_code,
+                       avail.total_available
+
+                FROM Performance p
+
+                JOIN Event e
+                    ON e.event_id = p.event_id
+
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+
+                JOIN (
+                    SELECT p2.performance_id,
+                           COALESCE(seats.avail, 0)
+                           + COALESCE(ga.avail, 0) AS total_available
+
+                    FROM Performance p2
+
+                    LEFT JOIN (
+                        SELECT ps.performance_id,
+                               SUM(
+                                   CASE
+                                       WHEN ps.blocked_status = FALSE
+                                       AND ps.performance_seat_id NOT IN (
+                                           SELECT performance_seats_ref
+                                           FROM Tickets
+                                           WHERE status = 'active'
+                                           AND performance_seats_ref IS NOT NULL
+                                       )
+                                       THEN 1
+                                       ELSE 0
+                                   END
+                               ) AS avail
+
+                        FROM PerformanceSeats ps
+
+                        GROUP BY ps.performance_id
+
+                    ) seats
+                        ON seats.performance_id = p2.performance_id
+
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               SUM(remaining_capacity) AS avail
+
+                        FROM GeneralAdmissionCapacity
+
+                        GROUP BY performance_id
+
+                    ) ga
+                        ON ga.performance_id = p2.performance_id
+
+                ) avail
+                    ON avail.performance_id = p.performance_id
+
+                WHERE p.status = 'scheduled'
+                  AND LEFT(v.postal_code, 3) = LEFT(?, 3)
+                  AND p.date_time BETWEEN ? AND ?
+                  AND avail.total_available >= ?
+
+                ORDER BY p.date_time
+                """;
+
+
+        List<DateRangePerformanceQuery> results =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setString(1, postalCode);
+
+            statement.setTimestamp(
+                    2,
+                    Timestamp.valueOf(startDate)
+            );
+
+            statement.setTimestamp(
+                    3,
+                    Timestamp.valueOf(endDate)
+            );
+
+            statement.setInt(
+                    4,
+                    minTickets
+            );
+
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+
+                while (rows.next()) {
+
+                    results.add(new DateRangePerformanceQuery(
+                            rows.getInt("performance_id"),
+                            rows.getString("title"),
+                            rows.getString("venue_name"),
+                            rows.getString("postal_code"),
+                            rows.getInt("total_available")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Date range performance search completed.",
+                List.copyOf(results)
+        );
+
+    });
+}
+
+
+
 
 }
