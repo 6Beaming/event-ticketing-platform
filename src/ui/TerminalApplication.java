@@ -529,16 +529,9 @@ public final class TerminalApplication {
 
     private void addPerformance() {
         while (running) {
-            Integer organizerId = readCheckedId(
-                    "Organizer ID: ",
-                    events::checkActiveOrganizer
-            );
-            if (organizerId == null) {
-                return;
-            }
             Integer eventId = readCheckedId(
                     "Event ID: ",
-                    id -> events.checkOwnedEvent(organizerId, id)
+                    events::checkEvent
             );
             if (eventId == null) {
                 return;
@@ -555,7 +548,6 @@ public final class TerminalApplication {
             }
 
             OperationResult<Integer> result = events.addPerformance(
-                    organizerId,
                     new PerformanceInput(eventId, venueId, dateTime)
             );
             printResult(result);
@@ -571,13 +563,9 @@ public final class TerminalApplication {
     }
 
     private void updateResaleCap() {
-        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
-        if (organizerId == null) {
-            return;
-        }
         Integer eventId = readCheckedId(
                 "Event ID: ",
-                id -> events.checkOwnedEvent(organizerId, id)
+                events::checkEvent
         );
         if (eventId == null) {
             return;
@@ -591,7 +579,7 @@ public final class TerminalApplication {
         if (cap == null) {
             return;
         }
-        printResult(events.updateResaleCap(organizerId, eventId, cap));
+        printResult(events.updateResaleCap(eventId, cap));
         pause();
     }
 

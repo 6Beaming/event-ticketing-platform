@@ -189,7 +189,6 @@ public final class FoundationDatabaseCheck {
         }
 
         OperationResult<Integer> invalidVenue = events.addPerformance(
-                DevelopmentIds.ORGANIZER,
                 new PerformanceInput(
                         DevelopmentIds.EVENT,
                         999999,
@@ -211,7 +210,6 @@ public final class FoundationDatabaseCheck {
         requireSuccess(event, "event creation");
 
         OperationResult<Integer> performance = events.addPerformance(
-                organizer.getValue().orElseThrow(),
                 new PerformanceInput(
                         event.getValue().orElseThrow(),
                         DevelopmentIds.VENUE,

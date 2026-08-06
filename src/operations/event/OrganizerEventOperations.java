@@ -48,28 +48,6 @@ public final class OrganizerEventOperations {
                 "Event found.", "Event not found.");
     }
 
-    public OperationResult<Void> checkOwnedEvent(int organizerId, int eventId) {
-        if (organizerId <= 0 || eventId <= 0) {
-            return OperationResult.invalidInput("Organizer and event IDs must be positive.");
-        }
-        return transactions.execute(connection -> {
-            String sql = "SELECT organizer_id FROM Event WHERE event_id = ?";
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setInt(1, eventId);
-                try (ResultSet rows = statement.executeQuery()) {
-                    if (!rows.next()) {
-                        return OperationResult.notFound("Event not found.");
-                    }
-                    return rows.getInt("organizer_id") == organizerId
-                            ? OperationResult.success("Organizer owns the event.")
-                            : OperationResult.forbidden(
-                                    "The organizer does not manage this event."
-                            );
-                }
-            }
-        });
-    }
-
     public OperationResult<Void> checkVenue(int venueId) {
         return checkRecord(venueId, "Venue", "venue_id",
                 "Venue found.", "Venue not found.");
@@ -102,10 +80,7 @@ public final class OrganizerEventOperations {
         });
     }
 
-    public OperationResult<Integer> addPerformance(int organizerId, PerformanceInput input) {
-        if (organizerId <= 0) {
-            return OperationResult.invalidInput("Organizer ID must be positive.");
-        }
+    public OperationResult<Integer> addPerformance(PerformanceInput input) {
         if (input == null) {
             return OperationResult.invalidInput("Performance information is required.");
         }
@@ -117,10 +92,8 @@ public final class OrganizerEventOperations {
         }
 
         return transactions.execute(connection -> {
-            if (!eventOwnedByOrganizer(connection, organizerId, input.getEventId())) {
-                return OperationResult.forbidden(
-                        "Only the organizer who manages the event can add its performances."
-                );
+            if (!recordExists(connection, "Event", "event_id", input.getEventId())) {
+                return OperationResult.notFound("Event not found.");
             }
             if (!recordExists(connection, "Venue", "venue_id", input.getVenueId())) {
                 return OperationResult.notFound("Venue not found.");
@@ -145,12 +118,11 @@ public final class OrganizerEventOperations {
     }
 
     public OperationResult<Void> updateResaleCap(
-            int organizerId,
             int eventId,
             BigDecimal resaleCapMultiplier
     ) {
-        if (organizerId <= 0 || eventId <= 0) {
-            return OperationResult.invalidInput("Organizer and event IDs must be positive.");
+        if (eventId <= 0) {
+            return OperationResult.invalidInput("Event ID must be positive.");
         }
         if (resaleCapMultiplier == null
                 || resaleCapMultiplier.compareTo(BigDecimal.ONE) < 0) {
@@ -160,22 +132,12 @@ public final class OrganizerEventOperations {
         }
 
         return transactions.execute(connection -> {
-            String sql = """
-                    SELECT e.organizer_id
-                    FROM Event e
-                    WHERE e.event_id = ?
-                    FOR UPDATE
-                    """;
+            String sql = "SELECT 1 FROM Event WHERE event_id = ? FOR UPDATE";
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setInt(1, eventId);
                 try (ResultSet rows = statement.executeQuery()) {
                     if (!rows.next()) {
                         return OperationResult.notFound("Event not found.");
-                    }
-                    if (rows.getInt("organizer_id") != organizerId) {
-                        return OperationResult.forbidden(
-                                "Only the organizer who manages the event can change its resale cap."
-                        );
                     }
                 }
             }
@@ -276,28 +238,6 @@ public final class OrganizerEventOperations {
                 """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, organizerId);
-            try (ResultSet rows = statement.executeQuery()) {
-                return rows.next();
-            }
-        }
-    }
-
-    private boolean eventOwnedByOrganizer(
-            Connection connection,
-            int organizerId,
-            int eventId
-    ) throws SQLException {
-        String sql = """
-                SELECT 1
-                FROM Event e
-                JOIN Organizer o ON o.user_id = e.organizer_id
-                JOIN Users u ON u.user_id = o.user_id
-                WHERE e.event_id = ? AND e.organizer_id = ?
-                  AND u.account_status = 'active'
-                """;
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, eventId);
-            statement.setInt(2, organizerId);
             try (ResultSet rows = statement.executeQuery()) {
                 return rows.next();
             }
