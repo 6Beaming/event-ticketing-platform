@@ -23,6 +23,7 @@ import operations.profile.UserProfileOperations;
 
 import reports.ReportOperations;
 import reports.TicketRevenueReport;
+import reports.EventPerformanceReport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -974,8 +975,80 @@ private void report1() {
 
 
 private void report2() {
-    System.out.println("Report 2 not implemented yet.");
+
+    printHeading("Events and Performances Report");
+
+    System.out.println("1. By segment and genre");
+    System.out.println("2. By country");
+    System.out.println("3. By country and city");
+    System.out.println("4. By country, city and venue");
+
+
+    OperationResult<List<EventPerformanceReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> result = reports.report2a();
+
+        case "2" -> result = reports.report2b();
+
+        case "3" -> result = reports.report2c();
+
+        case "4" -> result = reports.report2d();
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-15s %-15s %-15s %-15s %-25s %-15s %-15s%n",
+                "Segment",
+                "Genre",
+                "Country",
+                "City",
+                "Venue",
+                "Events",
+                "Performances"
+        );
+
+
+        for (EventPerformanceReport row : rows) {
+
+            System.out.printf(
+                    "%-15s %-15s %-15s %-15s %-25s %-15d %-15d%n",
+                    safe(row.getSegmentName()),
+                    safe(row.getGenreName()),
+                    safe(row.getCountry()),
+                    safe(row.getCity()),
+                    safe(row.getVenueName()),
+                    row.getEventCount(),
+                    row.getPerformanceCount()
+            );
+        }
+    });
+
+
     pause();
+}
+
+private String safe(String value) {
+    return value == null ? "-" : value;
 }
 
 private void report3() {
