@@ -614,4 +614,138 @@ public OperationResult<List<ScalperDetectionReport>> report4(
 
     });
 }
+
+
+
+ /*************************************************************************************************************
+ REPORT-5
+ *************************************************************************************************************/
+
+
+
+public OperationResult<List<CustomerOrderRankingReport>> report5a(
+        LocalDateTime startDate,
+        LocalDateTime endDate
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT tr.customer_id,
+                       u.name,
+                       COUNT(*) AS num_orders
+                FROM Transactions tr
+                JOIN Users u
+                    ON u.user_id = tr.customer_id
+                WHERE tr.transaction_type = 'purchase'
+                  AND tr.transaction_date BETWEEN ? AND ?
+                GROUP BY tr.customer_id, u.name
+                ORDER BY num_orders DESC
+                """;
+
+
+        List<CustomerOrderRankingReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setTimestamp(
+                    1,
+                    Timestamp.valueOf(startDate)
+            );
+
+            statement.setTimestamp(
+                    2,
+                    Timestamp.valueOf(endDate)
+            );
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new CustomerOrderRankingReport(
+                            rows.getInt("customer_id"),
+                            rows.getString("name"),
+                            null,
+                            rows.getInt("num_orders")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Customer order ranking generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+
+public OperationResult<List<CustomerOrderRankingReport>> report5b(
+        LocalDateTime oneYearAgo
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT tr.customer_id,
+                       u.name,
+                       v.city,
+                       COUNT(*) AS num_orders
+                FROM Transactions tr
+                JOIN Users u
+                    ON u.user_id = tr.customer_id
+                JOIN Performance p
+                    ON p.performance_id = tr.performance_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                WHERE tr.transaction_type = 'purchase'
+                  AND tr.transaction_date >= ?
+                GROUP BY tr.customer_id, u.name, v.city
+                HAVING COUNT(*) >= 2
+                ORDER BY v.city, num_orders DESC
+                """;
+
+
+        List<CustomerOrderRankingReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setTimestamp(
+                    1,
+                    Timestamp.valueOf(oneYearAgo)
+            );
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new CustomerOrderRankingReport(
+                            rows.getInt("customer_id"),
+                            rows.getString("name"),
+                            rows.getString("city"),
+                            rows.getInt("num_orders")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Customer city order ranking generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
 }

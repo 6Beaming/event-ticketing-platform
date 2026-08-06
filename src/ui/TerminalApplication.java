@@ -26,6 +26,7 @@ import reports.TicketRevenueReport;
 import reports.EventPerformanceReport;
 import reports.OrganizerRevenueReport;
 import reports.ScalperDetectionReport;
+import reports.CustomerOrderRankingReport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1173,7 +1174,84 @@ private void report4() {
 }
 
 private void report5() {
-    System.out.println("Report 5 not implemented yet.");
+
+    printHeading("Customer Order Rankings");
+
+    System.out.println("1. Ranking by order count in period");
+    System.out.println("2. Ranking by city (past year)");
+
+
+    OperationResult<List<CustomerOrderRankingReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> {
+
+            LocalDateTime[] dates = readReportDateRange();
+
+            if (dates == null) {
+                pause();
+                return;
+            }
+
+            result = reports.report5a(
+                    dates[0],
+                    dates[1]
+            );
+        }
+
+
+        case "2" -> {
+
+            result = reports.report5b(
+                    LocalDateTime.now().minusYears(1)
+            );
+        }
+
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s %-15s%n",
+                "ID",
+                "Customer",
+                "City",
+                "Orders"
+        );
+
+
+        for (CustomerOrderRankingReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20s %-15d%n",
+                    row.getCustomerId(),
+                    row.getCustomerName(),
+                    safe(row.getCity()),
+                    row.getNumberOfOrders()
+            );
+        }
+
+    });
+
+
     pause();
 }
 
