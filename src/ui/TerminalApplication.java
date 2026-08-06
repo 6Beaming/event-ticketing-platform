@@ -27,6 +27,7 @@ import reports.EventPerformanceReport;
 import reports.OrganizerRevenueReport;
 import reports.ScalperDetectionReport;
 import reports.CustomerOrderRankingReport;
+import reports.CancellationReport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1256,7 +1257,67 @@ private void report5() {
 }
 
 private void report6() {
-    System.out.println("Report 6 not implemented yet.");
+
+    printHeading("Cancellation Reports");
+
+    System.out.println("1. Customers with most cancelled tickets");
+    System.out.println("2. Organizers with most cancelled performances");
+
+
+    OperationResult<List<CancellationReport>> result;
+
+
+    LocalDateTime oneYearAgo =
+            LocalDateTime.now().minusYears(1);
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> result = reports.report6a(oneYearAgo);
+
+        case "2" -> result = reports.report6b(oneYearAgo);
+
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s%n",
+                "ID",
+                "Name",
+                "Cancelled"
+        );
+
+
+        for (CancellationReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20d%n",
+                    row.getId(),
+                    row.getName(),
+                    row.getCount()
+            );
+        }
+
+    });
+
+
     pause();
 }
 

@@ -748,4 +748,125 @@ public OperationResult<List<CustomerOrderRankingReport>> report5b(
     });
 }
 
+
+ /*************************************************************************************************************
+ REPORT-6
+ *************************************************************************************************************/
+public OperationResult<List<CancellationReport>> report6a(
+        LocalDateTime oneYearAgo
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT o.customer_id,
+                       u.name,
+                       COUNT(*) AS num_cancelled_tickets
+                FROM TicketCancellation tc
+                JOIN TicketOwnership o
+                    ON o.ownership_id = tc.ownership_id
+                JOIN Users u
+                    ON u.user_id = o.customer_id
+                WHERE tc.cancellation_date >= ?
+                GROUP BY o.customer_id, u.name
+                ORDER BY num_cancelled_tickets DESC
+                """;
+
+
+        List<CancellationReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setTimestamp(
+                    1,
+                    Timestamp.valueOf(oneYearAgo)
+            );
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new CancellationReport(
+                            rows.getInt("customer_id"),
+                            rows.getString("name"),
+                            rows.getInt("num_cancelled_tickets")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Cancelled ticket report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+public OperationResult<List<CancellationReport>> report6b(
+        LocalDateTime oneYearAgo
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT e.organizer_id,
+                       u.name,
+                       COUNT(*) AS num_cancelled_performances
+                FROM Performance p
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Users u
+                    ON u.user_id = e.organizer_id
+                WHERE p.status = 'cancelled'
+                  AND p.cancellation_date >= ?
+                GROUP BY e.organizer_id, u.name
+                ORDER BY num_cancelled_performances DESC
+                """;
+
+
+        List<CancellationReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setTimestamp(
+                    1,
+                    Timestamp.valueOf(oneYearAgo)
+            );
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new CancellationReport(
+                            rows.getInt("organizer_id"),
+                            rows.getString("name"),
+                            rows.getInt("num_cancelled_performances")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Cancelled performance report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+
+
+ /*************************************************************************************************************
+ REPORT-7
+ *************************************************************************************************************/
 }
