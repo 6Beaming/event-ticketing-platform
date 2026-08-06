@@ -31,6 +31,9 @@ import reports.CancellationReport;
 import reports.ResaleReport;
 import reports.EventNounPhraseReport;
 import reports.NounPhraseCount;
+import reports.SellThroughReport;
+import reports.SellThroughTierReport;
+import reports.SellThroughBucketReport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1325,7 +1328,185 @@ private void report6() {
 }
 
 private void report7() {
-    System.out.println("Report 7 not implemented yet.");
+
+    printHeading("Sell-Through Report");
+
+    System.out.println("1. Sell-through by performance");
+    System.out.println("2. Sell-through by tier");
+    System.out.println("3. Sold-out / under 25% by city");
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> report7a();
+
+        case "2" -> report7b();
+
+        case "3" -> report7c();
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+        }
+    }
+}
+
+
+private void report7a() {
+
+    printHeading("Sell-through by Performance");
+
+
+    OperationResult<List<SellThroughReport>> result =
+            reports.report7a();
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-12s %-25s %-20s %-12s %-12s %-15s%n",
+                "Performance",
+                "Event",
+                "City",
+                "Capacity",
+                "Sold",
+                "Rate"
+        );
+
+
+        for (SellThroughReport row : rows) {
+
+            System.out.printf(
+                    "%-12d %-25s %-20s %-12d %-12d %-15s%n",
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getCity(),
+                    row.getCapacity(),
+                    row.getNumSold(),
+                    row.getSellThroughRate()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report7b() {
+
+    printHeading("Sell-through by Tier");
+
+
+    OperationResult<List<SellThroughTierReport>> result =
+            reports.report7b();
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-12s %-12s %-12s %-12s %-15s%n",
+                "Performance",
+                "Tier",
+                "Capacity",
+                "Sold",
+                "Rate"
+        );
+
+
+        for (SellThroughTierReport row : rows) {
+
+            System.out.printf(
+                    "%-12d %-12s %-12d %-12d %-15s%n",
+                    row.getPerformanceId(),
+                    row.getTierCode(),
+                    row.getCapacity(),
+                    row.getNumSold(),
+                    row.getSellThroughRate()
+            );
+        }
+
+    });
+
+
+    pause();
+}
+
+private void report7c() {
+
+    printHeading("Sold-out / Under 25% Sell-through");
+
+
+    int year = Integer.parseInt(
+            readLine("Year: ")
+    );
+
+    int month = Integer.parseInt(
+            readLine("Month: ")
+    );
+
+
+    OperationResult<List<SellThroughBucketReport>> result =
+            reports.report7c(
+                    year,
+                    month
+            );
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-20s %-12s %-25s %-15s %-15s%n",
+                "City",
+                "Performance",
+                "Event",
+                "Rate",
+                "Bucket"
+        );
+
+
+        for (SellThroughBucketReport row : rows) {
+
+            System.out.printf(
+                    "%-20s %-12d %-25s %-15s %-15s%n",
+                    safe(row.getCity()),
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getSellThroughRate(),
+                    row.getBucket()
+            );
+        }
+
+    });
+
+
     pause();
 }
 

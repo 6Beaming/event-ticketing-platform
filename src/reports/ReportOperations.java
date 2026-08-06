@@ -1058,4 +1058,285 @@ public OperationResult<List<EventNounPhraseReport>> report9() {
 
     });
 }
+
+
+/*************************************************************************************************************
+ REPORT-7
+ *************************************************************************************************************/
+
+public OperationResult<List<SellThroughReport>> report7a() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT p.performance_id,
+                       e.title,
+                       v.city,
+                       sellable.capacity,
+                       COALESCE(sold.num_sold, 0) AS num_sold,
+                       ROUND(
+                           COALESCE(sold.num_sold, 0) / sellable.capacity,
+                           4
+                       ) AS sell_through_rate
+                FROM Performance p
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                JOIN (
+                    SELECT p2.performance_id,
+                           COALESCE(seats.n, 0)
+                           + COALESCE(ga.total_capacity, 0) AS capacity
+                    FROM Performance p2
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               COUNT(*) AS n
+                        FROM PerformanceSeats
+                        WHERE blocked_status = FALSE
+                        GROUP BY performance_id
+                    ) seats
+                        ON seats.performance_id = p2.performance_id
+                    LEFT JOIN GeneralAdmissionCapacity ga
+                        ON ga.performance_id = p2.performance_id
+                ) sellable
+                    ON sellable.performance_id = p.performance_id
+                LEFT JOIN (
+                    SELECT performance_id,
+                           COUNT(*) AS num_sold
+                    FROM Tickets
+                    WHERE status = 'active'
+                    GROUP BY performance_id
+                ) sold
+                    ON sold.performance_id = p.performance_id
+                WHERE sellable.capacity > 0
+                """;
+
+
+        List<SellThroughReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql);
+
+             ResultSet rows = statement.executeQuery()) {
+
+
+            while (rows.next()) {
+
+                reports.add(new SellThroughReport(
+                        rows.getInt("performance_id"),
+                        rows.getString("title"),
+                        rows.getString("city"),
+                        rows.getInt("capacity"),
+                        rows.getInt("num_sold"),
+                        rows.getBigDecimal("sell_through_rate")
+                ));
+            }
+        }
+
+
+        return OperationResult.success(
+                "Performance sell-through report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+
+public OperationResult<List<SellThroughTierReport>> report7b() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT p.performance_id,
+                       pt.tier_code,
+                       tier_cap.capacity,
+                       COALESCE(tier_sold.num_sold, 0) AS num_sold,
+                       ROUND(
+                           COALESCE(tier_sold.num_sold, 0)
+                           / tier_cap.capacity,
+                           4
+                       ) AS sell_through_rate
+                FROM Performance p
+                JOIN PriceTier pt
+                    ON pt.performance_id = p.performance_id
+                JOIN (
+                    SELECT sta.performance_id,
+                           sta.tier_code,
+                           SUM(
+                               CASE
+                                   WHEN s.section_type = 'reserved'
+                                   THEN seat_ct.n
+                                   ELSE ga.total_capacity
+                               END
+                           ) AS capacity
+                    FROM SectionTierAssignment sta
+                    JOIN Section s
+                        ON s.venue_id = sta.venue_id
+                       AND s.section_name = sta.section_name
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               venue_id,
+                               section_name,
+                               COUNT(*) AS n
+                        FROM PerformanceSeats
+                        WHERE blocked_status = FALSE
+                        GROUP BY performance_id,
+                                 venue_id,
+                                 section_name
+                    ) seat_ct
+                        ON seat_ct.performance_id = sta.performance_id
+                       AND seat_ct.venue_id = sta.venue_id
+                       AND seat_ct.section_name = sta.section_name
+                    LEFT JOIN GeneralAdmissionCapacity ga
+                        ON ga.performance_id = sta.performance_id
+                       AND ga.venue_id = sta.venue_id
+                       AND ga.section_name = sta.section_name
+                    GROUP BY sta.performance_id,
+                             sta.tier_code
+                ) tier_cap
+                    ON tier_cap.performance_id = pt.performance_id
+                   AND tier_cap.tier_code = pt.tier_code
+                LEFT JOIN (
+                    SELECT performance_id,
+                           tier_code,
+                           COUNT(*) AS num_sold
+                    FROM Tickets
+                    WHERE status = 'active'
+                    GROUP BY performance_id,
+                             tier_code
+                ) tier_sold
+                    ON tier_sold.performance_id = pt.performance_id
+                   AND tier_sold.tier_code = pt.tier_code
+                """;
+
+
+        List<SellThroughTierReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql);
+
+             ResultSet rows = statement.executeQuery()) {
+
+
+            while (rows.next()) {
+
+                reports.add(new SellThroughTierReport(
+                        rows.getInt("performance_id"),
+                        rows.getString("tier_code"),
+                        rows.getInt("capacity"),
+                        rows.getInt("num_sold"),
+                        rows.getBigDecimal("sell_through_rate")
+                ));
+            }
+        }
+
+
+        return OperationResult.success(
+                "Tier sell-through report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+
+public OperationResult<List<SellThroughBucketReport>> report7c(
+        int year,
+        int month
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT v.city,
+                       p.performance_id,
+                       e.title,
+                       ROUND(
+                           COALESCE(sold.num_sold, 0)
+                           / sellable.capacity,
+                           4
+                       ) AS sell_through_rate,
+                       CASE
+                           WHEN COALESCE(sold.num_sold, 0)
+                                >= sellable.capacity
+                           THEN 'sold_out'
+                           WHEN COALESCE(sold.num_sold, 0)
+                                < sellable.capacity * 0.25
+                           THEN 'under_quarter'
+                       END AS bucket
+                FROM Performance p
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                JOIN (
+                    SELECT p2.performance_id,
+                           COALESCE(seats.n, 0)
+                           + COALESCE(ga.total_capacity, 0) AS capacity
+                    FROM Performance p2
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               COUNT(*) AS n
+                        FROM PerformanceSeats
+                        WHERE blocked_status = FALSE
+                        GROUP BY performance_id
+                    ) seats
+                        ON seats.performance_id = p2.performance_id
+                    LEFT JOIN GeneralAdmissionCapacity ga
+                        ON ga.performance_id = p2.performance_id
+                ) sellable
+                    ON sellable.performance_id = p.performance_id
+                LEFT JOIN (
+                    SELECT performance_id,
+                           COUNT(*) AS num_sold
+                    FROM Tickets
+                    WHERE status = 'active'
+                    GROUP BY performance_id
+                ) sold
+                    ON sold.performance_id = p.performance_id
+                WHERE sellable.capacity > 0
+                  AND YEAR(p.date_time) = ?
+                  AND MONTH(p.date_time) = ?
+                HAVING bucket IS NOT NULL
+                ORDER BY v.city
+                """;
+
+
+        List<SellThroughBucketReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setInt(1, year);
+            statement.setInt(2, month);
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new SellThroughBucketReport(
+                            rows.getString("city"),
+                            rows.getInt("performance_id"),
+                            rows.getString("title"),
+                            rows.getBigDecimal("sell_through_rate"),
+                            rows.getString("bucket")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Monthly sell-through bucket report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
 }
