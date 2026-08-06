@@ -791,7 +791,7 @@ public final class TerminalApplication {
             return;
         }
         String tierCode = readCheckedText(
-                "Tier code: ",
+                "Tier: ",
                 value -> inputChecks.checkTier(performanceId, value)
         );
         if (tierCode == null) {
@@ -813,7 +813,7 @@ public final class TerminalApplication {
     private void changeSeatBlock(boolean block) {
         Integer performanceId = readCheckedId(
                 "Performance ID: ",
-                inputChecks::checkPerformance
+                inventory::checkPerformanceForSeatBlocking
         );
         if (performanceId == null) {
             return;

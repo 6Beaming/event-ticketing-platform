@@ -563,6 +563,25 @@ public final class FoundationDatabaseCheck {
         }
 
         requireSuccess(
+                inventory.checkPerformanceForSeatBlocking(
+                        DevelopmentIds.PERFORMANCE_RESERVED
+                ),
+                "future scheduled seat-blocking preflight"
+        );
+        OperationResult<Void> completedSeatBlockingPreflight =
+                inventory.checkPerformanceForSeatBlocking(
+                        DevelopmentIds.PERFORMANCE_LOW_SELL_THROUGH
+                );
+        if (completedSeatBlockingPreflight.getStatus() != OperationStatus.CONFLICT
+                || !completedSeatBlockingPreflight.getMessage().contains(
+                        "scheduled future performance"
+                )) {
+            throw new IllegalStateException(
+                    "completed performance seat-blocking preflight was not rejected"
+            );
+        }
+
+        requireSuccess(
                 inventory.blockSeat(
                         DevelopmentIds.PERFORMANCE_RESERVED,
                         610001

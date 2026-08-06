@@ -12,6 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class InventoryOperations {
+    private static final String SEAT_BLOCKING_PERFORMANCE_CONFLICT =
+            "Seats can be blocked only for a scheduled future performance.";
+
     private final TransactionManager transactions;
 
     public InventoryOperations(TransactionManager transactions) {
@@ -135,6 +138,20 @@ public final class InventoryOperations {
         return changeSeatBlock(performanceId, performanceSeatId, false);
     }
 
+    public OperationResult<Void> checkPerformanceForSeatBlocking(int performanceId) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+
+        return transactions.execute(
+                connection -> checkPerformanceForSeatBlocking(
+                        connection,
+                        performanceId,
+                        false
+                )
+        );
+    }
+
     private OperationResult<Void> changeSeatBlock(
             int performanceId,
             int performanceSeatId,
@@ -147,10 +164,18 @@ public final class InventoryOperations {
         }
 
         return transactions.execute(connection -> {
+            OperationResult<Void> performanceCheck = checkPerformanceForSeatBlocking(
+                    connection,
+                    performanceId,
+                    true
+            );
+            if (!performanceCheck.isSuccess()) {
+                return performanceCheck;
+            }
+
             String sql = """
-                    SELECT ps.blocked_status, p.status, p.date_time
+                    SELECT ps.blocked_status
                     FROM PerformanceSeats ps
-                    JOIN Performance p ON p.performance_id = ps.performance_id
                     WHERE ps.performance_id = ? AND ps.performance_seat_id = ?
                     FOR UPDATE
                     """;
@@ -162,13 +187,6 @@ public final class InventoryOperations {
                     if (!rows.next()) {
                         return OperationResult.notFound(
                                 "Reserved seat inventory was not found for this performance."
-                        );
-                    }
-                    if (!"scheduled".equals(rows.getString("status"))
-                            || !rows.getTimestamp("date_time").toLocalDateTime()
-                            .isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
-                        return OperationResult.conflict(
-                                "Seats can be blocked only for a scheduled future performance."
                         );
                     }
                     currentlyBlocked = rows.getBoolean("blocked_status");
@@ -194,6 +212,32 @@ public final class InventoryOperations {
                     targetBlocked ? "Seat blocked." : "Seat unblocked."
             );
         });
+    }
+
+    private OperationResult<Void> checkPerformanceForSeatBlocking(
+            java.sql.Connection connection,
+            int performanceId,
+            boolean lockForUpdate
+    ) throws SQLException {
+        String sql = """
+                SELECT status, date_time
+                FROM Performance
+                WHERE performance_id = ?
+                """ + (lockForUpdate ? " FOR UPDATE" : "");
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    return OperationResult.notFound("Performance not found.");
+                }
+                if (!"scheduled".equals(rows.getString("status"))
+                        || !rows.getTimestamp("date_time").toLocalDateTime()
+                        .isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
+                    return OperationResult.conflict(SEAT_BLOCKING_PERFORMANCE_CONFLICT);
+                }
+                return OperationResult.success("Performance is open for seat blocking.");
+            }
+        }
     }
 
     public static String validateSeatChange(
