@@ -513,4 +513,105 @@ public OperationResult<List<OrganizerRevenueReport>> report3c() {
 
     });
 }
+
+
+
+ /*************************************************************************************************************
+ REPORT-4
+ *************************************************************************************************************/
+
+
+public OperationResult<List<ScalperDetectionReport>> report4(
+        LocalDateTime oneYearAgo
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT purchases.customer_id,
+                       u.name,
+                       v.city,
+                       purchases.num_purchased,
+                       COALESCE(listed.num_listed, 0) AS num_listed
+                FROM (
+                    SELECT tr.customer_id,
+                           p.venue_id,
+                           COUNT(*) AS num_purchased
+                    FROM Tickets t
+                    JOIN Transactions tr
+                        ON tr.transaction_id = t.purchase_id
+                    JOIN Performance p
+                        ON p.performance_id = t.performance_id
+                    WHERE tr.transaction_type = 'purchase'
+                      AND tr.transaction_date >= ?
+                    GROUP BY tr.customer_id, p.venue_id
+                ) AS purchases
+                JOIN Venue v
+                    ON v.venue_id = purchases.venue_id
+                JOIN Users u
+                    ON u.user_id = purchases.customer_id
+                LEFT JOIN (
+                    SELECT o.customer_id,
+                           p.venue_id,
+                           COUNT(*) AS num_listed
+                    FROM ResaleListing rl
+                    JOIN TicketOwnership o
+                        ON o.ownership_id = rl.seller_ownership_id
+                    JOIN Tickets t
+                        ON t.ticket_id = o.ticket_id
+                    JOIN Performance p
+                        ON p.performance_id = t.performance_id
+                    WHERE rl.listed_date >= ?
+                    GROUP BY o.customer_id, p.venue_id
+                ) AS listed
+                    ON listed.customer_id = purchases.customer_id
+                   AND listed.venue_id = purchases.venue_id
+                WHERE purchases.num_purchased >= 10
+                  AND COALESCE(listed.num_listed, 0) > purchases.num_purchased / 2
+                ORDER BY v.city, num_listed DESC
+                """;
+
+
+        List<ScalperDetectionReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setTimestamp(
+                    1,
+                    Timestamp.valueOf(oneYearAgo)
+            );
+
+            statement.setTimestamp(
+                    2,
+                    Timestamp.valueOf(oneYearAgo)
+            );
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+
+                while (rows.next()) {
+
+                    reports.add(new ScalperDetectionReport(
+                            rows.getInt("customer_id"),
+                            rows.getString("name"),
+                            rows.getString("city"),
+                            rows.getInt("num_purchased"),
+                            rows.getInt("num_listed")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Scalper detection report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
 }

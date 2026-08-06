@@ -25,6 +25,7 @@ import reports.ReportOperations;
 import reports.TicketRevenueReport;
 import reports.EventPerformanceReport;
 import reports.OrganizerRevenueReport;
+import reports.ScalperDetectionReport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1119,7 +1120,55 @@ private void report3() {
 }
 
 private void report4() {
-    System.out.println("Report 4 not implemented yet.");
+
+    printHeading("Potential Ticket Scalpers");
+
+
+    LocalDateTime oneYearAgo =
+            LocalDateTime.now().minusYears(1);
+
+
+    OperationResult<List<ScalperDetectionReport>> result =
+            reports.report4(oneYearAgo);
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+
+        if (rows.isEmpty()) {
+            System.out.println("No potential scalpers found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s %-20s %-15s%n",
+                "ID",
+                "Customer",
+                "City",
+                "Purchased",
+                "Listed"
+        );
+
+
+        for (ScalperDetectionReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20s %-20d %-15d%n",
+                    row.getCustomerId(),
+                    row.getCustomerName(),
+                    row.getCity(),
+                    row.getTicketsPurchased(),
+                    row.getTicketsListed()
+            );
+        }
+
+    });
+
+
     pause();
 }
 
