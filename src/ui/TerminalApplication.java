@@ -507,6 +507,7 @@ public final class TerminalApplication {
             }
             Integer rank = readUniquePositiveInt(
                     "Billing rank for artist/team " + index + ": ",
+                    artistCount,
                     billingRanks,
                     "Billing ranks must be unique within an event."
             );
@@ -2793,11 +2794,18 @@ private void report9() {
 
     private Integer readUniquePositiveInt(
             String prompt,
+            int maximumValue,
             Set<Integer> usedValues,
             String duplicateMessage
     ) {
         while (running) {
-            Integer value = readPositiveIntWithRetry(prompt);
+            Integer value = readValidatedInteger(
+                    prompt,
+                    candidate -> candidate < 1 || candidate > maximumValue
+                            ? Optional.of("Enter a billing rank from 1 to "
+                                    + maximumValue + ".")
+                            : Optional.empty()
+            );
             if (value == null) {
                 return null;
             }

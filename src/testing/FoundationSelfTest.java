@@ -58,6 +58,7 @@ public final class FoundationSelfTest {
         test("SQL failure rolls back safely", this::sqlFailureRollsBack);
         test("inventory calculations are consistent", this::inventoryCalculations);
         test("duplicate artist billing rank is rejected", this::duplicateBillingRejected);
+        test("artist billing rank is capped by artist count", this::billingRankCapRejected);
         test("invalid organizer/taxonomy IDs are rejected", this::invalidEventIdsRejected);
         test("invalid pricing setup and unsafe replacement are rejected", this::pricingShapeRejected);
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
@@ -164,6 +165,19 @@ public final class FoundationSelfTest {
                 List.of(new ArtistBillingInput(1, 1), new ArtistBillingInput(2, 1))
         );
         assertTrue(OrganizerEventOperations.validateEvent(event).contains("unique"));
+    }
+
+    private void billingRankCapRejected() {
+        EventInput event = new EventInput(
+                1,
+                "Test Event",
+                null,
+                new BigDecimal("1.20"),
+                1,
+                List.of(new ArtistBillingInput(1, 1), new ArtistBillingInput(2, 3))
+        );
+        assertTrue(OrganizerEventOperations.validateEvent(event)
+                .contains("number of artists or teams"));
     }
 
     private void invalidEventIdsRejected() {

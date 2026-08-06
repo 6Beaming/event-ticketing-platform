@@ -211,9 +211,13 @@ public final class OrganizerEventOperations {
 
         Set<Integer> artistIds = new HashSet<>();
         Set<Integer> ranks = new HashSet<>();
+        int maximumRank = input.getArtists().size();
         for (ArtistBillingInput artist : input.getArtists()) {
             if (artist == null || artist.getArtistId() <= 0 || artist.getBillingRank() <= 0) {
                 return "Artist IDs and billing ranks must be positive.";
+            }
+            if (artist.getBillingRank() > maximumRank) {
+                return "Billing ranks cannot exceed the number of artists or teams.";
             }
             if (!artistIds.add(artist.getArtistId())) {
                 return "An artist or team can appear only once in an event billing order.";
