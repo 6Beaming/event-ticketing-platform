@@ -589,6 +589,22 @@ public final class FoundationDatabaseCheck {
             throw new IllegalStateException("general-admission inventory did not match development data");
         }
 
+        OperationResult<List<ReservedSeatAvailability>> completedReserved =
+                inventory.getReservedInventory(DevelopmentIds.PERFORMANCE_PAST);
+        requireSuccess(completedReserved, "completed performance reserved inventory lookup");
+        if (completedReserved.getValue().orElseThrow().isEmpty()) {
+            throw new IllegalStateException("completed performance reserved inventory was hidden");
+        }
+
+        OperationResult<List<GeneralAdmissionAvailability>> completedGeneral =
+                inventory.getGeneralAdmissionInventory(
+                        DevelopmentIds.PERFORMANCE_LOW_SELL_THROUGH
+                );
+        requireSuccess(completedGeneral, "completed performance general inventory lookup");
+        if (completedGeneral.getValue().orElseThrow().isEmpty()) {
+            throw new IllegalStateException("completed performance general inventory was hidden");
+        }
+
         requireSuccess(
                 reviews.submitReview(
                         2011,

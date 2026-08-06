@@ -190,7 +190,7 @@ public final class PerformancePricingOperations {
         }
         if (ticketsExist) {
             return "Pricing for performance " + performanceId
-                    + " cannot be replaced because tickets have already been sold. "
+                    + " cannot be replaced because some tickets have already been sold. "
                     + "Existing tiers and section assignments were kept.";
         }
         if (!futureScheduled) {

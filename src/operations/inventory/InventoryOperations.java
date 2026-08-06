@@ -6,7 +6,6 @@ import database.TransactionManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -28,9 +27,8 @@ public final class InventoryOperations {
         }
 
         return transactions.execute(connection -> {
-            OperationResult<Void> saleable = checkSaleablePerformance(connection, performanceId);
-            if (!saleable.isSuccess()) {
-                return copyFailure(saleable);
+            if (!performanceExists(connection, performanceId)) {
+                return OperationResult.notFound("Performance not found.");
             }
 
             String sql = """
@@ -82,9 +80,8 @@ public final class InventoryOperations {
         }
 
         return transactions.execute(connection -> {
-            OperationResult<Void> saleable = checkSaleablePerformance(connection, performanceId);
-            if (!saleable.isSuccess()) {
-                return copyFailure(saleable);
+            if (!performanceExists(connection, performanceId)) {
+                return OperationResult.notFound("Performance not found.");
             }
 
             String sql = """
@@ -229,37 +226,16 @@ public final class InventoryOperations {
         }
     }
 
-    private OperationResult<Void> checkSaleablePerformance(
+    private boolean performanceExists(
             java.sql.Connection connection,
             int performanceId
     ) throws SQLException {
-        String sql = "SELECT status, date_time FROM Performance WHERE performance_id = ?";
+        String sql = "SELECT 1 FROM Performance WHERE performance_id = ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, performanceId);
             try (ResultSet rows = statement.executeQuery()) {
-                if (!rows.next()) {
-                    return OperationResult.notFound("Performance not found.");
-                }
-                if (!"scheduled".equals(rows.getString("status"))) {
-                    return OperationResult.conflict("Only scheduled performances have saleable inventory.");
-                }
-                Timestamp dateTime = rows.getTimestamp("date_time");
-                if (dateTime.toLocalDateTime().isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
-                    return OperationResult.conflict("Past performances do not have saleable inventory.");
-                }
-                return OperationResult.success("Performance is saleable.");
+                return rows.next();
             }
         }
-    }
-
-    private <T> OperationResult<T> copyFailure(OperationResult<?> result) {
-        return switch (result.getStatus()) {
-            case INVALID_INPUT -> OperationResult.invalidInput(result.getMessage());
-            case NOT_FOUND -> OperationResult.notFound(result.getMessage());
-            case FORBIDDEN -> OperationResult.forbidden(result.getMessage());
-            case CONFLICT -> OperationResult.conflict(result.getMessage());
-            case DATABASE_FAILURE -> OperationResult.databaseFailure(result.getMessage());
-            case SUCCESS -> throw new IllegalArgumentException("Cannot copy a successful result as failure");
-        };
     }
 }
