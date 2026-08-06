@@ -348,4 +348,169 @@ public OperationResult<List<EventPerformanceReport>> report2d() {
     });
 }
 
+
+ /*************************************************************************************************************
+ REPORT-3
+ *************************************************************************************************************/
+public OperationResult<List<OrganizerRevenueReport>> report3a() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT o.user_id AS organizer_id,
+                       u.name AS organizer_name,
+                       SUM(t.face_value) AS gross_revenue
+                FROM Tickets t
+                JOIN Performance p 
+                    ON p.performance_id = t.performance_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Organizer o
+                    ON o.user_id = e.organizer_id
+                JOIN Users u
+                    ON u.user_id = o.user_id
+                WHERE t.status = 'active'
+                GROUP BY o.user_id, u.name
+                ORDER BY gross_revenue DESC
+                """;
+
+
+        List<OrganizerRevenueReport> reports = new ArrayList<>();
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new OrganizerRevenueReport(
+                            rows.getInt("organizer_id"),
+                            rows.getString("organizer_name"),
+                            null,
+                            null,
+                            rows.getBigDecimal("gross_revenue")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Organizer revenue ranking generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+public OperationResult<List<OrganizerRevenueReport>> report3b() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT o.user_id AS organizer_id,
+                       u.name AS organizer_name,
+                       v.country,
+                       SUM(t.face_value) AS gross_revenue
+                FROM Tickets t
+                JOIN Performance p
+                    ON p.performance_id = t.performance_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Organizer o
+                    ON o.user_id = e.organizer_id
+                JOIN Users u
+                    ON u.user_id = o.user_id
+                WHERE t.status = 'active'
+                GROUP BY o.user_id, u.name, v.country
+                ORDER BY v.country, gross_revenue DESC
+                """;
+
+
+        List<OrganizerRevenueReport> reports = new ArrayList<>();
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new OrganizerRevenueReport(
+                            rows.getInt("organizer_id"),
+                            rows.getString("organizer_name"),
+                            rows.getString("country"),
+                            null,
+                            rows.getBigDecimal("gross_revenue")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Organizer revenue by country generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+public OperationResult<List<OrganizerRevenueReport>> report3c() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT o.user_id AS organizer_id,
+                       u.name AS organizer_name,
+                       v.city,
+                       SUM(t.face_value) AS gross_revenue
+                FROM Tickets t
+                JOIN Performance p
+                    ON p.performance_id = t.performance_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Organizer o
+                    ON o.user_id = e.organizer_id
+                JOIN Users u
+                    ON u.user_id = o.user_id
+                WHERE t.status = 'active'
+                GROUP BY o.user_id, u.name, v.city
+                ORDER BY v.city, gross_revenue DESC
+                """;
+
+
+        List<OrganizerRevenueReport> reports = new ArrayList<>();
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new OrganizerRevenueReport(
+                            rows.getInt("organizer_id"),
+                            rows.getString("organizer_name"),
+                            null,
+                            rows.getString("city"),
+                            rows.getBigDecimal("gross_revenue")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Organizer revenue by city generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
 }

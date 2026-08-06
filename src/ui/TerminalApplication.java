@@ -24,6 +24,7 @@ import operations.profile.UserProfileOperations;
 import reports.ReportOperations;
 import reports.TicketRevenueReport;
 import reports.EventPerformanceReport;
+import reports.OrganizerRevenueReport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1052,7 +1053,68 @@ private String safe(String value) {
 }
 
 private void report3() {
-    System.out.println("Report 3 not implemented yet.");
+
+    printHeading("Organizer Revenue Ranking");
+
+    System.out.println("1. Overall organizer ranking");
+    System.out.println("2. Organizer ranking by country");
+    System.out.println("3. Organizer ranking by city");
+
+
+    OperationResult<List<OrganizerRevenueReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" -> result = reports.report3a();
+
+        case "2" -> result = reports.report3b();
+
+        case "3" -> result = reports.report3c();
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-25s %-20s %-20s %-15s%n",
+                "ID",
+                "Organizer",
+                "Country",
+                "City",
+                "Revenue"
+        );
+
+
+        for (OrganizerRevenueReport row : rows) {
+
+            System.out.printf(
+                    "%-10d %-25s %-20s %-20s $%-15s%n",
+                    row.getOrganizerId(),
+                    row.getOrganizerName(),
+                    safe(row.getCountry()),
+                    safe(row.getCity()),
+                    row.getGrossRevenue().toPlainString()
+            );
+        }
+    });
+
+
     pause();
 }
 
