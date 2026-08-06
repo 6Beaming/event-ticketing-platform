@@ -1,0 +1,343 @@
+package queries;
+
+import database.TransactionManager;
+
+import common.OperationResult;
+import database.TransactionManager;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
+public final class QueryOperations {
+
+    private final TransactionManager transactions;
+
+    public QueryOperations(TransactionManager transactions) {
+        this.transactions = transactions;
+    }
+
+
+/*************************************************************************************************************
+ QUERY-1
+ Upcoming performances near location
+ *************************************************************************************************************/
+public OperationResult<List<UpcomingPerformanceQuery>> query1(
+        double latitude,
+        double longitude,
+        double radiusKm,
+        String sortBy
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+SELECT p.performance_id, e.title, v.name AS venue_name, v.city,
+       ROUND(
+         6371 * ACOS(
+           COS(RADIANS(?)) * COS(RADIANS(v.latitude)) * COS(RADIANS(v.longitude) - RADIANS(?))
+           + SIN(RADIANS(?)) * SIN(RADIANS(v.latitude))
+         ), 2
+       ) AS distance_km,
+       cheapest.min_price AS cheapest_available_price
+FROM Performance p
+JOIN Event e ON e.event_id = p.event_id
+JOIN Venue v ON v.venue_id = p.venue_id
+LEFT JOIN (
+    SELECT pt.performance_id, MIN(pt.price) AS min_price
+    FROM PriceTier pt
+    JOIN SectionTierAssignment sta 
+        ON sta.performance_id = pt.performance_id 
+        AND sta.tier_code = pt.tier_code
+    JOIN Section s 
+        ON s.venue_id = sta.venue_id 
+        AND s.section_name = sta.section_name
+    LEFT JOIN (
+        SELECT performance_id, venue_id, section_name,
+               SUM(
+                   CASE 
+                       WHEN blocked_status = FALSE
+                        AND performance_seat_id NOT IN (
+                             SELECT performance_seats_ref 
+                             FROM Tickets
+                             WHERE status = 'active' 
+                             AND performance_seats_ref IS NOT NULL
+                        )
+                       THEN 1 
+                       ELSE 0 
+                   END
+               ) AS avail_count
+        FROM PerformanceSeats
+        GROUP BY performance_id, venue_id, section_name
+    ) seat_avail 
+        ON seat_avail.performance_id = sta.performance_id
+        AND seat_avail.venue_id = sta.venue_id
+        AND seat_avail.section_name = sta.section_name
+    LEFT JOIN GeneralAdmissionCapacity ga 
+        ON ga.performance_id = sta.performance_id
+        AND ga.venue_id = sta.venue_id
+        AND ga.section_name = sta.section_name
+    WHERE (s.section_type = 'reserved' 
+           AND COALESCE(seat_avail.avail_count, 0) > 0)
+       OR (s.section_type = 'general'  
+           AND ga.remaining_capacity > 0)
+    GROUP BY pt.performance_id
+) cheapest 
+    ON cheapest.performance_id = p.performance_id
+WHERE p.status = 'scheduled'
+  AND p.date_time > NOW()
+HAVING distance_km <= ?
+ORDER BY
+  CASE 
+      WHEN ? IN ('price_asc','price_desc') 
+      AND cheapest_available_price IS NULL 
+      THEN 1 
+      ELSE 0 
+  END,
+  CASE 
+      WHEN ? = 'distance' 
+      THEN distance_km 
+  END ASC,
+  CASE 
+      WHEN ? = 'price_asc' 
+      THEN cheapest_available_price 
+  END ASC,
+  CASE 
+      WHEN ? = 'price_desc' 
+      THEN cheapest_available_price 
+  END DESC;
+                """;
+
+
+        List<UpcomingPerformanceQuery> results =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+              statement.setDouble(1, latitude);
+    statement.setDouble(2, longitude);
+    statement.setDouble(3, latitude);
+
+    statement.setDouble(4, radiusKm);
+
+    statement.setString(5, sortBy);
+    statement.setString(6, sortBy);
+    statement.setString(7, sortBy);
+    statement.setString(8, sortBy);
+
+
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+
+                while (rows.next()) {
+
+                    results.add(new UpcomingPerformanceQuery(
+                            rows.getInt("performance_id"),
+                            rows.getString("title"),
+                            rows.getString("venue_name"),
+                            rows.getString("city"),
+                            rows.getDouble("distance_km"),
+                            rows.getDouble("cheapest_available_price")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Upcoming performances retrieved.",
+                List.copyOf(results)
+        );
+
+    });
+}
+
+
+
+    /*************************************************************************************************************
+     QUERY-1A
+     Upcoming performances ranked by distance
+     *************************************************************************************************************/
+    public OperationResult<List<UpcomingPerformanceQuery>> query1a(
+            double latitude,
+            double longitude,
+            double maxDistanceKm
+    ) {
+
+        return transactions.execute(connection -> {
+
+            String sql = """
+                    -- SQL HERE
+                    """;
+
+            List<UpcomingPerformanceQuery> queries =
+                    new ArrayList<>();
+
+            try (PreparedStatement statement =
+                         connection.prepareStatement(sql)) {
+
+                // Parameters
+
+                try (ResultSet rows =
+                             statement.executeQuery()) {
+
+                    while (rows.next()) {
+
+                        queries.add(new UpcomingPerformanceQuery(
+                                0,
+                                "",
+                                "",
+                                null,
+                                0.0,
+                                0.0
+                        ));
+                    }
+                }
+            }
+
+            return OperationResult.success(
+                    "Upcoming performances retrieved.",
+                    List.copyOf(queries)
+            );
+        });
+    }
+
+    /*************************************************************************************************************
+     QUERY-1B
+     Upcoming performances ranked by cheapest ticket price (ascending)
+     *************************************************************************************************************/
+    public OperationResult<List<UpcomingPerformanceQuery>> query1b(
+            double latitude,
+            double longitude,
+            double maxDistanceKm
+    ) {
+
+        return transactions.execute(connection -> {
+
+            String sql = """
+                    -- SQL HERE
+                    """;
+
+            List<UpcomingPerformanceQuery> queries =
+                    new ArrayList<>();
+
+            try (PreparedStatement statement =
+                         connection.prepareStatement(sql)) {
+
+                try (ResultSet rows =
+                             statement.executeQuery()) {
+
+                    while (rows.next()) {
+
+                        queries.add(new UpcomingPerformanceQuery(
+                                0,
+                                "",
+                                "",
+                                null,
+                                0.0,
+                                0.0
+                        ));
+                    }
+                }
+            }
+
+            return OperationResult.success(
+                    "Upcoming performances retrieved.",
+                    List.copyOf(queries)
+            );
+        });
+    }
+
+    /*************************************************************************************************************
+     QUERY-1C
+     Upcoming performances ranked by cheapest ticket price (descending)
+     *************************************************************************************************************/
+    public OperationResult<List<UpcomingPerformanceQuery>> query1c(
+            double latitude,
+            double longitude,
+            double maxDistanceKm
+    ) {
+
+        return transactions.execute(connection -> {
+
+            String sql = """
+                    -- SQL HERE
+                    """;
+
+            List<UpcomingPerformanceQuery> queries =
+                    new ArrayList<>();
+
+            try (PreparedStatement statement =
+                         connection.prepareStatement(sql)) {
+
+                try (ResultSet rows =
+                             statement.executeQuery()) {
+
+                    while (rows.next()) {
+
+                        queries.add(new UpcomingPerformanceQuery(
+                                0,
+                                "",
+                                "",
+                                null,
+                                0.0,
+                                0.0
+                        ));
+                    }
+                }
+            }
+
+            return OperationResult.success(
+                    "Upcoming performances retrieved.",
+                    List.copyOf(queries)
+            );
+        });
+    }
+
+
+    /*************************************************************************************************************
+     QUERY-2
+     *************************************************************************************************************/
+    public OperationResult<?> query2(/* parameters */) {
+
+        return transactions.execute(connection -> {
+
+            String sql = """
+                    SELECT ...
+                    """;
+
+            return OperationResult.success(
+                    "Query completed successfully.",
+                    null
+            );
+        });
+    }
+
+    /*************************************************************************************************************
+     QUERY-3
+     *************************************************************************************************************/
+    public OperationResult<?> query3(/* parameters */) {
+
+        return transactions.execute(connection -> {
+
+            String sql = """
+                    SELECT ...
+                    """;
+
+            return OperationResult.success(
+                    "Query completed successfully.",
+                    null
+            );
+        });
+    }
+}
+    // Additional queries...

@@ -35,6 +35,9 @@ import reports.SellThroughReport;
 import reports.SellThroughTierReport;
 import reports.SellThroughBucketReport;
 
+import queries.QueryOperations;
+import queries.UpcomingPerformanceQuery;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -61,6 +64,7 @@ public final class TerminalApplication {
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
     private final ReportOperations reports;
+    private final QueryOperations queries;
 
     private boolean running;
 
@@ -76,6 +80,7 @@ public final class TerminalApplication {
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
         this.reports = new ReportOperations(transactions);
+        this.queries = new QueryOperations(transactions);
     }
 
     public void run() {
@@ -797,11 +802,169 @@ public final class TerminalApplication {
         pause();
     }
 
-    private void showSearches() {
-        printHeading("Required searches");
-        System.out.println("Q1-Q7 implementation is scheduled for August 1-3.");
-        pause();
+private void showSearches() {
+    boolean inMenu = true;
+
+    while (running && inMenu) {
+        printHeading("Required Searches");
+
+        System.out.println("1. Upcoming performances near a location");
+        System.out.println("2. Search by postal code");
+        System.out.println("3. Search by exact address");
+        System.out.println("4. Date range and ticket availability");
+        System.out.println("5. Performance filter search");
+        System.out.println("6. Seat map summary");
+        System.out.println("7. Best available seats");
+        System.out.println("0. Back");
+
+        switch (readLine("Select an option: ")) {
+            case "1" -> runOnlineAction(this::query1);
+            case "2" -> runOnlineAction(this::query2);
+            case "3" -> runOnlineAction(this::query3);
+            case "4" -> runOnlineAction(this::query4);
+            case "5" -> runOnlineAction(this::query5);
+            case "6" -> runOnlineAction(this::query6);
+            case "7" -> runOnlineAction(this::query7);
+            case "0" -> inMenu = false;
+            default -> System.out.println("Unknown search option.");
+        }
     }
+}
+
+
+ private void query1() {
+
+    printHeading("Upcoming Performances Near Location");
+
+
+    double latitude =
+            Double.parseDouble(readLine("Latitude: "));
+
+    double longitude =
+            Double.parseDouble(readLine("Longitude: "));
+
+
+    String radiusInput =
+            readLine("Maximum distance in km (default 50): ");
+
+
+    double radiusKm =
+            radiusInput.isBlank()
+                    ? 50.0
+                    : Double.parseDouble(radiusInput);
+
+
+    System.out.println("1. Rank by distance");
+    System.out.println("2. Rank by cheapest price ascending");
+    System.out.println("3. Rank by cheapest price descending");
+
+
+    String sortBy;
+
+
+    switch (readLine("Select option: ")) {
+
+        case "1" ->
+                sortBy = "distance";
+
+        case "2" ->
+                sortBy = "price_asc";
+
+        case "3" ->
+                sortBy = "price_desc";
+
+        default -> {
+            System.out.println("Unknown search option.");
+            pause();
+            return;
+        }
+    }
+
+
+    OperationResult<List<UpcomingPerformanceQuery>> result =
+            queries.query1(
+                    latitude,
+                    longitude,
+                    radiusKm,
+                    sortBy
+            );
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No performances found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-8s %-25s %-20s %-15s %-12s %-12s%n",
+                "ID",
+                "Event",
+                "Venue",
+                "City",
+                "Distance",
+                "Price"
+        );
+
+
+        for (UpcomingPerformanceQuery row : rows) {
+
+            System.out.printf(
+                    "%-8d %-25s %-20s %-15s %-12.2f %-12.2f%n",
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getVenueName(),
+                    row.getCity(),
+                    row.getDistanceKm(),
+                    row.getCheapestAvailablePrice()
+            );
+        }
+    });
+
+
+    pause();
+}
+private void query2() {
+    printHeading("Search by Postal Code");
+    System.out.println("Query 2 is not yet implemented.");
+    pause();
+}
+
+private void query3() {
+    printHeading("Search by Exact Address");
+    System.out.println("Query 3 is not yet implemented.");
+    pause();
+}
+
+private void query4() {
+    printHeading("Date Range and Ticket Availability");
+    System.out.println("Query 4 is not yet implemented.");
+    pause();
+}
+
+private void query5() {
+    printHeading("Performance Filter Search");
+    System.out.println("Query 5 is not yet implemented.");
+    pause();
+}
+
+private void query6() {
+    printHeading("Seat Map Summary");
+    System.out.println("Query 6 is not yet implemented.");
+    pause();
+}
+
+private void query7() {
+    printHeading("Best Available Seats");
+    System.out.println("Query 7 is not yet implemented.");
+    pause();
+}
+
 
 private void showReports() {
     boolean inMenu = true;
