@@ -25,23 +25,15 @@ public final class PerformancePricingOperations {
         this.transactions = transactions;
     }
 
-    public OperationResult<List<String>> getVenueSectionsForPricing(
-            int organizerId,
-            int performanceId
-    ) {
-        if (organizerId <= 0 || performanceId <= 0) {
-            return OperationResult.invalidInput("Organizer and performance IDs must be positive.");
+    public OperationResult<List<String>> getVenueSectionsForPricing(int performanceId) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
         }
 
         return transactions.execute(connection -> {
-            PerformanceOwner performance = findPerformanceOwner(connection, performanceId, false);
+            PerformanceDetails performance = findPerformance(connection, performanceId, false);
             if (performance == null) {
                 return OperationResult.notFound("Performance not found.");
-            }
-            if (performance.organizerId != organizerId) {
-                return OperationResult.forbidden(
-                        "Only the event organizer can configure this performance."
-                );
             }
             boolean existingPricing = pricingExists(connection, performanceId);
             String replacementError = findReplacementConflict(connection, performanceId);
@@ -66,31 +58,20 @@ public final class PerformancePricingOperations {
         });
     }
 
-    public OperationResult<PricingSetupSummary> configurePricing(
-            int organizerId,
-            PricingSetupInput input
-    ) {
-        if (organizerId <= 0) {
-            return OperationResult.invalidInput("Organizer ID must be positive.");
-        }
+    public OperationResult<PricingSetupSummary> configurePricing(PricingSetupInput input) {
         String validationError = PricingValidator.validateShape(input);
         if (validationError != null) {
             return OperationResult.invalidInput(validationError);
         }
 
         return transactions.execute(connection -> {
-            PerformanceOwner performance = findPerformanceOwner(
+            PerformanceDetails performance = findPerformance(
                     connection,
                     input.getPerformanceId(),
                     true
             );
             if (performance == null) {
                 return OperationResult.notFound("Performance not found.");
-            }
-            if (performance.organizerId != organizerId) {
-                return OperationResult.forbidden(
-                        "Only the event organizer can configure this performance."
-                );
             }
 
             boolean replacingExistingPricing = pricingExists(connection, input.getPerformanceId());
@@ -131,13 +112,12 @@ public final class PerformancePricingOperations {
     }
 
     public OperationResult<Void> updateTierPrice(
-            int organizerId,
             int performanceId,
             String tierCode,
             java.math.BigDecimal newPrice
     ) {
-        if (organizerId <= 0 || performanceId <= 0) {
-            return OperationResult.invalidInput("Organizer and performance IDs must be positive.");
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
         }
         if (tierCode == null || tierCode.trim().isEmpty()) {
             return OperationResult.invalidInput("Tier code is required.");
@@ -147,14 +127,9 @@ public final class PerformancePricingOperations {
         }
 
         return transactions.execute(connection -> {
-            PerformanceOwner performance = findPerformanceOwner(connection, performanceId, true);
+            PerformanceDetails performance = findPerformance(connection, performanceId, true);
             if (performance == null) {
                 return OperationResult.notFound("Performance not found.");
-            }
-            if (performance.organizerId != organizerId) {
-                return OperationResult.forbidden(
-                        "Only the event organizer can update this tier price."
-                );
             }
 
             String tierSql = """
@@ -252,15 +227,14 @@ public final class PerformancePricingOperations {
         return null;
     }
 
-    private PerformanceOwner findPerformanceOwner(
+    private PerformanceDetails findPerformance(
             Connection connection,
             int performanceId,
             boolean lock
     ) throws SQLException {
         String sql = """
-                SELECT p.venue_id, p.date_time, p.status, e.organizer_id
+                SELECT p.venue_id, p.date_time, p.status
                 FROM Performance p
-                JOIN Event e ON e.event_id = p.event_id
                 WHERE p.performance_id = ?
                 """ + (lock ? " FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -269,9 +243,8 @@ public final class PerformancePricingOperations {
                 if (!rows.next()) {
                     return null;
                 }
-                return new PerformanceOwner(
+                return new PerformanceDetails(
                         rows.getInt("venue_id"),
-                        rows.getInt("organizer_id"),
                         rows.getTimestamp("date_time").toLocalDateTime(),
                         rows.getString("status")
                 );
@@ -464,20 +437,17 @@ public final class PerformancePricingOperations {
         return value.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static final class PerformanceOwner {
+    private static final class PerformanceDetails {
         private final int venueId;
-        private final int organizerId;
         private final LocalDateTime dateTime;
         private final String status;
 
-        private PerformanceOwner(
+        private PerformanceDetails(
                 int venueId,
-                int organizerId,
                 LocalDateTime dateTime,
                 String status
         ) {
             this.venueId = venueId;
-            this.organizerId = organizerId;
             this.dateTime = dateTime;
             this.status = status;
         }

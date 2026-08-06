@@ -609,21 +609,12 @@ public final class TerminalApplication {
 
     private void configurePricing() {
         while (running) {
-            Integer organizerId = readCheckedId(
-                    "Organizer ID: ",
-                    events::checkActiveOrganizer
-            );
-            if (organizerId == null) {
-                return;
-            }
-            PricingSetupInput pricingInput = readPricingSetup(organizerId);
+            PricingSetupInput pricingInput = readPricingSetup();
             if (pricingInput == null) {
                 return;
             }
-            OperationResult<PricingSetupSummary> result = pricing.configurePricing(
-                    organizerId,
-                    pricingInput
-            );
+            OperationResult<PricingSetupSummary> result =
+                    pricing.configurePricing(pricingInput);
             printResult(result);
             if (result.isSuccess()) {
                 result.getValue().ifPresent(summary -> {
@@ -645,7 +636,7 @@ public final class TerminalApplication {
         }
     }
 
-    private PricingSetupInput readPricingSetup(int organizerId) {
+    private PricingSetupInput readPricingSetup() {
         Integer performanceId = null;
         List<String> venueSections = null;
         while (running) {
@@ -654,7 +645,7 @@ public final class TerminalApplication {
                 return null;
             }
             OperationResult<List<String>> sectionsResult =
-                    pricing.getVenueSectionsForPricing(organizerId, performanceId);
+                    pricing.getVenueSectionsForPricing(performanceId);
             if (sectionsResult.isSuccess()) {
                 System.out.println(sectionsResult.getMessage());
                 venueSections = sectionsResult.getValue().orElseThrow();
@@ -792,13 +783,9 @@ public final class TerminalApplication {
     }
 
     private void updateTierPrice() {
-        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
-        if (organizerId == null) {
-            return;
-        }
         Integer performanceId = readCheckedId(
                 "Performance ID: ",
-                id -> inputChecks.checkOwnedPerformance(organizerId, id)
+                inputChecks::checkPerformance
         );
         if (performanceId == null) {
             return;
@@ -819,18 +806,14 @@ public final class TerminalApplication {
         if (price == null) {
             return;
         }
-        printResult(pricing.updateTierPrice(organizerId, performanceId, tierCode, price));
+        printResult(pricing.updateTierPrice(performanceId, tierCode, price));
         pause();
     }
 
     private void changeSeatBlock(boolean block) {
-        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
-        if (organizerId == null) {
-            return;
-        }
         Integer performanceId = readCheckedId(
                 "Performance ID: ",
-                id -> inputChecks.checkOwnedPerformance(organizerId, id)
+                inputChecks::checkPerformance
         );
         if (performanceId == null) {
             return;
@@ -843,8 +826,8 @@ public final class TerminalApplication {
             return;
         }
         OperationResult<Void> result = block
-                ? inventory.blockSeat(organizerId, performanceId, performanceSeatId)
-                : inventory.unblockSeat(organizerId, performanceId, performanceSeatId);
+                ? inventory.blockSeat(performanceId, performanceSeatId)
+                : inventory.unblockSeat(performanceId, performanceSeatId);
         printResult(result);
         pause();
     }

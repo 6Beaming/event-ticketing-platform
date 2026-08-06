@@ -125,39 +125,35 @@ public final class InventoryOperations {
     }
 
     public OperationResult<Void> blockSeat(
-            int organizerId,
             int performanceId,
             int performanceSeatId
     ) {
-        return changeSeatBlock(organizerId, performanceId, performanceSeatId, true);
+        return changeSeatBlock(performanceId, performanceSeatId, true);
     }
 
     public OperationResult<Void> unblockSeat(
-            int organizerId,
             int performanceId,
             int performanceSeatId
     ) {
-        return changeSeatBlock(organizerId, performanceId, performanceSeatId, false);
+        return changeSeatBlock(performanceId, performanceSeatId, false);
     }
 
     private OperationResult<Void> changeSeatBlock(
-            int organizerId,
             int performanceId,
             int performanceSeatId,
             boolean targetBlocked
     ) {
-        if (organizerId <= 0 || performanceId <= 0 || performanceSeatId <= 0) {
+        if (performanceId <= 0 || performanceSeatId <= 0) {
             return OperationResult.invalidInput(
-                    "Organizer, performance, and seat IDs must be positive."
+                    "Performance and seat IDs must be positive."
             );
         }
 
         return transactions.execute(connection -> {
             String sql = """
-                    SELECT ps.blocked_status, p.status, p.date_time, e.organizer_id
+                    SELECT ps.blocked_status, p.status, p.date_time
                     FROM PerformanceSeats ps
                     JOIN Performance p ON p.performance_id = ps.performance_id
-                    JOIN Event e ON e.event_id = p.event_id
                     WHERE ps.performance_id = ? AND ps.performance_seat_id = ?
                     FOR UPDATE
                     """;
@@ -169,11 +165,6 @@ public final class InventoryOperations {
                     if (!rows.next()) {
                         return OperationResult.notFound(
                                 "Reserved seat inventory was not found for this performance."
-                        );
-                    }
-                    if (rows.getInt("organizer_id") != organizerId) {
-                        return OperationResult.forbidden(
-                                "Only the event organizer can block or unblock this seat."
                         );
                     }
                     if (!"scheduled".equals(rows.getString("status"))

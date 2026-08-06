@@ -219,7 +219,6 @@ public final class FoundationDatabaseCheck {
         requireSuccess(performance, "performance creation");
 
         OperationResult<List<String>> venueSections = pricing.getVenueSectionsForPricing(
-                organizer.getValue().orElseThrow(),
                 performance.getValue().orElseThrow()
         );
         requireSuccess(venueSections, "performance venue-section preflight check");
@@ -228,7 +227,6 @@ public final class FoundationDatabaseCheck {
         }
 
         OperationResult<?> pricingResult = pricing.configurePricing(
-                organizer.getValue().orElseThrow(),
                 new PricingSetupInput(
                         performance.getValue().orElseThrow(),
                         List.of(
@@ -260,7 +258,6 @@ public final class FoundationDatabaseCheck {
 
         OperationResult<List<String>> replacementPreflight =
                 pricing.getVenueSectionsForPricing(
-                        organizer.getValue().orElseThrow(),
                         performance.getValue().orElseThrow()
                 );
         requireSuccess(replacementPreflight, "unsold pricing replacement preflight");
@@ -269,7 +266,6 @@ public final class FoundationDatabaseCheck {
         }
 
         OperationResult<?> replacementPricing = pricing.configurePricing(
-                organizer.getValue().orElseThrow(),
                 new PricingSetupInput(
                         performance.getValue().orElseThrow(),
                         List.of(
@@ -525,7 +521,6 @@ public final class FoundationDatabaseCheck {
 
         OperationResult<List<String>> soldPricingPreflight =
                 pricing.getVenueSectionsForPricing(
-                        DevelopmentIds.ORGANIZER,
                         DevelopmentIds.PERFORMANCE_RESERVED
                 );
         if (soldPricingPreflight.getStatus() != OperationStatus.CONFLICT
@@ -535,7 +530,6 @@ public final class FoundationDatabaseCheck {
 
         requireSuccess(
                 pricing.updateTierPrice(
-                        DevelopmentIds.ORGANIZER,
                         DevelopmentIds.PERFORMANCE_RESERVED,
                         "P3",
                         new BigDecimal("52.00")
@@ -543,7 +537,6 @@ public final class FoundationDatabaseCheck {
                 "unsold tier price update"
         );
         OperationResult<Void> soldTierUpdate = pricing.updateTierPrice(
-                DevelopmentIds.ORGANIZER,
                 DevelopmentIds.PERFORMANCE_RESERVED,
                 "P1",
                 new BigDecimal("125.00")
@@ -554,7 +547,6 @@ public final class FoundationDatabaseCheck {
 
         requireSuccess(
                 inventory.blockSeat(
-                        DevelopmentIds.ORGANIZER,
                         DevelopmentIds.PERFORMANCE_RESERVED,
                         610001
                 ),
@@ -562,14 +554,12 @@ public final class FoundationDatabaseCheck {
         );
         requireSuccess(
                 inventory.unblockSeat(
-                        DevelopmentIds.ORGANIZER,
                         DevelopmentIds.PERFORMANCE_RESERVED,
                         610001
                 ),
                 "blocked seat unblock"
         );
         OperationResult<Void> soldSeatBlock = inventory.blockSeat(
-                DevelopmentIds.ORGANIZER,
                 DevelopmentIds.PERFORMANCE_RESERVED,
                 610005
         );
