@@ -161,8 +161,6 @@ ORDER BY
     });
 }
 
-
-
 /*************************************************************************************************************
  QUERY-2
  Upcoming performances by postal code
@@ -239,21 +237,93 @@ public OperationResult<List<PostalCodePerformanceQuery>> query2(
     });
 }
     /*************************************************************************************************************
-     QUERY-3
-     *************************************************************************************************************/
-    public OperationResult<?> query3(/* parameters */) {
+ QUERY-3
+ Exact address search
+ *************************************************************************************************************/
+public OperationResult<List<AddressPerformanceQuery>> query3(
+        String address
+) {
 
-        return transactions.execute(connection -> {
+    return transactions.execute(connection -> {
 
-            String sql = """
-                    SELECT ...
-                    """;
+        String sql = """
+                SELECT v.venue_id,
+                       v.name,
+                       v.address,
+                       v.city,
+                       v.country,
+                       p.performance_id,
+                       e.title,
+                       p.date_time
 
-            return OperationResult.success(
-                    "Query completed successfully.",
-                    null
+                FROM Venue v
+
+                LEFT JOIN Performance p
+                    ON p.venue_id = v.venue_id
+                    AND p.status = 'scheduled'
+                    AND p.date_time > NOW()
+
+                LEFT JOIN Event e
+                    ON e.event_id = p.event_id
+
+                WHERE v.address = ?
+
+                ORDER BY p.date_time
+                """;
+
+
+        List<AddressPerformanceQuery> results =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setString(
+                    1,
+                    address
             );
-        });
-    }
+
+
+            try (ResultSet rows =
+                         statement.executeQuery()) {
+
+
+                while (rows.next()) {
+
+                    LocalDateTime dateTime = null;
+
+                    if (rows.getTimestamp("date_time") != null) {
+                        dateTime =
+                                rows.getTimestamp("date_time")
+                                        .toLocalDateTime();
+                    }
+
+
+                    results.add(new AddressPerformanceQuery(
+                            rows.getInt("venue_id"),
+                            rows.getString("name"),
+                            rows.getString("address"),
+                            rows.getString("city"),
+                            rows.getString("country"),
+                            rows.getInt("performance_id"),
+                            rows.getString("title"),
+                            dateTime
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Address search completed.",
+                List.copyOf(results)
+        );
+
+    });
 }
-    // Additional queries...
+
+
+
+}

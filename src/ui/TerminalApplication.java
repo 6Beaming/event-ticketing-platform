@@ -38,6 +38,7 @@ import reports.SellThroughBucketReport;
 import queries.QueryOperations;
 import queries.UpcomingPerformanceQuery;
 import queries.PostalCodePerformanceQuery;
+import queries.AddressPerformanceQuery;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -986,8 +987,59 @@ private void query2() {
 }
 
 private void query3() {
-    printHeading("Search by Exact Address");
-    System.out.println("Query 3 is not yet implemented.");
+
+    printHeading("Search Venue By Exact Address");
+
+
+    String address =
+            readLine("Enter address: ");
+
+
+    OperationResult<List<AddressPerformanceQuery>> result =
+            queries.query3(address);
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+        if (rows.isEmpty()) {
+            System.out.println("No venue found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-8s %-20s %-25s %-15s %-15s %-8s %-25s %-20s%n",
+                "VenueID",
+                "Venue",
+                "Address",
+                "City",
+                "Country",
+                "PerfID",
+                "Event",
+                "Date"
+        );
+
+
+        for (AddressPerformanceQuery row : rows) {
+
+            System.out.printf(
+                    "%-8d %-20s %-25s %-15s %-15s %-8d %-25s %-20s%n",
+                    row.getVenueId(),
+                    row.getVenueName(),
+                    row.getAddress(),
+                    row.getCity(),
+                    row.getCountry(),
+                    row.getPerformanceId(),
+                    row.getTitle(),
+                    row.getDateTime()
+            );
+        }
+    });
+
+
     pause();
 }
 
