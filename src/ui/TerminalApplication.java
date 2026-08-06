@@ -28,6 +28,9 @@ import reports.OrganizerRevenueReport;
 import reports.ScalperDetectionReport;
 import reports.CustomerOrderRankingReport;
 import reports.CancellationReport;
+import reports.ResaleReport;
+import reports.EventNounPhraseReport;
+import reports.NounPhraseCount;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -1327,12 +1330,149 @@ private void report7() {
 }
 
 private void report8() {
-    System.out.println("Report 8 not implemented yet.");
+
+    printHeading("Resale Reports");
+
+
+    System.out.println("1. Resale statistics per event");
+    System.out.println("2. Top 10 events by resale volume");
+
+
+    OperationResult<List<ResaleReport>> result;
+
+
+    switch (readLine("Select option: ")) {
+
+
+        case "1" -> result = reports.report8a();
+
+
+        case "2" -> {
+
+            LocalDateTime[] dates = readReportDateRange();
+
+            if (dates == null) {
+                pause();
+                return;
+            }
+
+            result = reports.report8b(
+                    dates[0],
+                    dates[1]
+            );
+        }
+
+
+        default -> {
+            System.out.println("Unknown report option.");
+            pause();
+            return;
+        }
+    }
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+
+        if (rows.isEmpty()) {
+            System.out.println("No report data found.");
+            return;
+        }
+
+
+        System.out.printf(
+                "%-10s %-30s %-15s %-15s %-15s%n",
+                "ID",
+                "Event",
+                "Resales",
+                "Avg Markup",
+                "At Cap"
+        );
+
+
+        for (ResaleReport row : rows) {
+
+
+            System.out.printf(
+                    "%-10d %-30s %-15d %-15s %-15s%n",
+                    row.getEventId(),
+                    row.getEventTitle(),
+                    row.getResaleCount(),
+                    row.getAvgMarkupPct() == null
+                            ? "-"
+                            : row.getAvgMarkupPct(),
+                    row.getPctAtCap() == null
+                            ? "-"
+                            : row.getPctAtCap()
+            );
+        }
+
+    });
+
+
     pause();
 }
 
 private void report9() {
-    System.out.println("Report 9 not implemented yet.");
+
+    printHeading("Event Word Cloud Report");
+
+
+    OperationResult<List<EventNounPhraseReport>> result =
+            reports.report9();
+
+
+    printResult(result);
+
+
+    result.getValue().ifPresent(rows -> {
+
+
+        if (rows.isEmpty()) {
+
+            System.out.println(
+                    "No review data found."
+            );
+
+            return;
+        }
+
+
+        for (EventNounPhraseReport report : rows) {
+
+
+            System.out.println();
+            System.out.println(
+                    "Event: "
+                            + report.getEventTitle()
+            );
+
+
+            System.out.printf(
+                    "%-30s %-10s%n",
+                    "Noun Phrase",
+                    "Count"
+            );
+
+
+            for (NounPhraseCount phrase :
+                    report.getPhrases()) {
+
+
+                System.out.printf(
+                        "%-30s %-10d%n",
+                        phrase.getPhrase(),
+                        phrase.getCount()
+                );
+            }
+        }
+
+    });
+
+
     pause();
 }
 

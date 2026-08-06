@@ -867,6 +867,195 @@ public OperationResult<List<CancellationReport>> report6b(
 
 
  /*************************************************************************************************************
- REPORT-7
+ REPORT-8
  *************************************************************************************************************/
+public OperationResult<List<ResaleReport>> report8a() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT e.event_id,
+                       e.title,
+                       COUNT(*) AS num_completed_resales,
+                       ROUND(
+                           AVG((rl.listing_price - t.face_value)
+                           / t.face_value), 4
+                       ) AS avg_markup_pct,
+                       ROUND(
+                           SUM(
+                               CASE
+                                   WHEN rl.listing_price = rl.cap_price_at_listing
+                                   THEN 1
+                                   ELSE 0
+                               END
+                           ) / COUNT(*), 4
+                       ) AS pct_at_cap
+                FROM ResaleListing rl
+                JOIN Tickets t
+                    ON t.ticket_id = rl.ticket_id
+                JOIN Performance p
+                    ON p.performance_id = t.performance_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                WHERE rl.status = 'sold'
+                GROUP BY e.event_id, e.title
+                """;
+
+
+        List<ResaleReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new ResaleReport(
+                            rows.getInt("event_id"),
+                            rows.getString("title"),
+                            rows.getInt("num_completed_resales"),
+                            rows.getBigDecimal("avg_markup_pct"),
+                            rows.getBigDecimal("pct_at_cap")
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Event resale report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+public OperationResult<List<ResaleReport>> report8b(
+        LocalDateTime startDate,
+        LocalDateTime endDate
+) {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT e.event_id,
+                       e.title,
+                       COUNT(*) AS resale_volume
+                FROM ResaleListing rl
+                JOIN Tickets t
+                    ON t.ticket_id = rl.ticket_id
+                JOIN Performance p
+                    ON p.performance_id = t.performance_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                WHERE rl.status = 'sold'
+                  AND rl.listed_date BETWEEN ? AND ?
+                GROUP BY e.event_id, e.title
+                ORDER BY resale_volume DESC
+                LIMIT 10
+                """;
+
+
+        List<ResaleReport> reports = new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+
+            statement.setTimestamp(
+                    1,
+                    Timestamp.valueOf(startDate)
+            );
+
+            statement.setTimestamp(
+                    2,
+                    Timestamp.valueOf(endDate)
+            );
+
+
+            try (ResultSet rows = statement.executeQuery()) {
+
+                while (rows.next()) {
+
+                    reports.add(new ResaleReport(
+                            rows.getInt("event_id"),
+                            rows.getString("title"),
+                            rows.getInt("resale_volume"),
+                            null,
+                            null
+                    ));
+                }
+            }
+        }
+
+
+        return OperationResult.success(
+                "Top resale volume report generated.",
+                List.copyOf(reports)
+        );
+
+    });
+}
+
+
+ /*************************************************************************************************************
+ REPORT-9
+ *************************************************************************************************************/
+
+public OperationResult<List<EventNounPhraseReport>> report9() {
+
+    return transactions.execute(connection -> {
+
+        String sql = """
+                SELECT e.event_id,
+                       e.title,
+                       r.comment_text
+                FROM Reviews r
+                JOIN Performance p
+                    ON p.performance_id = r.performance_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                ORDER BY e.event_id
+                """;
+
+
+        List<EventCommentReport> comments =
+                new ArrayList<>();
+
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql);
+
+             ResultSet rows =
+                     statement.executeQuery()) {
+
+
+            while (rows.next()) {
+
+                comments.add(
+                        new EventCommentReport(
+                                rows.getInt("event_id"),
+                                rows.getString("title"),
+                                rows.getString("comment_text")
+                        )
+                );
+            }
+        }
+
+
+        NounPhraseAnalyzer analyzer =
+                new NounPhraseAnalyzer();
+
+
+        return OperationResult.success(
+                "Event word cloud report generated.",
+                analyzer.analyze(comments)
+        );
+
+    });
+}
 }
