@@ -5,8 +5,9 @@ set -eu
 BUILD_DIR=".build/classes"
 SOURCE_LIST=".build/sources.list"
 CONNECTOR_PATH="lib/mysql-connector-java-8.0.29.jar"
+LIB_PATH="lib/*"
 
-if [ ! -f "$CONNECTOR_PATH" ]; then
+if [ ! -f "lib/mysql-connector-java-8.0.29.jar" ]; then
     echo "Missing MySQL driver: lib/mysql-connector-java-8.0.29.jar" >&2
     exit 1
 fi
@@ -27,25 +28,25 @@ if [ ! -s "$SOURCE_LIST" ]; then
     exit 1
 fi
 
-javac -cp "$CONNECTOR_PATH" -d "$BUILD_DIR" @"$SOURCE_LIST"
+javac -cp "$LIB_PATH" -d "$BUILD_DIR" @"$SOURCE_LIST"
 
 # Optional development utilities. [We can remove them when delivery], except --generate-data
 # --generate-data is useful, and the PDF explicitly recommends writing a sample-data generator.
 case "${1:-}" in
     --generate-data)
-        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" data.DevelopmentDataGenerator
+        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$LIB_PATH" data.DevelopmentDataGenerator
         exit 0
         ;;
     --self-test)
         # Runs quickly without MySQL and checks Java validation, transaction behavior, and calculations.
-        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" testing.FoundationSelfTest
+        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$LIB_PATH" testing.FoundationSelfTest
         exit 0
         ;;
     --database-check)
         # It runs drop.sql -> schema.sql -> load.sql -> tests real JDBC operations
-        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" testing.FoundationDatabaseCheck --reset-database
+        java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$LIB_PATH" testing.FoundationDatabaseCheck --reset-database
         exit 0
         ;;
 esac
 
-java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$CONNECTOR_PATH" Main
+java -cp "$BUILD_DIR$CLASSPATH_SEPARATOR$LIB_PATH" Main
