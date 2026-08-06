@@ -28,6 +28,7 @@ import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
 import operations.review.ReviewOperations;
+import operations.validation.OperationInputChecks;
 
 import reports.ReportOperations;
 import reports.TicketRevenueReport;
@@ -72,6 +73,7 @@ public final class TerminalApplication {
     private final InventoryOperations inventory;
     private final ResaleOperations resale;
     private final ReviewOperations reviews;
+    private final OperationInputChecks inputChecks;
     private final ReportOperations reports;
 
     private boolean running;
@@ -91,6 +93,7 @@ public final class TerminalApplication {
         this.inventory = new InventoryOperations(transactions);
         this.resale = new ResaleOperations(transactions);
         this.reviews = new ReviewOperations(transactions);
+        this.inputChecks = new OperationInputChecks(transactions);
         this.reports = new ReportOperations(transactions);
     }
 
@@ -345,17 +348,6 @@ public final class TerminalApplication {
         return null;
     }
 
-    private LocalDateTime readDateTime(String prompt) {
-    String value = readLine(prompt);
-
-    try {
-        return LocalDateTime.parse(value, DATE_TIME_FORMAT);
-    } catch (DateTimeParseException exception) {
-        System.out.println("Enter date and time in YYYY-MM-DD HH:mm format.");
-        return null;
-    }
-}
-
     private void printInputError(String message) {
         System.out.println("INVALID_INPUT: " + message);
     }
@@ -401,9 +393,11 @@ public final class TerminalApplication {
     }
 
     private void deactivateUser() {
-        Integer userId = readPositiveInt("User ID to deactivate: ");
+        Integer userId = readCheckedId(
+                "User ID to deactivate: ",
+                inputChecks::checkActiveUser
+        );
         if (userId == null) {
-            pause();
             return;
         }
         String confirmation = readLine("Type DEACTIVATE to make this profile anonymous while preserving the history");
@@ -530,7 +524,10 @@ public final class TerminalApplication {
             if (organizerId == null) {
                 return;
             }
-            Integer eventId = readPositiveIntWithRetry("Event ID: ");
+            Integer eventId = readCheckedId(
+                    "Event ID: ",
+                    id -> events.checkOwnedEvent(organizerId, id)
+            );
             if (eventId == null) {
                 return;
             }
@@ -566,7 +563,10 @@ public final class TerminalApplication {
         if (organizerId == null) {
             return;
         }
-        Integer eventId = readPositiveIntWithRetry("Event ID: ");
+        Integer eventId = readCheckedId(
+                "Event ID: ",
+                id -> events.checkOwnedEvent(organizerId, id)
+        );
         if (eventId == null) {
             return;
         }
@@ -796,15 +796,16 @@ public final class TerminalApplication {
         if (organizerId == null) {
             return;
         }
-        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                id -> inputChecks.checkOwnedPerformance(organizerId, id)
+        );
         if (performanceId == null) {
             return;
         }
-        String tierCode = readValidatedText(
+        String tierCode = readCheckedText(
                 "Tier code: ",
-                value -> value.trim().isEmpty()
-                        ? Optional.of("Tier code is required.")
-                        : Optional.empty()
+                value -> inputChecks.checkTier(performanceId, value)
         );
         if (tierCode == null) {
             return;
@@ -827,11 +828,17 @@ public final class TerminalApplication {
         if (organizerId == null) {
             return;
         }
-        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                id -> inputChecks.checkOwnedPerformance(organizerId, id)
+        );
         if (performanceId == null) {
             return;
         }
-        Integer performanceSeatId = readPositiveIntWithRetry("Reserved seat inventory ID: ");
+        Integer performanceSeatId = readCheckedId(
+                "Reserved seat inventory ID: ",
+                id -> inputChecks.checkReservedSeat(performanceId, id)
+        );
         if (performanceSeatId == null) {
             return;
         }
@@ -923,16 +930,17 @@ public final class TerminalApplication {
     }
 
     private void bookReservedSeats() {
-        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        Integer performanceId = readCheckedId("Performance ID: ", inputChecks::checkPerformance);
         if (performanceId == null) {
             return;
         }
-        List<Integer> seatIds = readPositiveIntListWithRetry(
-                "Reserved seat inventory IDs (comma-separated): "
+        List<Integer> seatIds = readCheckedPositiveIntList(
+                "Reserved seat inventory IDs (comma-separated): ",
+                ids -> inputChecks.checkReservedSeats(performanceId, ids)
         );
         if (seatIds == null) {
             return;
@@ -947,19 +955,17 @@ public final class TerminalApplication {
     }
 
     private void bookGeneralAdmission() {
-        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        Integer performanceId = readCheckedId("Performance ID: ", inputChecks::checkPerformance);
         if (performanceId == null) {
             return;
         }
-        String sectionName = readValidatedText(
+        String sectionName = readCheckedText(
                 "General-admission section name: ",
-                value -> value.trim().isEmpty()
-                        ? Optional.of("General-admission section name is required.")
-                        : Optional.empty()
+                value -> inputChecks.checkGeneralAdmissionSection(performanceId, value)
         );
         if (sectionName == null) {
             return;
@@ -988,12 +994,13 @@ public final class TerminalApplication {
     }
 
     private void cancelCustomerTickets() {
-        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
         if (customerId == null) {
             return;
         }
-        List<Integer> ticketIds = readPositiveIntListWithRetry(
-                "Ticket IDs to cancel (comma-separated): "
+        List<Integer> ticketIds = readCheckedPositiveIntList(
+                "Ticket IDs to cancel (comma-separated): ",
+                inputChecks::checkTickets
         );
         if (ticketIds == null) {
             return;
@@ -1013,7 +1020,10 @@ public final class TerminalApplication {
         if (organizerId == null) {
             return;
         }
-        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                id -> inputChecks.checkOwnedPerformance(organizerId, id)
+        );
         if (performanceId == null) {
             return;
         }
@@ -1054,11 +1064,14 @@ public final class TerminalApplication {
     }
 
     private void listTicketForResale() {
-        Integer sellerId = readPositiveIntWithRetry("Seller customer ID: ");
+        Integer sellerId = readCheckedId(
+                "Seller customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
         if (sellerId == null) {
             return;
         }
-        Integer ticketId = readPositiveIntWithRetry("Ticket ID: ");
+        Integer ticketId = readCheckedId("Ticket ID: ", inputChecks::checkTicket);
         if (ticketId == null) {
             return;
         }
@@ -1087,11 +1100,17 @@ public final class TerminalApplication {
     }
 
     private void withdrawResaleListing() {
-        Integer sellerId = readPositiveIntWithRetry("Seller customer ID: ");
+        Integer sellerId = readCheckedId(
+                "Seller customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
         if (sellerId == null) {
             return;
         }
-        Integer listingId = readPositiveIntWithRetry("Listing ID: ");
+        Integer listingId = readCheckedId(
+                "Listing ID: ",
+                inputChecks::checkResaleListing
+        );
         if (listingId == null) {
             return;
         }
@@ -1100,11 +1119,17 @@ public final class TerminalApplication {
     }
 
     private void purchaseResaleListing() {
-        Integer buyerId = readPositiveIntWithRetry("Buyer customer ID: ");
+        Integer buyerId = readCheckedId(
+                "Buyer customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
         if (buyerId == null) {
             return;
         }
-        Integer listingId = readPositiveIntWithRetry("Listing ID: ");
+        Integer listingId = readCheckedId(
+                "Listing ID: ",
+                inputChecks::checkResaleListing
+        );
         if (listingId == null) {
             return;
         }
@@ -1138,11 +1163,11 @@ public final class TerminalApplication {
     }
 
     private void submitReview() {
-        Integer customerId = readPositiveIntWithRetry("Customer ID: ");
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readPositiveIntWithRetry("Performance ID: ");
+        Integer performanceId = readCheckedId("Performance ID: ", inputChecks::checkPerformance);
         if (performanceId == null) {
             return;
         }
@@ -1230,34 +1255,34 @@ private void showReports() {
 
 
 private LocalDateTime[] readReportDateRange() {
-
-    LocalDateTime startDate = readDateTime(
-            "Start date/time (YYYY-MM-DD HH:mm): "
-    );
-
-    LocalDateTime endDate = readDateTime(
-            "End date/time (YYYY-MM-DD HH:mm): "
-    );
-
-    if (startDate == null || endDate == null) {
-        return null;
-    }
-
-    if (!startDate.isBefore(endDate)) {
-        System.out.println(
-                "Start date/time must be before end date/time."
+    while (running) {
+        LocalDateTime startDate = readDateTimeWithRetry(
+                "Start date/time (YYYY-MM-DD HH:mm): "
         );
-        return null;
-    }
+        if (startDate == null) {
+            return null;
+        }
 
-    if (endDate.isAfter(LocalDateTime.now())) {
-        System.out.println(
-                "End date/time cannot be in the future."
+        LocalDateTime endDate = readDateTimeWithRetry(
+                "End date/time (YYYY-MM-DD HH:mm): "
         );
-        return null;
-    }
+        if (endDate == null) {
+            return null;
+        }
 
-    return new LocalDateTime[]{startDate, endDate};
+        if (!startDate.isBefore(endDate)) {
+            printInputError("Start date/time must be before end date/time.");
+        } else if (endDate.isAfter(LocalDateTime.now())) {
+            printInputError("End date/time cannot be in the future.");
+        } else {
+            return new LocalDateTime[]{startDate, endDate};
+        }
+
+        if (!promptToRetry()) {
+            return null;
+        }
+    }
+    return null;
 }
 
 
@@ -1300,7 +1325,15 @@ private void report1() {
 
     System.out.println("1. Revenue by city");
     System.out.println("2. Revenue by venue within a city");
-    String choice = readLine("Select option: ");
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 2
+                    ? Optional.of("Select report option 1 or 2.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
 
 
     OperationResult<List<TicketRevenueReport>> result;
@@ -1311,19 +1344,20 @@ private void report1() {
 }
 
     switch (choice) {
-        case "1" -> {
+        case 1 -> {
             result = reports.report1a(
                     dates[0],
                     dates[1]
             );}
 
-        case "2" -> {
-            String city = readLine(
-                    "City: "
+        case 2 -> {
+            String city = readValidatedText(
+                    "City: ",
+                    value -> value.isBlank()
+                            ? Optional.of("City is required.")
+                            : Optional.empty()
             );
-            if (city.isBlank()) {
-                System.out.println("City is required.");
-                pause();
+            if (city == null) {
                 return;
             }
 
@@ -1847,13 +1881,25 @@ private void report7c() {
     printHeading("Sold-out / Under 25% Sell-through");
 
 
-    int year = Integer.parseInt(
-            readLine("Year: ")
+    Integer year = readValidatedInteger(
+            "Year: ",
+            value -> value < 1000 || value > 9999
+                    ? Optional.of("Enter a four-digit year.")
+                    : Optional.empty()
     );
+    if (year == null) {
+        return;
+    }
 
-    int month = Integer.parseInt(
-            readLine("Month: ")
+    Integer month = readValidatedInteger(
+            "Month: ",
+            value -> value < 1 || value > 12
+                    ? Optional.of("Month must be from 1 to 12.")
+                    : Optional.empty()
     );
+    if (month == null) {
+        return;
+    }
 
 
     OperationResult<List<SellThroughBucketReport>> result =
@@ -2168,6 +2214,34 @@ private void report9() {
         return null;
     }
 
+    private String readCheckedText(
+            String prompt,
+            Function<String, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            if (value.isBlank()) {
+                printInputError("A value is required.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+            OperationResult<Void> result = checker.apply(value);
+            if (result.isSuccess()) {
+                return value;
+            }
+            printResult(result);
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     private Integer readUniqueCheckedId(
             String prompt,
             Function<Integer, OperationResult<Void>> checker,
@@ -2239,6 +2313,27 @@ private void report9() {
                 return values;
             }
             printInputError("Enter unique positive IDs separated by commas.");
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<Integer> readCheckedPositiveIntList(
+            String prompt,
+            Function<List<Integer>, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            List<Integer> values = readPositiveIntListWithRetry(prompt);
+            if (values == null) {
+                return null;
+            }
+            OperationResult<Void> result = checker.apply(values);
+            if (result.isSuccess()) {
+                return values;
+            }
+            printResult(result);
             if (!promptToRetry()) {
                 return null;
             }

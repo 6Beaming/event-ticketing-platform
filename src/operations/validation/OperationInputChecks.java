@@ -1,0 +1,258 @@
+package operations.validation;
+
+import common.OperationResult;
+import database.TransactionManager;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.List;
+
+/**
+ * Read-only existence and relationship checks used while collecting terminal input.
+ * The operation itself must still repeat its transactional checks before changing data.
+ */
+public final class OperationInputChecks {
+    private final TransactionManager transactions;
+
+    public OperationInputChecks(TransactionManager transactions) {
+        if (transactions == null) {
+            throw new IllegalArgumentException("Transaction manager is required");
+        }
+        this.transactions = transactions;
+    }
+
+    public OperationResult<Void> checkActiveCustomer(int customerId) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT 1
+                    FROM Customer c
+                    JOIN Users u ON u.user_id = c.user_id
+                    WHERE c.user_id = ? AND u.account_status = 'active'
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, customerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("Active customer found.")
+                            : OperationResult.notFound("Active customer not found.");
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkActiveUser(int userId) {
+        if (userId <= 0) {
+            return OperationResult.invalidInput("User ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = "SELECT 1 FROM Users WHERE user_id = ? AND account_status = 'active'";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, userId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("Active user found.")
+                            : OperationResult.notFound("Active user not found.");
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkPerformance(int performanceId) {
+        return checkRecord(
+                performanceId,
+                "SELECT 1 FROM Performance WHERE performance_id = ?",
+                "Performance found.",
+                "Performance not found."
+        );
+    }
+
+    public OperationResult<Void> checkOwnedPerformance(int organizerId, int performanceId) {
+        if (organizerId <= 0 || performanceId <= 0) {
+            return OperationResult.invalidInput("Organizer and performance IDs must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT e.organizer_id
+                    FROM Performance p
+                    JOIN Event e ON e.event_id = p.event_id
+                    WHERE p.performance_id = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound("Performance not found.");
+                    }
+                    return rows.getInt("organizer_id") == organizerId
+                            ? OperationResult.success("Organizer manages the performance.")
+                            : OperationResult.forbidden(
+                                    "Only the event organizer can manage this performance."
+                            );
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkTicket(int ticketId) {
+        return checkRecord(
+                ticketId,
+                "SELECT 1 FROM Tickets WHERE ticket_id = ?",
+                "Ticket found.",
+                "Ticket not found."
+        );
+    }
+
+    public OperationResult<Void> checkTickets(List<Integer> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) {
+            return OperationResult.invalidInput("At least one ticket ID is required.");
+        }
+        return transactions.execute(connection -> {
+            String sql = "SELECT 1 FROM Tickets WHERE ticket_id = ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                for (Integer ticketId : ticketIds) {
+                    if (ticketId == null || ticketId <= 0) {
+                        return OperationResult.invalidInput("Ticket IDs must be positive.");
+                    }
+                    statement.setInt(1, ticketId);
+                    try (ResultSet rows = statement.executeQuery()) {
+                        if (!rows.next()) {
+                            return OperationResult.notFound("Ticket " + ticketId + " not found.");
+                        }
+                    }
+                }
+            }
+            return OperationResult.success("Tickets found.");
+        });
+    }
+
+    public OperationResult<Void> checkResaleListing(int listingId) {
+        return checkRecord(
+                listingId,
+                "SELECT 1 FROM ResaleListing WHERE listing_id = ?",
+                "Resale listing found.",
+                "Resale listing not found."
+        );
+    }
+
+    public OperationResult<Void> checkTier(int performanceId, String tierCode) {
+        if (performanceId <= 0 || tierCode == null || tierCode.isBlank()) {
+            return OperationResult.invalidInput("Performance ID and tier code are required.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT 1
+                    FROM PriceTier
+                    WHERE performance_id = ? AND tier_code = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                statement.setString(2, tierCode.trim());
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("Tier found.")
+                            : OperationResult.notFound(
+                                    "Tier not found for the selected performance."
+                            );
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkReservedSeat(
+            int performanceId,
+            int performanceSeatId
+    ) {
+        if (performanceId <= 0 || performanceSeatId <= 0) {
+            return OperationResult.invalidInput(
+                    "Performance and reserved-seat inventory IDs must be positive."
+            );
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT 1
+                    FROM PerformanceSeats
+                    WHERE performance_id = ? AND performance_seat_id = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                statement.setInt(2, performanceSeatId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("Reserved seat found.")
+                            : OperationResult.notFound(
+                                    "Reserved seat not found for the selected performance."
+                            );
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkReservedSeats(
+            int performanceId,
+            List<Integer> performanceSeatIds
+    ) {
+        if (performanceSeatIds == null || performanceSeatIds.isEmpty()) {
+            return OperationResult.invalidInput("At least one reserved-seat ID is required.");
+        }
+        for (Integer performanceSeatId : performanceSeatIds) {
+            OperationResult<Void> result = checkReservedSeat(performanceId, performanceSeatId);
+            if (!result.isSuccess()) {
+                return result;
+            }
+        }
+        return OperationResult.success("Reserved seats found.");
+    }
+
+    public OperationResult<Void> checkGeneralAdmissionSection(
+            int performanceId,
+            String sectionName
+    ) {
+        if (performanceId <= 0 || sectionName == null || sectionName.isBlank()) {
+            return OperationResult.invalidInput(
+                    "Performance ID and general-admission section are required."
+            );
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT 1
+                    FROM GeneralAdmissionCapacity
+                    WHERE performance_id = ? AND section_name = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                statement.setString(2, sectionName.trim());
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("General-admission section found.")
+                            : OperationResult.notFound(
+                                    "General-admission section not found for the selected performance."
+                            );
+                }
+            }
+        });
+    }
+
+    private OperationResult<Void> checkRecord(
+            int id,
+            String sql,
+            String successMessage,
+            String notFoundMessage
+    ) {
+        if (id <= 0) {
+            return OperationResult.invalidInput("ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, id);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success(successMessage)
+                            : OperationResult.notFound(notFoundMessage);
+                }
+            }
+        });
+    }
+}

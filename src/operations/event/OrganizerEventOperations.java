@@ -52,13 +52,22 @@ public final class OrganizerEventOperations {
         if (organizerId <= 0 || eventId <= 0) {
             return OperationResult.invalidInput("Organizer and event IDs must be positive.");
         }
-        return transactions.execute(connection -> eventOwnedByOrganizer(
-                connection,
-                organizerId,
-                eventId
-        )
-                ? OperationResult.success("Organizer owns the event.")
-                : OperationResult.forbidden("The organizer does not manage this event."));
+        return transactions.execute(connection -> {
+            String sql = "SELECT organizer_id FROM Event WHERE event_id = ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, eventId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound("Event not found.");
+                    }
+                    return rows.getInt("organizer_id") == organizerId
+                            ? OperationResult.success("Organizer owns the event.")
+                            : OperationResult.forbidden(
+                                    "The organizer does not manage this event."
+                            );
+                }
+            }
+        });
     }
 
     public OperationResult<Void> checkVenue(int venueId) {
