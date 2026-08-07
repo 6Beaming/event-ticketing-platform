@@ -17,7 +17,7 @@ public class RevenueImpactInput {
             BigDecimal proposedPrice,
             BigDecimal bandWidth
     ) {
-        this.comparablePerformanceIds = comparablePerformanceIds;
+        this.comparablePerformanceIds = List.copyOf(comparablePerformanceIds);
         this.currentPrice = currentPrice;
         this.proposedPrice = proposedPrice;
         this.bandWidth = bandWidth;

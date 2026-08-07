@@ -14,6 +14,7 @@ public class ComparablePerformance {
     private final int venueCapacity;
     private final LocalDateTime dateTime;
     private final int matchRank;
+    private final String selectionReason;
 
 
     public ComparablePerformance(
@@ -26,7 +27,8 @@ public class ComparablePerformance {
             String city,
             int venueCapacity,
             LocalDateTime dateTime,
-            int matchRank
+            int matchRank,
+            String selectionReason
     ) {
         this.performanceId = performanceId;
         this.title = title;
@@ -38,6 +40,7 @@ public class ComparablePerformance {
         this.venueCapacity = venueCapacity;
         this.dateTime = dateTime;
         this.matchRank = matchRank;
+        this.selectionReason = selectionReason;
     }
 
 
@@ -79,5 +82,9 @@ public class ComparablePerformance {
 
     public int getMatchRank() {
         return matchRank;
+    }
+
+    public String getSelectionReason() {
+        return selectionReason;
     }
 }

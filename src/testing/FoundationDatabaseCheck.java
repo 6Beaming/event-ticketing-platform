@@ -45,6 +45,12 @@ import queries.QueryOperations;
 import reports.ReportOperations;
 import reports.ResaleReport;
 import reports.ScalperDetectionReport;
+import toolkit.PricingRecommendation;
+import toolkit.PricingRecommendationInput;
+import toolkit.RevenueImpactEstimate;
+import toolkit.RevenueImpactInput;
+import toolkit.TierRecommendation;
+import toolkit.ToolkitOperations;
 
 import java.math.BigDecimal;
 import java.nio.file.Paths;
@@ -112,6 +118,7 @@ public final class FoundationDatabaseCheck {
         ReviewOperations reviews = new ReviewOperations(transactions);
         QueryOperations queries = new QueryOperations(transactions);
         ReportOperations reports = new ReportOperations(transactions);
+        ToolkitOperations toolkit = new ToolkitOperations(transactions);
 
         LocalDateTime queryStart = LocalDateTime.now(ZoneOffset.UTC).plusDays(1);
         LocalDateTime queryEnd = queryStart.plusDays(120);
@@ -249,6 +256,78 @@ public final class FoundationDatabaseCheck {
             );
         }
         requireRows(reports.report8b(reportStart, reportEnd), "R8 top resale volume");
+
+        OperationResult<PricingRecommendation> toolkitRecommendation =
+                toolkit.recommendPricing(new PricingRecommendationInput(
+                        DevelopmentIds.GENRE_ROCK,
+                        "Toronto",
+                        120,
+                        0.25,
+                        24,
+                        20
+                ));
+        requireSuccess(toolkitRecommendation, "organizer toolkit recommendation");
+        PricingRecommendation recommendation = toolkitRecommendation.getValue().orElseThrow();
+        if (recommendation.getTiers().isEmpty()
+                || recommendation.getComparablePerformances().isEmpty()) {
+            throw new IllegalStateException(
+                    "organizer toolkit did not use the seeded comparable performances"
+            );
+        }
+        BigDecimal capacityTotal = recommendation.getTiers().stream()
+                .map(TierRecommendation::getCapacityPct)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (capacityTotal.compareTo(new BigDecimal("100.0")) != 0) {
+            throw new IllegalStateException(
+                    "organizer toolkit capacity shares totalled " + capacityTotal
+            );
+        }
+        if (recommendation.getComparablePerformances().stream().anyMatch(
+                comparable -> comparable.getSelectionReason() == null
+                        || comparable.getSelectionReason().isBlank()
+        )) {
+            throw new IllegalStateException(
+                    "organizer toolkit did not explain its comparable selections"
+            );
+        }
+
+        OperationResult<PricingRecommendation> expandedToolkitRecommendation =
+                toolkit.recommendPricing(new PricingRecommendationInput(
+                        DevelopmentIds.GENRE_ROCK,
+                        "No Historical City",
+                        120,
+                        0.25,
+                        24,
+                        20
+                ));
+        requireSuccess(expandedToolkitRecommendation, "organizer toolkit expanded fallback");
+        if (!expandedToolkitRecommendation.getValue().orElseThrow().isFallbackUsed()) {
+            throw new IllegalStateException(
+                    "organizer toolkit did not identify the expanded fallback"
+            );
+        }
+
+        OperationResult<RevenueImpactEstimate> revenueImpact = toolkit.estimateRevenueImpact(
+                new RevenueImpactInput(
+                        recommendation.getComparablePerformanceIds(),
+                        new BigDecimal("80.00"),
+                        new BigDecimal("100.00"),
+                        new BigDecimal("5000.00")
+                )
+        );
+        requireSuccess(revenueImpact, "organizer toolkit revenue-change estimate");
+        RevenueImpactEstimate estimate = revenueImpact.getValue().orElseThrow();
+        BigDecimal calculatedChange = estimate.getProposedExpectedRevenue()
+                .subtract(estimate.getCurrentExpectedRevenue())
+                .setScale(2);
+        if (estimate.getCurrentSampleSize() <= 0
+                || estimate.getProposedSampleSize() <= 0
+                || estimate.getExpectedRevenueChange().compareTo(calculatedChange) != 0
+                || estimate.getExpectedRevenueChange().signum() <= 0) {
+            throw new IllegalStateException(
+                    "organizer toolkit revenue-change estimate was inconsistent"
+            );
+        }
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"

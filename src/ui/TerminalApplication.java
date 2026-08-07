@@ -65,6 +65,7 @@ import queries.SeatMapSummaryQuery;
 import queries.BestAvailableQuery;
 
 import toolkit.ToolkitOperations;
+import toolkit.ComparablePerformance;
 import toolkit.PricingRecommendation;
 import toolkit.PricingRecommendationInput;
 import toolkit.TierRecommendation;
@@ -3140,69 +3141,104 @@ private void report9() {
 
     pause();
 }
-private void showToolkit(){
-    printHeading("Performance Pricing Recommendation");
-    int genreId = readPositiveIntWithRetry("Genre ID :");
-    String city = readLine("City : ");
-    int venueCapacity = readPositiveIntWithRetry("Venue capacity: ");
-    PricingRecommendationInput input =
-        new PricingRecommendationInput(
+    private void showToolkit() {
+        printHeading("Performance pricing recommendation");
+        int genreId = readPositiveIntWithRetry("Genre ID: ");
+        String city = readValidatedText(
+                "City: ",
+                value -> value == null || value.isBlank()
+                        ? Optional.of("City is required.")
+                        : Optional.empty()
+        );
+        if (city == null) {
+            return;
+        }
+        int venueCapacity = readPositiveIntWithRetry("Venue capacity: ");
+
+        PricingRecommendationInput input = new PricingRecommendationInput(
                 genreId,
-                city,
+                city.trim(),
                 venueCapacity,
                 0.25,
                 24,
                 20
         );
-    OperationResult<PricingRecommendation> result =
-            toolkit.recommendPricing(input);
-    printResult(result);
+        OperationResult<PricingRecommendation> result = toolkit.recommendPricing(input);
+        printResult(result);
+        PricingRecommendation recommendation = result.getValue().orElse(null);
+        if (recommendation == null) {
+            pause();
+            return;
+        }
 
-    PricingRecommendation recommendation = result.getValue().orElse(null);
-
-    result.getValue().ifPresent(rec -> {
         System.out.println();
-        System.out.println(
-                "Comparable performances used: "
-                + rec.getComparablesUsed()
-        );
-        System.out.println(
-                "Recommended number of tiers: "
-                + rec.getTierCount()
-        );
+        System.out.println("Recommendation method:");
+        System.out.println(recommendation.getStrategyDescription());
+        System.out.println();
+        System.out.println("Comparable performances used: "
+                + recommendation.getComparablesUsed());
+        System.out.println("Recommended number of tiers: "
+                + recommendation.getTierCount());
+        if (recommendation.getExpectedRevenue().signum() > 0) {
+            System.out.println("Average historical primary-ticket revenue: $"
+                    + recommendation.getExpectedRevenue().toPlainString());
+        }
+
         System.out.println();
         System.out.printf(
                 "%-12s %-20s %-20s%n",
                 "Tier",
                 "Capacity %",
-                "Suggested Price"
+                "Suggested price"
         );
-        System.out.println(
-                "------------------------------------------------"
-        );
-        for (TierRecommendation tier :
-                rec.getTiers()) {
+        System.out.println("------------------------------------------------");
+        for (TierRecommendation tier : recommendation.getTiers()) {
             System.out.printf(
                     "%-12d %-20s $%-20s%n",
                     tier.getTierRank(),
-                    tier.getCapacityPct(),
-                    tier.getSuggestedPrice()
+                    tier.getCapacityPct().toPlainString(),
+                    tier.getSuggestedPrice().toPlainString()
             );
         }
-    });
-    pause();
-    System.out.println("\n----------------------------------------\n");
-    boolean inMenu = true;
-        while (running && inMenu) {
-            System.out.println("1. Estimate revenue impact of changing a price tier : \n");
-            System.out.println("0. Back");
-            switch (readLine("Select an option: ")) {
-                case "1" -> {estimateRevenueImpact(recommendation); return;}
-                case "0" -> { return; }
-                default -> System.out.println("Unknown profile option.");
+
+        System.out.println();
+        if (recommendation.getComparablePerformances().isEmpty()) {
+            System.out.println("Historical comparables: none; the documented rule-based fallback was used.");
+        } else {
+            System.out.println("Comparable performances that influenced this recommendation:");
+            for (ComparablePerformance comparable :
+                    recommendation.getComparablePerformances()) {
+                System.out.printf(
+                        "- %d | %s | %s/%s | %s, %s | capacity %d%n",
+                        comparable.getPerformanceId(),
+                        comparable.getTitle(),
+                        comparable.getSegmentName(),
+                        comparable.getGenreName(),
+                        comparable.getVenueName(),
+                        comparable.getCity(),
+                        comparable.getVenueCapacity()
+                );
+                System.out.println("  Why selected: " + comparable.getSelectionReason());
             }
         }
-}
+
+        pause();
+        while (running) {
+            System.out.println();
+            System.out.println("1. Estimate revenue change for a tier-price change");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> {
+                    estimateRevenueImpact(recommendation);
+                    return;
+                }
+                case "0" -> {
+                    return;
+                }
+                default -> System.out.println("Unknown toolkit option.");
+            }
+        }
+    }
 
 private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
     if (lastRecommendation == null
@@ -3225,9 +3261,27 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
             + " comparable performance(s) from the recommendation above."
     );
 
-    BigDecimal currentPrice = BigDecimal.valueOf(readPositiveIntWithRetry("Current price: $"));
-    BigDecimal proposedPrice = BigDecimal.valueOf(readPositiveIntWithRetry("Proposed price: $"));
-    BigDecimal bandWidth = BigDecimal.valueOf(readPositiveIntWithRetry("Band width ($): "));
+    BigDecimal currentPrice = readDecimalWithRetry(
+            "Current price: $",
+            value -> value.signum() > 0
+                    ? Optional.empty()
+                    : Optional.of("Current price must be positive.")
+    );
+    BigDecimal proposedPrice = readDecimalWithRetry(
+            "Proposed price: $",
+            value -> value.signum() > 0
+                    ? Optional.empty()
+                    : Optional.of("Proposed price must be positive.")
+    );
+    BigDecimal bandWidth = readDecimalWithRetry(
+            "Band width ($): ",
+            value -> value.signum() > 0
+                    ? Optional.empty()
+                    : Optional.of("Band width must be positive.")
+    );
+    if (currentPrice == null || proposedPrice == null || bandWidth == null) {
+        return;
+    }
 
     RevenueImpactInput input =
             new RevenueImpactInput(
@@ -3243,18 +3297,24 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
 
     result.getValue().ifPresent(estimate -> {
         System.out.println();
-        System.out.println(
-                "Comparable tiers used: "
-                + estimate.getSampleSize()
-        );
+        System.out.println("Current-price comparable tiers: "
+                + estimate.getCurrentSampleSize());
         System.out.printf(
-                "Expected sell-through: %.1f%%%n",
-                estimate.getExpectedSellThroughPct()
+                "Expected sell-through at current price: %.1f%%%n",
+                estimate.getCurrentExpectedSellThroughPct()
         );
-        System.out.println(
-                "Expected revenue at proposed price: $"
-                + estimate.getExpectedRevenue()
+        System.out.println("Expected revenue at current price: $"
+                + estimate.getCurrentExpectedRevenue().toPlainString());
+        System.out.println("Proposed-price comparable tiers: "
+                + estimate.getProposedSampleSize());
+        System.out.printf(
+                "Expected sell-through at proposed price: %.1f%%%n",
+                estimate.getProposedExpectedSellThroughPct()
         );
+        System.out.println("Expected revenue at proposed price: $"
+                + estimate.getProposedExpectedRevenue().toPlainString());
+        System.out.println("Estimated revenue change: $"
+                + estimate.getExpectedRevenueChange().toPlainString());
     });
 
     pause();

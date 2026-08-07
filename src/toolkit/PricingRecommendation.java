@@ -9,7 +9,9 @@ public class PricingRecommendation {
     private final List<TierRecommendation> tiers;
     private final int comparablesUsed;
     private final BigDecimal expectedRevenue;
-    private final List<Integer> comparablePerformanceIds;
+    private final List<ComparablePerformance> comparablePerformances;
+    private final boolean fallbackUsed;
+    private final String strategyDescription;
 
 
     public PricingRecommendation(
@@ -17,13 +19,17 @@ public class PricingRecommendation {
             List<TierRecommendation> tiers,
             int comparablesUsed,
             BigDecimal expectedRevenue,
-            List<Integer> comparablePerformanceIds
+            List<ComparablePerformance> comparablePerformances,
+            boolean fallbackUsed,
+            String strategyDescription
     ) {
         this.tierCount = tierCount;
-        this.tiers = tiers;
+        this.tiers = List.copyOf(tiers);
         this.comparablesUsed = comparablesUsed;
         this.expectedRevenue = expectedRevenue;
-        this.comparablePerformanceIds = comparablePerformanceIds;
+        this.comparablePerformances = List.copyOf(comparablePerformances);
+        this.fallbackUsed = fallbackUsed;
+        this.strategyDescription = strategyDescription;
     }
 
 
@@ -54,6 +60,20 @@ public class PricingRecommendation {
      * of the user having to re-enter or re-look-up IDs.
      */
     public List<Integer> getComparablePerformanceIds() {
-        return comparablePerformanceIds;
+        return comparablePerformances.stream()
+                .map(ComparablePerformance::getPerformanceId)
+                .toList();
+    }
+
+    public List<ComparablePerformance> getComparablePerformances() {
+        return comparablePerformances;
+    }
+
+    public boolean isFallbackUsed() {
+        return fallbackUsed;
+    }
+
+    public String getStrategyDescription() {
+        return strategyDescription;
     }
 }

@@ -5,13 +5,13 @@ import java.math.BigDecimal;
 public class TierRecommendation {
 
     private final int tierRank;
-    private final double capacityPct;
+    private final BigDecimal capacityPct;
     private final BigDecimal suggestedPrice;
 
 
     public TierRecommendation(
             int tierRank,
-            double capacityPct,
+            BigDecimal capacityPct,
             BigDecimal suggestedPrice
     ) {
         this.tierRank = tierRank;
@@ -25,7 +25,7 @@ public class TierRecommendation {
     }
 
 
-    public double getCapacityPct() {
+    public BigDecimal getCapacityPct() {
         return capacityPct;
     }
 

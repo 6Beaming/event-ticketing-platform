@@ -4,33 +4,59 @@ import java.math.BigDecimal;
 
 public class RevenueImpactEstimate {
 
-    private final double expectedSellThroughPct;
-    private final BigDecimal expectedRevenue;
-    private final int sampleSize;
+    private final double currentExpectedSellThroughPct;
+    private final double proposedExpectedSellThroughPct;
+    private final BigDecimal currentExpectedRevenue;
+    private final BigDecimal proposedExpectedRevenue;
+    private final BigDecimal expectedRevenueChange;
+    private final int currentSampleSize;
+    private final int proposedSampleSize;
 
 
     public RevenueImpactEstimate(
-            double expectedSellThroughPct,
-            BigDecimal expectedRevenue,
-            int sampleSize
+            double currentExpectedSellThroughPct,
+            double proposedExpectedSellThroughPct,
+            BigDecimal currentExpectedRevenue,
+            BigDecimal proposedExpectedRevenue,
+            BigDecimal expectedRevenueChange,
+            int currentSampleSize,
+            int proposedSampleSize
     ) {
-        this.expectedSellThroughPct = expectedSellThroughPct;
-        this.expectedRevenue = expectedRevenue;
-        this.sampleSize = sampleSize;
+        this.currentExpectedSellThroughPct = currentExpectedSellThroughPct;
+        this.proposedExpectedSellThroughPct = proposedExpectedSellThroughPct;
+        this.currentExpectedRevenue = currentExpectedRevenue;
+        this.proposedExpectedRevenue = proposedExpectedRevenue;
+        this.expectedRevenueChange = expectedRevenueChange;
+        this.currentSampleSize = currentSampleSize;
+        this.proposedSampleSize = proposedSampleSize;
     }
 
 
-    public double getExpectedSellThroughPct() {
-        return expectedSellThroughPct;
+    public double getCurrentExpectedSellThroughPct() {
+        return currentExpectedSellThroughPct;
     }
 
-
-    public BigDecimal getExpectedRevenue() {
-        return expectedRevenue;
+    public double getProposedExpectedSellThroughPct() {
+        return proposedExpectedSellThroughPct;
     }
 
+    public BigDecimal getCurrentExpectedRevenue() {
+        return currentExpectedRevenue;
+    }
 
-    public int getSampleSize() {
-        return sampleSize;
+    public BigDecimal getProposedExpectedRevenue() {
+        return proposedExpectedRevenue;
+    }
+
+    public BigDecimal getExpectedRevenueChange() {
+        return expectedRevenueChange;
+    }
+
+    public int getCurrentSampleSize() {
+        return currentSampleSize;
+    }
+
+    public int getProposedSampleSize() {
+        return proposedSampleSize;
     }
 }

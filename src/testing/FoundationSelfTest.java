@@ -25,6 +25,9 @@ import operations.resale.ResaleOperations;
 import operations.review.ReviewOperations;
 import queries.LocationSearchInput;
 import queries.QueryOperations;
+import toolkit.PricingRecommendationInput;
+import toolkit.RevenueImpactInput;
+import toolkit.ToolkitOperations;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -73,6 +76,7 @@ public final class FoundationSelfTest {
         test("Q4 and Q5 search inputs are validated", this::searchInputsValidated);
         test("Q4 and Q5 SQL parameters are bound", this::searchSqlParametersBound);
         test("date-only ranges include the complete end date", this::dateRangesAreInclusive);
+        test("organizer toolkit rejects invalid requests", this::toolkitRequestsValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -538,6 +542,27 @@ public final class FoundationSelfTest {
     @FunctionalInterface
     private interface CheckedTest {
         void run() throws Exception;
+    }
+
+    private void toolkitRequestsValidated() {
+        FakeConnection fake = new FakeConnection();
+        ToolkitOperations toolkit = new ToolkitOperations(new TransactionManager(fake.provider()));
+        OperationResult<?> missingCity = toolkit.recommendPricing(
+                new PricingRecommendationInput(4101, " ", 120, 0.25, 24, 20)
+        );
+        assertEquals(OperationStatus.INVALID_INPUT, missingCity.getStatus());
+
+        OperationResult<?> missingComparables = toolkit.estimateRevenueImpact(
+                new RevenueImpactInput(
+                        List.of(),
+                        new BigDecimal("80.00"),
+                        new BigDecimal("100.00"),
+                        new BigDecimal("20.00")
+                )
+        );
+        assertEquals(OperationStatus.INVALID_INPUT, missingComparables.getStatus());
+        assertEquals(0, fake.commits);
+        assertEquals(0, fake.rollbacks);
     }
 
     private static final class QueryRecorder implements InvocationHandler {
