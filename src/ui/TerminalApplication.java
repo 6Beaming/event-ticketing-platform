@@ -3,23 +3,40 @@ package ui;
 import common.OperationResult;
 import database.DatabaseConnection;
 import database.TransactionManager;
+import operations.booking.BookingOperations;
+import operations.booking.BookingSummary;
+import operations.cancellation.CancellationOperations;
+import operations.cancellation.CancellationSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
+import operations.event.OrganizerPerformanceSalesHistory;
 import operations.event.PerformanceInput;
 import operations.inventory.GeneralAdmissionAvailability;
 import operations.inventory.InventoryOperations;
+import operations.inventory.InventoryState;
 import operations.inventory.ReservedSeatAvailability;
+import operations.inventory.ReservedSeatLocation;
 import operations.pricing.PerformancePricingOperations;
 import operations.pricing.PricingSetupInput;
 import operations.pricing.PricingSetupSummary;
 import operations.pricing.SectionTierInput;
 import operations.pricing.TierInput;
 import operations.profile.CustomerProfile;
+import operations.profile.CustomerOrderHistoryEntry;
 import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
 import operations.profile.UserProfileOperations;
+import operations.resale.AvailableResaleTicket;
+import operations.resale.OwnedResaleTicket;
+import operations.resale.ResaleListingSummary;
+import operations.resale.ResaleOperations;
+import operations.resale.ResalePurchaseSummary;
+import operations.resale.TicketOwnershipHistoryEntry;
+import operations.review.CustomerReview;
+import operations.review.ReviewOperations;
+import operations.validation.OperationInputChecks;
 
 import reports.ReportOperations;
 import reports.TicketRevenueReport;
@@ -74,9 +91,14 @@ public final class TerminalApplication {
     private final Scanner input;
     private final DatabaseConnection database;
     private final UserProfileOperations profiles;
+    private final BookingOperations bookings;
+    private final CancellationOperations cancellations;
     private final OrganizerEventOperations events;
     private final PerformancePricingOperations pricing;
     private final InventoryOperations inventory;
+    private final ResaleOperations resale;
+    private final ReviewOperations reviews;
+    private final OperationInputChecks inputChecks;
     private final ReportOperations reports;
     private final QueryOperations queries;
     private final ToolkitOperations toolkit;
@@ -91,9 +113,14 @@ public final class TerminalApplication {
         this.database = database;
         TransactionManager transactions = new TransactionManager(database);
         this.profiles = new UserProfileOperations(transactions);
+        this.bookings = new BookingOperations(transactions);
+        this.cancellations = new CancellationOperations(transactions);
         this.events = new OrganizerEventOperations(transactions);
         this.pricing = new PerformancePricingOperations(transactions);
         this.inventory = new InventoryOperations(transactions);
+        this.resale = new ResaleOperations(transactions);
+        this.reviews = new ReviewOperations(transactions);
+        this.inputChecks = new OperationInputChecks(transactions);
         this.reports = new ReportOperations(transactions);
         this.queries = new QueryOperations(transactions);
         this.toolkit = new ToolkitOperations(transactions);
@@ -113,7 +140,7 @@ public final class TerminalApplication {
         System.out.println();
         System.out.println("============================================================");
         System.out.println("                         MyTix");
-        System.out.println("        Event ticketing database terminal foundation");
+        System.out.println("             Event ticketing database terminal");
         System.out.println("============================================================");
     }
 
@@ -125,7 +152,7 @@ public final class TerminalApplication {
         System.out.println(" 2. Organizer events and performances");
         System.out.println(" 3. Performance pricing and inventory");
         System.out.println(" 4. Ticket booking and cancellations");
-        System.out.println(" 5. Ticket resale");
+        System.out.println(" 5. Ticket resale and histories");
         System.out.println(" 6. Attendance reviews");
         System.out.println(" 7. Searches (Q1-Q7)");
         System.out.println(" 8. Reports (R1-R9)");
@@ -139,18 +166,9 @@ public final class TerminalApplication {
             case "1" -> showProfileMenu();
             case "2" -> showEventMenu();
             case "3" -> showPricingAndInventoryMenu();
-            case "4" -> showLaterModule(
-                    "Ticket booking and cancellations",
-                    "Reserved/GA booking and cancellation are scheduled for August 1-3."
-            );
-            case "5" -> showLaterModule(
-                    "Ticket resale",
-                    "Listing, withdrawal, purchase, and ownership transfer are scheduled for August 1-3."
-            );
-            case "6" -> showLaterModule(
-                    "Attendance reviews",
-                    "Attendance-based reviews are scheduled for August 1-3."
-            );
+            case "4" -> showBookingAndCancellationMenu();
+            case "5" -> showResaleMenu();
+            case "6" -> showReviewMenu();
             case "7" -> showSearches();
             case "8" -> showReports();
             case "9" -> showToolkit();
@@ -171,12 +189,14 @@ public final class TerminalApplication {
             System.out.println("2. Create organizer profile");
             System.out.println("3. View customer profile");
             System.out.println("4. Deactivate user profile");
+            System.out.println("5. View customer order and ticket history");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createCustomer);
                 case "2" -> runOnlineAction(this::createOrganizer);
                 case "3" -> runOnlineAction(this::viewCustomer);
                 case "4" -> runOnlineAction(this::deactivateUser);
+                case "5" -> runOnlineAction(this::viewCustomerOrderHistory);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown profile option.");
             }
@@ -356,17 +376,6 @@ public final class TerminalApplication {
         return null;
     }
 
-    private LocalDateTime readDateTime(String prompt) {
-    String value = readLine(prompt);
-
-    try {
-        return LocalDateTime.parse(value, DATE_TIME_FORMAT);
-    } catch (DateTimeParseException exception) {
-        System.out.println("Enter date and time in YYYY-MM-DD HH:mm format.");
-        return null;
-    }
-}
-
     private void printInputError(String message) {
         System.out.println("INVALID_INPUT: " + message);
     }
@@ -389,9 +398,8 @@ public final class TerminalApplication {
     }
 
     private void viewCustomer() {
-        Integer customerId = readPositiveInt("Customer ID: ");
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkCustomer);
         if (customerId == null) {
-            pause();
             return;
         }
         OperationResult<CustomerProfile> result = profiles.getCustomerProfile(customerId);
@@ -411,10 +419,77 @@ public final class TerminalApplication {
         pause();
     }
 
-    private void deactivateUser() {
-        Integer userId = readPositiveInt("User ID to deactivate: ");
-        if (userId == null) {
+    private void viewCustomerOrderHistory() {
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkCustomer);
+        if (customerId == null) {
+            return;
+        }
+        OperationResult<List<CustomerOrderHistoryEntry>> result =
+                profiles.getCustomerOrderHistory(customerId);
+        printResult(result);
+        if (!result.isSuccess()) {
             pause();
+            return;
+        }
+
+        List<CustomerOrderHistoryEntry> history = result.getValue().orElseThrow();
+        if (history.isEmpty()) {
+            System.out.println("No order or ticket history found for this customer.");
+            pause();
+            return;
+        }
+
+        int displayedOrderId = -1;
+        for (CustomerOrderHistoryEntry entry : history) {
+            if (entry.getOrderId() != displayedOrderId) {
+                displayedOrderId = entry.getOrderId();
+                System.out.println();
+                System.out.println("Order ID: " + entry.getOrderId());
+                System.out.println("Order type: "
+                        + entry.getOrderType().toUpperCase(Locale.ROOT));
+                System.out.println("Order date: "
+                        + entry.getOrderDate().format(DATE_TIME_FORMAT));
+                System.out.println("Payment card: " + entry.getMaskedCardNumber());
+            }
+
+            String location = entry.getRowName() == null
+                    ? entry.getSectionName() + " (general admission)"
+                    : entry.getSectionName() + ", row " + entry.getRowName()
+                            + ", seat " + entry.getSeatNumber();
+            System.out.println("  Ticket ID: " + entry.getTicketId());
+            System.out.println("    Performance: " + entry.getPerformanceId()
+                    + " - " + entry.getEventTitle());
+            System.out.println("    Date/status: "
+                    + entry.getPerformanceDateTime().format(DATE_TIME_FORMAT)
+                    + " / " + entry.getPerformanceStatus());
+            System.out.println("    Venue: " + entry.getVenueName()
+                    + " (" + entry.getVenueCity() + ")");
+            System.out.println("    Location/tier: " + location
+                    + " / " + entry.getTierCode());
+            System.out.println("    Paid: $" + entry.getPurchasePrice().toPlainString()
+                    + " / ticket status: " + entry.getTicketStatus());
+            System.out.println("    Ownership acquired: "
+                    + entry.getAcquiredAt().format(DATE_TIME_FORMAT));
+            System.out.println("    Ownership: "
+                    + (entry.getOwnershipEndedAt() == null
+                            ? "current"
+                            : "ended "
+                                    + entry.getOwnershipEndedAt().format(DATE_TIME_FORMAT)));
+            if (entry.getCancellationDate() != null) {
+                System.out.println("    Cancelled: "
+                        + entry.getCancellationDate().format(DATE_TIME_FORMAT)
+                        + " / refund: $" + entry.getRefundAmount().toPlainString());
+            }
+        }
+        pause();
+    }
+
+    private void deactivateUser() {
+        Integer userId = readCheckedId(
+                "User ID to deactivate: ",
+                inputChecks::checkActiveUser
+        );
+        if (userId == null) {
             return;
         }
         String confirmation = readLine("Type DEACTIVATE to make this profile anonymous while preserving the history");
@@ -433,10 +508,14 @@ public final class TerminalApplication {
             printHeading("Organizer events and performances");
             System.out.println("1. Create event with artist billing");
             System.out.println("2. Add performance");
+            System.out.println("3. Update event resale cap");
+            System.out.println("4. View managed events and performance sales history");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createEvent);
                 case "2" -> runOnlineAction(this::addPerformance);
+                case "3" -> runOnlineAction(this::updateResaleCap);
+                case "4" -> runOnlineAction(this::viewOrganizerSalesHistory);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown event option.");
             }
@@ -511,6 +590,7 @@ public final class TerminalApplication {
             }
             Integer rank = readUniquePositiveInt(
                     "Billing rank for artist/team " + index + ": ",
+                    artistCount,
                     billingRanks,
                     "Billing ranks must be unique within an event."
             );
@@ -532,7 +612,10 @@ public final class TerminalApplication {
 
     private void addPerformance() {
         while (running) {
-            Integer eventId = readCheckedId("Event ID: ", events::checkEvent);
+            Integer eventId = readCheckedId(
+                    "Event ID: ",
+                    events::checkEvent
+            );
             if (eventId == null) {
                 return;
             }
@@ -562,18 +645,111 @@ public final class TerminalApplication {
         }
     }
 
+    private void updateResaleCap() {
+        Integer eventId = readCheckedId(
+                "Event ID: ",
+                events::checkEvent
+        );
+        if (eventId == null) {
+            return;
+        }
+        BigDecimal cap = readDecimalWithRetry(
+                "New resale cap multiplier: ",
+                value -> value.compareTo(BigDecimal.ONE) < 0
+                        ? Optional.of("Resale cap multiplier must be at least 1.00.")
+                        : Optional.empty()
+        );
+        if (cap == null) {
+            return;
+        }
+        printResult(events.updateResaleCap(eventId, cap));
+        pause();
+    }
+
+    private void viewOrganizerSalesHistory() {
+        Integer organizerId = readCheckedId("Organizer ID: ", inputChecks::checkOrganizer);
+        if (organizerId == null) {
+            return;
+        }
+        OperationResult<List<OrganizerPerformanceSalesHistory>> result =
+                events.getOrganizerPerformanceSalesHistory(organizerId);
+        printResult(result);
+        if (!result.isSuccess()) {
+            pause();
+            return;
+        }
+
+        List<OrganizerPerformanceSalesHistory> history = result.getValue().orElseThrow();
+        if (history.isEmpty()) {
+            System.out.println("This organizer does not manage any events.");
+            pause();
+            return;
+        }
+
+        int displayedEventId = -1;
+        Integer displayedPerformanceId = null;
+        for (OrganizerPerformanceSalesHistory entry : history) {
+            if (entry.getEventId() != displayedEventId) {
+                displayedEventId = entry.getEventId();
+                displayedPerformanceId = null;
+                System.out.println();
+                System.out.println("Event " + entry.getEventId()
+                        + ": " + entry.getEventTitle());
+            }
+            if (entry.getPerformanceId() == null) {
+                System.out.println("  No performances have been added.");
+                continue;
+            }
+            if (!entry.getPerformanceId().equals(displayedPerformanceId)) {
+                displayedPerformanceId = entry.getPerformanceId();
+                System.out.println("  Performance ID: " + entry.getPerformanceId());
+                System.out.println("    Date/status: "
+                        + entry.getPerformanceDateTime().format(DATE_TIME_FORMAT)
+                        + " / " + entry.getPerformanceStatus());
+                System.out.println("    Venue: " + entry.getVenueName()
+                        + " (" + entry.getVenueCity() + ")");
+                System.out.println("    Original sales: " + entry.getOriginalTicketCount()
+                        + " tickets / $" + entry.getOriginalGrossRevenue().toPlainString());
+                System.out.println("    Ticket status: " + entry.getActiveTicketCount()
+                        + " active / " + entry.getCancelledTicketCount() + " cancelled");
+                System.out.println("    Refunds: $" + entry.getRefundedAmount().toPlainString());
+                System.out.println("    Completed resales: " + entry.getCompletedResaleCount()
+                        + " / $" + entry.getResaleGrossRevenue().toPlainString());
+                System.out.println("    Sales:");
+            }
+            if (entry.getTransactionId() == null) {
+                System.out.println("      No sales recorded.");
+                continue;
+            }
+            System.out.println("      Transaction " + entry.getTransactionId()
+                    + " / " + entry.getTransactionType().toUpperCase(Locale.ROOT)
+                    + " / " + entry.getTransactionDate().format(DATE_TIME_FORMAT));
+            System.out.println("        Customer: " + entry.getCustomerId()
+                    + " - " + entry.getCustomerName());
+            System.out.println("        Ticket: " + entry.getTicketId()
+                    + " / $" + entry.getSalePrice().toPlainString());
+        }
+        pause();
+    }
+
     private void showPricingAndInventoryMenu() {
         boolean inMenu = true;
         while (running && inMenu) {
             printHeading("Performance pricing and inventory");
-            System.out.println("1. Configure tiers and all section assignments");
-            System.out.println("2. View reserved-seat inventory");
-            System.out.println("3. View general-admission inventory");
+            System.out.println("1. View reserved-seat inventory");
+            System.out.println("2. View general-admission inventory");
+            System.out.println("3. Configure tiers and all section assignments");
+            System.out.println("4. Update one tier price");
+            System.out.println("5. Block a reserved seat");
+            System.out.println("6. Unblock a reserved seat");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
-                case "1" -> runOnlineAction(this::configurePricing);
-                case "2" -> runOnlineAction(this::viewReservedInventory);
-                case "3" -> runOnlineAction(this::viewGeneralInventory);
+                case "1" -> runOnlineAction(this::viewReservedInventory);
+                case "2" -> runOnlineAction(this::viewGeneralInventory);
+                case "3" -> runOnlineAction(this::configurePricing);
+                case "4" -> runOnlineAction(this::updateTierPrice);
+                case "5" -> runOnlineAction(() -> changeSeatBlock(true));
+                case "6" -> runOnlineAction(() -> changeSeatBlock(false));
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown pricing/inventory option.");
             }
@@ -582,17 +758,23 @@ public final class TerminalApplication {
 
     private void configurePricing() {
         while (running) {
-            PricingSetupInput input = readPricingSetup();
-            if (input == null) {
+            PricingSetupInput pricingInput = readPricingSetup();
+            if (pricingInput == null) {
                 return;
             }
-            OperationResult<PricingSetupSummary> result = pricing.configurePricing(input);
+            OperationResult<PricingSetupSummary> result =
+                    pricing.configurePricing(pricingInput);
             printResult(result);
             if (result.isSuccess()) {
                 result.getValue().ifPresent(summary -> {
                     System.out.println("Performance ID: " + summary.getPerformanceId());
                     System.out.println("Tiers created: " + summary.getTierCount());
                     System.out.println("Sections assigned: " + summary.getAssignedSectionCount());
+                    System.out.println("Tier and section map:");
+                    for (SectionTierInput assignment : pricingInput.getAssignments()) {
+                        System.out.println("  " + assignment.getSectionName()
+                                + " -> " + assignment.getTierCode());
+                    }
                 });
                 pause();
                 return;
@@ -677,51 +859,11 @@ public final class TerminalApplication {
             tiers.add(new TierInput(code, price));
         }
 
-        Integer assignmentCount = readValidatedInteger(
-                "Number of venue sections to assign: ",
-                value -> value != requiredAssignments
-                        ? Optional.of("This venue has " + requiredAssignments
-                                + " sections; enter " + requiredAssignments + " assignments.")
-                        : Optional.empty()
-        );
-        if (assignmentCount == null) {
-            return null;
-        }
-
-        Set<String> validSections = new HashSet<>();
-        for (String section : venueSections) {
-            validSections.add(normalize(section));
-        }
-        Set<String> assignedSections = new HashSet<>();
         Set<String> assignedTierCodes = new HashSet<>();
         List<SectionTierInput> assignments = new ArrayList<>();
-        for (int index = 1; index <= assignmentCount; index++) {
-            String section = readValidatedText(
-                    "Section " + index + " name: ",
-                    value -> {
-                        String normalized = normalize(value);
-                        if (normalized.isEmpty()) {
-                            return Optional.of("A section name is required.");
-                        }
-                        if (!validSections.contains(normalized)) {
-                            return Optional.of(
-                                    "Enter a section belonging to the performance venue."
-                            );
-                        }
-                        if (assignedSections.contains(normalized)) {
-                            return Optional.of(
-                                    "A section can be assigned only once for a performance."
-                            );
-                        }
-                        return Optional.empty();
-                    }
-            );
-            if (section == null) {
-                return null;
-            }
-            assignedSections.add(normalize(section));
-
-            int remainingAssignments = assignmentCount - index;
+        for (int index = 0; index < requiredAssignments; index++) {
+            String section = venueSections.get(index);
+            int remainingAssignments = requiredAssignments - index - 1;
             String tierCode = readValidatedText(
                     "Tier code for " + section + ": ",
                     value -> {
@@ -749,6 +891,83 @@ public final class TerminalApplication {
         return new PricingSetupInput(performanceId, tiers, assignments);
     }
 
+    private void updateTierPrice() {
+        while (running) {
+            Integer performanceId = readCheckedId(
+                    "Performance ID: ",
+                    pricing::checkPerformanceForTierPriceUpdate
+            );
+            if (performanceId == null) {
+                return;
+            }
+            String tierCode = readCheckedText(
+                    "Tier: ",
+                    value -> pricing.checkTierForPriceUpdate(performanceId, value)
+            );
+            if (tierCode == null) {
+                return;
+            }
+            BigDecimal price = readDecimalWithRetry(
+                    "New tier price: ",
+                    value -> value.compareTo(BigDecimal.ZERO) <= 0
+                            ? Optional.of("Tier price must be positive.")
+                            : Optional.empty()
+            );
+            if (price == null) {
+                return;
+            }
+            OperationResult<Void> result = pricing.updateTierPrice(
+                    performanceId,
+                    tierCode,
+                    price
+            );
+            printResult(result);
+            if (result.isSuccess()) {
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
+        }
+    }
+
+    private void changeSeatBlock(boolean block) {
+        while (running) {
+            Integer performanceId = readCheckedId(
+                    "Performance ID: ",
+                    inventory::checkPerformanceForSeatBlocking
+            );
+            if (performanceId == null) {
+                return;
+            }
+            String rowName = readValidatedText(
+                    "Row: ",
+                    value -> value.isBlank()
+                            ? Optional.of("A row letter is required.")
+                            : Optional.empty()
+            );
+            if (rowName == null) {
+                return;
+            }
+            Integer seatNumber = readPositiveIntWithRetry("Seat#: ");
+            if (seatNumber == null) {
+                return;
+            }
+            OperationResult<Void> result = block
+                    ? inventory.blockSeat(performanceId, rowName, seatNumber)
+                    : inventory.unblockSeat(performanceId, rowName, seatNumber);
+            printResult(result);
+            if (result.isSuccess()) {
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
+        }
+    }
+
     private void viewReservedInventory() {
         Integer performanceId = readPositiveInt("Performance ID: ");
         if (performanceId == null) {
@@ -763,11 +982,10 @@ public final class TerminalApplication {
                 System.out.println("No reserved seats are configured for this performance.");
                 return;
             }
-            System.out.printf("%-8s %-20s %-8s %-6s %-8s %-10s %-10s%n",
-                    "Seat ID", "Section", "Row", "Seat", "Tier", "Price", "Status");
+            System.out.printf("%-20s %-8s %-6s %-8s %-10s %-10s%n",
+                    "Section", "Row", "Seat", "Tier", "Price", "Status");
             for (ReservedSeatAvailability seat : seats) {
-                System.out.printf("%-8d %-20s %-8s %-6d %-8s $%-9s %-10s%n",
-                        seat.getPerformanceSeatId(),
+                System.out.printf("%-20s %-8s %-6d %-8s $%-9s %-10s%n",
                         seat.getSectionName(),
                         seat.getRowName(),
                         seat.getSeatNumber(),
@@ -804,6 +1022,555 @@ public final class TerminalApplication {
                         section.getTotalCapacity(),
                         section.getSoldQuantity(),
                         section.getRemainingCapacity());
+            }
+        });
+        pause();
+    }
+
+    private void showBookingAndCancellationMenu() {
+        boolean inMenu = true;
+        while (running && inMenu) {
+            printHeading("Ticket booking and cancellations");
+            System.out.println("1. View available reserved seats");
+            System.out.println("2. Book reserved seats");
+            System.out.println("3. Book general-admission tickets");
+            System.out.println("4. Cancel customer tickets");
+            System.out.println("5. Cancel an organizer's performance");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::viewAvailableReservedSeats);
+                case "2" -> runOnlineAction(this::bookReservedSeats);
+                case "3" -> runOnlineAction(this::bookGeneralAdmission);
+                case "4" -> runOnlineAction(this::cancelCustomerTickets);
+                case "5" -> runOnlineAction(this::cancelPerformance);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown booking/cancellation option.");
+            }
+        }
+    }
+
+    private void viewAvailableReservedSeats() {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                bookings::checkPerformanceForBooking
+        );
+        if (performanceId == null) {
+            return;
+        }
+        OperationResult<List<ReservedSeatAvailability>> result =
+                inventory.getReservedInventory(performanceId);
+        printResult(result);
+        result.getValue().ifPresent(seats -> {
+            List<ReservedSeatAvailability> availableSeats = seats.stream()
+                    .filter(seat -> seat.getState() == InventoryState.AVAILABLE)
+                    .toList();
+            if (availableSeats.isEmpty()) {
+                System.out.println("No reserved seats are currently available.");
+                return;
+            }
+            System.out.printf("%-20s %-8s %-6s %-8s %-10s%n",
+                    "Section", "Row", "Seat", "Tier", "Price");
+            for (ReservedSeatAvailability seat : availableSeats) {
+                System.out.printf("%-20s %-8s %-6d %-8s $%-9s%n",
+                        seat.getSectionName(),
+                        seat.getRowName(),
+                        seat.getSeatNumber(),
+                        seat.getTierCode(),
+                        seat.getPrice().toPlainString());
+            }
+        });
+        pause();
+    }
+
+    private void bookReservedSeats() {
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
+        if (customerId == null) {
+            return;
+        }
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                bookings::checkPerformanceForBooking
+        );
+        if (performanceId == null) {
+            return;
+        }
+        List<Integer> seatIds = null;
+        while (running) {
+            List<ReservedSeatLocation> locations = readReservedSeatLocationsWithRetry(
+                    "Reserved seats (Row Seat#, comma-separated): "
+            );
+            if (locations == null) {
+                return;
+            }
+            OperationResult<List<Integer>> resolved = inventory.resolveReservedSeatIds(
+                    performanceId,
+                    locations
+            );
+            if (resolved.isSuccess()) {
+                seatIds = resolved.getValue().orElseThrow();
+                break;
+            }
+            printResult(resolved);
+            if (!promptToRetry()) {
+                return;
+            }
+        }
+        if (seatIds == null) {
+            return;
+        }
+        OperationResult<BookingSummary> result = bookings.bookReservedSeats(
+                customerId,
+                performanceId,
+                seatIds
+        );
+        printBookingResult(result);
+        pause();
+    }
+
+    private void bookGeneralAdmission() {
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
+        if (customerId == null) {
+            return;
+        }
+        Integer performanceId = null;
+        while (running) {
+            Integer candidatePerformanceId = readCheckedId(
+                    "Performance ID: ",
+                    bookings::checkPerformanceForBooking
+            );
+            if (candidatePerformanceId == null) {
+                return;
+            }
+            OperationResult<List<GeneralAdmissionAvailability>> inventoryResult =
+                    inventory.getGeneralAdmissionInventory(candidatePerformanceId);
+            if (!inventoryResult.isSuccess()) {
+                printResult(inventoryResult);
+                if (!promptToRetry()) {
+                    return;
+                }
+                continue;
+            }
+            List<String> sectionNames = inventoryResult.getValue().orElseThrow().stream()
+                    .map(GeneralAdmissionAvailability::getSectionName)
+                    .toList();
+            if (sectionNames.isEmpty()) {
+                System.out.println(
+                        "CONFLICT: No general-admission sections are configured "
+                                + "for this performance."
+                );
+                if (!promptToRetry()) {
+                    return;
+                }
+                continue;
+            }
+            System.out.println("General-admission sections: " + String.join(", ", sectionNames));
+            performanceId = candidatePerformanceId;
+            break;
+        }
+        if (performanceId == null) {
+            return;
+        }
+        int selectedPerformanceId = performanceId;
+        String sectionName = readCheckedText(
+                "General-admission section name: ",
+                value -> inputChecks.checkGeneralAdmissionSection(selectedPerformanceId, value)
+        );
+        if (sectionName == null) {
+            return;
+        }
+        Integer quantity = readPositiveIntWithRetry("Quantity: ");
+        if (quantity == null) {
+            return;
+        }
+        OperationResult<BookingSummary> result = bookings.bookGeneralAdmission(
+                customerId,
+                selectedPerformanceId,
+                sectionName,
+                quantity
+        );
+        printBookingResult(result);
+        pause();
+    }
+
+    private void printBookingResult(OperationResult<BookingSummary> result) {
+        printResult(result);
+        result.getValue().ifPresent(summary -> {
+            System.out.println("Transaction ID: " + summary.getTransactionId());
+            System.out.println("Ticket IDs: " + summary.getTicketIds());
+            System.out.println("Total: $" + summary.getTotal().toPlainString());
+        });
+    }
+
+    private void cancelCustomerTickets() {
+        List<Integer> ticketIds = readCheckedPositiveIntList(
+                "Ticket IDs to cancel (comma-separated): ",
+                inputChecks::checkTickets
+        );
+        if (ticketIds == null) {
+            return;
+        }
+        String reason = readLine("Cancellation reason (optional): ");
+        OperationResult<CancellationSummary> result = cancellations.cancelCustomerTickets(
+                ticketIds,
+                reason
+        );
+        printCancellationResult(result);
+        pause();
+    }
+
+    private void cancelPerformance() {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                inputChecks::checkPerformance
+        );
+        if (performanceId == null) {
+            return;
+        }
+        String reason = readLine("Cancellation reason (optional): ");
+        OperationResult<CancellationSummary> result = cancellations.cancelPerformance(
+                performanceId,
+                reason
+        );
+        printCancellationResult(result);
+        pause();
+    }
+
+    private void printCancellationResult(OperationResult<CancellationSummary> result) {
+        printResult(result);
+        result.getValue().ifPresent(summary -> {
+            System.out.println("Tickets cancelled: " + summary.getCancelledTicketCount());
+            System.out.println("Refund total: $" + summary.getRefundTotal().toPlainString());
+        });
+    }
+
+    private void showResaleMenu() {
+        boolean inMenu = true;
+        while (running && inMenu) {
+            printHeading("Ticket resale");
+            System.out.println("1. View a customer's currently owned tickets");
+            System.out.println("2. View available resale tickets by performance");
+            System.out.println("3. Resale a ticket");
+            System.out.println("4. Withdraw an active listing");
+            System.out.println("5. Purchase a resale ticket");
+            System.out.println("6. View a ticket's ownership history");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::viewCustomerOwnedTickets);
+                case "2" -> runOnlineAction(this::viewAvailableResaleTickets);
+                case "3" -> runOnlineAction(this::listTicketForResale);
+                case "4" -> runOnlineAction(this::withdrawResaleListing);
+                case "5" -> runOnlineAction(this::purchaseResaleListing);
+                case "6" -> runOnlineAction(this::viewTicketOwnershipHistory);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown resale option.");
+            }
+        }
+    }
+
+    private void viewCustomerOwnedTickets() {
+        Integer customerId = readCheckedId(
+                "Customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (customerId == null) {
+            return;
+        }
+        OperationResult<List<OwnedResaleTicket>> result = resale.getOwnedTickets(customerId);
+        printResult(result);
+        result.getValue().ifPresent(tickets -> {
+            if (tickets.isEmpty()) {
+                System.out.println("No active tickets are currently owned by this customer.");
+                return;
+            }
+            System.out.printf(
+                    "%-12s %-15s %-10s%n",
+                    "Ticket ID",
+                    "Performance ID",
+                    "Status"
+            );
+            for (OwnedResaleTicket ticket : tickets) {
+                System.out.printf(
+                        "%-12d %-15d %-10s%n",
+                        ticket.getTicketId(),
+                        ticket.getPerformanceId(),
+                        ticket.getStatus()
+                );
+            }
+        });
+        pause();
+    }
+
+    private void viewAvailableResaleTickets() {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                inputChecks::checkPerformance
+        );
+        if (performanceId == null) {
+            return;
+        }
+        OperationResult<List<AvailableResaleTicket>> result =
+                resale.getAvailableListings(performanceId);
+        printResult(result);
+        result.getValue().ifPresent(listings -> {
+            if (listings.isEmpty()) {
+                System.out.println(
+                        "No resale tickets are currently available for this performance."
+                );
+                return;
+            }
+            System.out.printf(
+                    "%-12s %-20s %-15s%n",
+                    "Ticket ID",
+                    "Seller customer ID",
+                    "Listing price"
+            );
+            for (AvailableResaleTicket listing : listings) {
+                System.out.printf(
+                        "%-12d %-20d $%-14s%n",
+                        listing.getTicketId(),
+                        listing.getSellerCustomerId(),
+                        listing.getListingPrice().toPlainString()
+                );
+            }
+        });
+        pause();
+    }
+
+    private void listTicketForResale() {
+        Integer sellerId = readCheckedId(
+                "Seller customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (sellerId == null) {
+            return;
+        }
+        Integer ticketId = readCheckedId(
+                "Ticket ID: ",
+                id -> inputChecks.checkTicketForResale(sellerId, id)
+        );
+        if (ticketId == null) {
+            return;
+        }
+        BigDecimal listingPrice = readCheckedDecimal(
+                "Listing price: ",
+                value -> inputChecks.checkResaleListingPrice(ticketId, value)
+        );
+        if (listingPrice == null) {
+            return;
+        }
+        OperationResult<ResaleListingSummary> result = resale.listTicket(
+                sellerId,
+                ticketId,
+                listingPrice
+        );
+        printResult(result);
+        result.getValue().ifPresent(listing -> {
+            System.out.println("Listing ID: " + listing.getListingId());
+            System.out.println("Ticket ID: " + listing.getTicketId());
+            System.out.println("Listing price: $" + listing.getListingPrice().toPlainString());
+            System.out.println("Cap price: $" + listing.getCapPrice().toPlainString());
+        });
+        pause();
+    }
+
+    private void withdrawResaleListing() {
+        Integer sellerId = readCheckedId(
+                "Seller customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (sellerId == null) {
+            return;
+        }
+        Integer ticketId = readCheckedId(
+                "Ticket ID: ",
+                inputChecks::checkActiveResaleTicket
+        );
+        if (ticketId == null) {
+            return;
+        }
+        printResult(resale.withdrawListingByTicket(sellerId, ticketId));
+        pause();
+    }
+
+    private void purchaseResaleListing() {
+        Integer buyerId = readCheckedId(
+                "Buyer customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (buyerId == null) {
+            return;
+        }
+        Integer ticketId = readCheckedId(
+                "Ticket ID: ",
+                inputChecks::checkActiveResaleTicket
+        );
+        if (ticketId == null) {
+            return;
+        }
+        OperationResult<ResalePurchaseSummary> result = resale.purchaseListingByTicket(
+                buyerId,
+                ticketId
+        );
+        printResult(result);
+        result.getValue().ifPresent(purchase -> {
+            System.out.println("Transaction ID: " + purchase.getTransactionId());
+            System.out.println("Listing ID: " + purchase.getListingId());
+            System.out.println("Ticket ID: " + purchase.getTicketId());
+            System.out.println("Purchase price: $"
+                    + purchase.getPurchasePrice().toPlainString());
+        });
+        pause();
+    }
+
+    private void viewTicketOwnershipHistory() {
+        Integer ticketId = readCheckedId("Ticket ID: ", inputChecks::checkTicket);
+        if (ticketId == null) {
+            return;
+        }
+        OperationResult<List<TicketOwnershipHistoryEntry>> result =
+                resale.getTicketOwnershipHistory(ticketId);
+        printResult(result);
+        if (!result.isSuccess()) {
+            pause();
+            return;
+        }
+
+        for (TicketOwnershipHistoryEntry entry : result.getValue().orElseThrow()) {
+            System.out.println();
+            System.out.println("Owner: " + entry.getCustomerId()
+                    + " - " + entry.getCustomerName());
+            System.out.println("Acquisition: "
+                    + entry.getTransactionType().toUpperCase(Locale.ROOT)
+                    + " transaction " + entry.getTransactionId()
+                    + " / $" + entry.getPurchasePrice().toPlainString());
+            if (entry.getListingId() != null) {
+                System.out.println("Resale listing ID: " + entry.getListingId());
+            }
+            System.out.println("Owned from: " + entry.getAcquiredAt().format(DATE_TIME_FORMAT));
+            System.out.println("Ownership: "
+                    + (entry.getEndedAt() == null
+                            ? "current"
+                            : "ended " + entry.getEndedAt().format(DATE_TIME_FORMAT)));
+        }
+        pause();
+    }
+
+    private void showReviewMenu() {
+        boolean inMenu = true;
+        while (running && inMenu) {
+            printHeading("Attendance reviews");
+            System.out.println("1. Submit an event and venue review");
+            System.out.println("2. View a customer's submitted reviews");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::submitReview);
+                case "2" -> runOnlineAction(this::viewCustomerReviews);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown review option.");
+            }
+        }
+    }
+
+    private void submitReview() {
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
+        if (customerId == null) {
+            return;
+        }
+        OperationResult<List<Integer>> reviewableResult =
+                reviews.getReviewablePerformanceIds(customerId);
+        if (!reviewableResult.isSuccess()) {
+            printResult(reviewableResult);
+            pause();
+            return;
+        }
+        List<Integer> reviewablePerformanceIds = reviewableResult.getValue().orElseThrow();
+        if (reviewablePerformanceIds.isEmpty()) {
+            System.out.println(
+                    "No attended and completed performances are currently available for review."
+            );
+            System.out.println("Use option 2 to view this customer's submitted reviews.");
+            pause();
+            return;
+        } else {
+            System.out.println(
+                    "Performance IDs available for review: "
+                            + String.join(
+                                    ", ",
+                                    reviewablePerformanceIds.stream()
+                                            .map(String::valueOf)
+                                            .toList()
+                            )
+            );
+        }
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                id -> reviews.checkReviewEligibility(customerId, id)
+        );
+        if (performanceId == null) {
+            return;
+        }
+        Integer eventRating = readValidatedInteger(
+                "Event rating (1-5): ",
+                value -> value < 1 || value > 5
+                        ? Optional.of("Event rating must be from 1 to 5.")
+                        : Optional.empty()
+        );
+        if (eventRating == null) {
+            return;
+        }
+        Integer venueRating = readValidatedInteger(
+                "Venue rating (1-5): ",
+                value -> value < 1 || value > 5
+                        ? Optional.of("Venue rating must be from 1 to 5.")
+                        : Optional.empty()
+        );
+        if (venueRating == null) {
+            return;
+        }
+        String comment = readValidatedText(
+                "Comment: ",
+                value -> value.trim().isEmpty()
+                        ? Optional.of("Review comment is required.")
+                        : Optional.empty()
+        );
+        if (comment == null) {
+            return;
+        }
+        printResult(reviews.submitReview(
+                customerId,
+                performanceId,
+                eventRating,
+                venueRating,
+                comment
+        ));
+        pause();
+    }
+
+    private void viewCustomerReviews() {
+        Integer customerId = readCheckedId(
+                "Customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (customerId == null) {
+            return;
+        }
+
+        OperationResult<List<CustomerReview>> result = reviews.getCustomerReviews(customerId);
+        printResult(result);
+        result.getValue().ifPresent(customerReviews -> {
+            if (customerReviews.isEmpty()) {
+                System.out.println("No submitted reviews found for this customer.");
+                return;
+            }
+            for (CustomerReview review : customerReviews) {
+                System.out.println();
+                System.out.println("Performance ID: " + review.getPerformanceId());
+                System.out.println("Event rating: " + review.getEventRating() + "/5");
+                System.out.println("Venue rating: " + review.getVenueRating() + "/5");
+                System.out.println("Comment: " + review.getComment());
+                System.out.println(
+                        "Review date: " + review.getReviewDate().format(DATE_TIME_FORMAT)
+                );
             }
         });
         pause();
@@ -1371,34 +2138,34 @@ private void showReports() {
 
 
 private LocalDateTime[] readReportDateRange() {
-
-    LocalDateTime startDate = readDateTime(
-            "Start date/time (YYYY-MM-DD HH:mm): "
-    );
-
-    LocalDateTime endDate = readDateTime(
-            "End date/time (YYYY-MM-DD HH:mm): "
-    );
-
-    if (startDate == null || endDate == null) {
-        return null;
-    }
-
-    if (!startDate.isBefore(endDate)) {
-        System.out.println(
-                "Start date/time must be before end date/time."
+    while (running) {
+        LocalDateTime startDate = readDateTimeWithRetry(
+                "Start date/time (YYYY-MM-DD HH:mm): "
         );
-        return null;
-    }
+        if (startDate == null) {
+            return null;
+        }
 
-    if (endDate.isAfter(LocalDateTime.now())) {
-        System.out.println(
-                "End date/time cannot be in the future."
+        LocalDateTime endDate = readDateTimeWithRetry(
+                "End date/time (YYYY-MM-DD HH:mm): "
         );
-        return null;
-    }
+        if (endDate == null) {
+            return null;
+        }
 
-    return new LocalDateTime[]{startDate, endDate};
+        if (!startDate.isBefore(endDate)) {
+            printInputError("Start date/time must be before end date/time.");
+        } else if (endDate.isAfter(LocalDateTime.now())) {
+            printInputError("End date/time cannot be in the future.");
+        } else {
+            return new LocalDateTime[]{startDate, endDate};
+        }
+
+        if (!promptToRetry()) {
+            return null;
+        }
+    }
+    return null;
 }
 
 
@@ -1441,7 +2208,15 @@ private void report1() {
 
     System.out.println("1. Revenue by city");
     System.out.println("2. Revenue by venue within a city");
-    String choice = readLine("Select option: ");
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 2
+                    ? Optional.of("Select report option 1 or 2.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
 
 
     OperationResult<List<TicketRevenueReport>> result;
@@ -1452,19 +2227,20 @@ private void report1() {
 }
 
     switch (choice) {
-        case "1" -> {
+        case 1 -> {
             result = reports.report1a(
                     dates[0],
                     dates[1]
             );}
 
-        case "2" -> {
-            String city = readLine(
-                    "City: "
+        case 2 -> {
+            String city = readValidatedText(
+                    "City: ",
+                    value -> value.isBlank()
+                            ? Optional.of("City is required.")
+                            : Optional.empty()
             );
-            if (city.isBlank()) {
-                System.out.println("City is required.");
-                pause();
+            if (city == null) {
                 return;
             }
 
@@ -1987,13 +2763,25 @@ private void report7c() {
     printHeading("Sold-out / Under 25% Sell-through");
 
 
-    int year = Integer.parseInt(
-            readLine("Year: ")
+    Integer year = readValidatedInteger(
+            "Year: ",
+            value -> value < 1000 || value > 9999
+                    ? Optional.of("Enter a four-digit year.")
+                    : Optional.empty()
     );
+    if (year == null) {
+        return;
+    }
 
-    int month = Integer.parseInt(
-            readLine("Month: ")
+    Integer month = readValidatedInteger(
+            "Month: ",
+            value -> value < 1 || value > 12
+                    ? Optional.of("Month must be from 1 to 12.")
+                    : Optional.empty()
     );
+    if (month == null) {
+        return;
+    }
 
 
     OperationResult<List<SellThroughBucketReport>> result =
@@ -2426,6 +3214,34 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
         return null;
     }
 
+    private String readCheckedText(
+            String prompt,
+            Function<String, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            if (value.isBlank()) {
+                printInputError("A value is required.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+            OperationResult<Void> result = checker.apply(value);
+            if (result.isSuccess()) {
+                return value;
+            }
+            printResult(result);
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     private Integer readUniqueCheckedId(
             String prompt,
             Function<Integer, OperationResult<Void>> checker,
@@ -2450,11 +3266,18 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
 
     private Integer readUniquePositiveInt(
             String prompt,
+            int maximumValue,
             Set<Integer> usedValues,
             String duplicateMessage
     ) {
         while (running) {
-            Integer value = readPositiveIntWithRetry(prompt);
+            Integer value = readValidatedInteger(
+                    prompt,
+                    candidate -> candidate < 1 || candidate > maximumValue
+                            ? Optional.of("Enter a billing rank from 1 to "
+                                    + maximumValue + ".")
+                            : Optional.empty()
+            );
             if (value == null) {
                 return null;
             }
@@ -2462,6 +3285,107 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
                 return value;
             }
             printInputError(duplicateMessage);
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<Integer> readPositiveIntListWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            List<Integer> values = new ArrayList<>();
+            Set<Integer> unique = new HashSet<>();
+            boolean valid = !value.isEmpty();
+            if (valid) {
+                for (String part : value.split(",")) {
+                    try {
+                        int parsed = Integer.parseInt(part.trim());
+                        if (parsed <= 0 || !unique.add(parsed)) {
+                            valid = false;
+                            break;
+                        }
+                        values.add(parsed);
+                    } catch (NumberFormatException exception) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if (valid) {
+                return values;
+            }
+            printInputError("Enter unique positive IDs separated by commas.");
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<ReservedSeatLocation> readReservedSeatLocationsWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+
+            List<ReservedSeatLocation> locations = new ArrayList<>();
+            Set<String> uniqueLocations = new HashSet<>();
+            boolean valid = !value.isBlank();
+            if (valid) {
+                for (String entry : value.split(",")) {
+                    String[] parts = entry.trim().split("\\s+");
+                    if (parts.length != 2 || parts[0].isBlank()) {
+                        valid = false;
+                        break;
+                    }
+                    try {
+                        int seatNumber = Integer.parseInt(parts[1]);
+                        String key = normalize(parts[0]) + ":" + seatNumber;
+                        if (seatNumber <= 0 || !uniqueLocations.add(key)) {
+                            valid = false;
+                            break;
+                        }
+                        locations.add(new ReservedSeatLocation(parts[0], seatNumber));
+                    } catch (NumberFormatException exception) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if (valid) {
+                return List.copyOf(locations);
+            }
+            printInputError(
+                    "Enter unique seats as Row Seat#, separated by commas "
+                            + "(for example: A 1, A 2)."
+            );
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<Integer> readCheckedPositiveIntList(
+            String prompt,
+            Function<List<Integer>, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            List<Integer> values = readPositiveIntListWithRetry(prompt);
+            if (values == null) {
+                return null;
+            }
+            OperationResult<Void> result = checker.apply(values);
+            if (result.isSuccess()) {
+                return values;
+            }
+            printResult(result);
             if (!promptToRetry()) {
                 return null;
             }
@@ -2494,6 +3418,38 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
                 return parsed;
             }
             printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal readCheckedDecimal(
+            String prompt,
+            Function<BigDecimal, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            BigDecimal parsed;
+            try {
+                parsed = new BigDecimal(value);
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid decimal number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            OperationResult<Void> result = checker.apply(parsed);
+            if (result.isSuccess()) {
+                return parsed;
+            }
+            printResult(result);
             if (!promptToRetry()) {
                 return null;
             }

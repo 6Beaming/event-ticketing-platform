@@ -26,7 +26,6 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - Customer ticket cancellation and refunds
 - Organizer performance cancellation and refunds
 - Resale listing, withdrawal, purchase, and ownership transfer
-- Possible-scalper prohibition
 - Q6 seat-map summary and Q7 best consecutive seats
 - R4 possible scalpers, R5 customer orders, R6 cancellations, R7 sell-through, and R8 resale
 - Primary author of `manual.pdf`
@@ -58,7 +57,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 | Work block | Member A focus | Member B focus |
 |---|---|---|
 | July 29-31 | JDBC transactions, customer operations, inventory lookups, and transaction-side development data | Data dictionary, generator foundation, organizer/event operations, and pricing foundation |
-| August 1-3 | Booking, cancellation, resale, scalper control, Q6, and Q7 | Event/pricing completion, blocking, reviews, and Q1-Q5 |
+| August 1-3 | Booking, cancellation, resale, Q6, and Q7 | Event/pricing completion, blocking, reviews, and Q1-Q5 |
 | August 4-6 | R4-R8, transaction-heavy final data, transaction/report terminal integration, manual lead, and assigned report sections | R1-R3/R9, toolkit, base data/load integration, organizer/search terminal integration, report lead, and assigned manual sections |
 | August 7 | Terminal/manual verification | Database/report/data verification |
 
@@ -173,38 +172,34 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member A
 
-- [ ] **Build reserved-seat booking as one transaction.**
-  - [ ] Accept customer, performance, and one or more requested seat IDs.
-  - [ ] Reject cancelled or past performances and prohibited customers.
-  - [ ] Lock requested seats in a consistent order so two customers cannot buy the same seat.
-  - [ ] Check that every seat is available and not blocked before creating the order.
-  - [ ] Save the order, payment snapshot, tickets, original prices, and first ownership records.
-  - [ ] Mark every requested seat sold; roll back the whole booking if one seat fails.
-- [ ] **Build general-admission booking as one transaction.**
-  - [ ] Accept customer, performance, section, and requested quantity.
-  - [ ] Lock the performance-section inventory row.
-  - [ ] Check the requested quantity against the remaining capacity.
-  - [ ] Save the order, tickets, and ownership records and update capacity together.
-- [ ] **Build customer ticket cancellation.**
-  - [ ] Lock the order, ticket, current ownership, performance, active listing, and inventory rows involved.
-  - [ ] Confirm the customer placed the order and the performance is at least seven days away.
-  - [ ] Record the cancellation and full refund instead of deleting history.
-  - [ ] Withdraw any active listing and return reserved or general-admission inventory.
-- [ ] **Build organizer performance cancellation.**
-  - [ ] Confirm the organizer manages the event.
-  - [ ] Lock and mark the performance cancelled.
-  - [ ] Close active resale listings and refund every active ticket.
-  - [ ] Preserve cancellation history and keep the cancelled performance unsellable.
-- [ ] **Build the complete resale workflow.**
-  - [ ] List only a currently owned, active, non-cancelled ticket.
-  - [ ] Calculate the maximum listing price from face value and the event resale cap.
-  - [ ] Allow the seller to withdraw only an active unsold listing.
-  - [ ] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
-  - [ ] Ensure two buyers cannot complete the same listing.
-- [ ] **Add the possible-scalper check.**
-  - [ ] Calculate the past-year purchased and listed counts.
-  - [ ] Flag customers who bought at least 10 tickets and listed more than half.
-  - [ ] Block the prohibited actions chosen by the design and show a clear terminal message.
+- [x] **Build reserved-seat booking as one transaction.**
+  - [x] Accept customer, performance, and one or more requested seat IDs.
+  - [x] Reject cancelled or past performances.
+  - [x] Lock requested seats in a consistent order so two customers cannot buy the same seat.
+  - [x] Check that every seat is available and not blocked before creating the order.
+  - [x] Save the order, payment snapshot, tickets, original prices, and first ownership records.
+  - [x] Mark every requested seat sold; roll back the whole booking if one seat fails.
+- [x] **Build general-admission booking as one transaction.**
+  - [x] Accept customer, performance, section, and requested quantity.
+  - [x] Lock the performance-section inventory row.
+  - [x] Check the requested quantity against the remaining capacity.
+  - [x] Save the order, tickets, and ownership records and update capacity together.
+- [x] **Build customer ticket cancellation.**
+  - [x] Lock the order, ticket, current ownership, performance, active listing, and inventory rows involved.
+  - [x] Confirm the customer placed the order and the performance is at least seven days away.
+  - [x] Record the cancellation and full refund instead of deleting history.
+  - [x] Withdraw any active listing and return reserved or general-admission inventory.
+- [x] **Build organizer performance cancellation.**
+  - [x] Confirm the organizer manages the event.
+  - [x] Lock and mark the performance cancelled.
+  - [x] Close active resale listings and refund every active ticket.
+  - [x] Preserve cancellation history and keep the cancelled performance unsellable.
+- [x] **Build the complete resale workflow.**
+  - [x] List only a currently owned, active, non-cancelled ticket.
+  - [x] Calculate the maximum listing price from face value and the event resale cap.
+  - [x] Allow the seller to withdraw only an active unsold listing.
+  - [x] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
+  - [x] Ensure two buyers cannot complete the same listing.
 - [ ] **Build Q6: seat-map summary.**
   - [ ] Accept a performance ID.
   - [ ] Return every section with tier, price, available/remaining capacity, sold, and blocked counts.
@@ -214,36 +209,37 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Find consecutive numeric seats in the same row.
   - [ ] Exclude sold and blocked seats.
   - [ ] Return the qualifying group with the lowest total tier price, or a clear no-result message.
-- [ ] Demonstrate the required booking, cancellation, resale, Q6, and Q7 success/rejection behavior before marking each operation complete.
+- [x] Demonstrate the required booking, cancellation, and resale success/rejection behavior before marking each operation complete.
+- [ ] Demonstrate the required Q6 and Q7 success/rejection behavior.
 
 ### Member B
 
-- [ ] **Finish event and performance setup.**
-  - [ ] Require organizer ownership, valid segment/genre, at least one artist/team, and billing order.
-  - [ ] Add performances with a valid venue, future/past date-time as appropriate, and active status.
-  - [ ] Set and update the event resale-cap value.
-  - [ ] Return created event/performance IDs to the terminal.
-- [ ] **Finish performance pricing.**
-  - [ ] Create named tiers with positive prices.
-  - [ ] Assign every section of the selected venue to exactly one tier for that performance.
-  - [ ] Reject missing, duplicate, cross-performance, or cross-venue assignments.
-  - [ ] Display the completed tier/section map for confirmation.
-- [ ] **Build the safe tier-price update.**
-  - [ ] Lock the tier and relevant ticket rows.
-  - [ ] Confirm the performance is in the future.
-  - [ ] Reject the update if any ticket has been sold from the tier and explain why.
-  - [ ] Update and commit only when both conditions pass.
-- [ ] **Build seat blocking and unblocking.**
-  - [ ] Accept performance and reserved-seat IDs.
-  - [ ] Lock the performance-seat inventory row.
-  - [ ] Block only an available seat, reject a sold seat, and allow only a blocked seat to be unblocked.
-  - [ ] Retain performance-specific status so the physical seat can differ across performances.
-- [ ] **Build attendance reviews.**
-  - [ ] Accept customer, performance, event rating, venue rating, and free-form comment.
-  - [ ] Confirm the performance occurred within the documented “recent” period.
-  - [ ] Confirm the customer held a non-cancelled ticket for that performance.
-  - [ ] Enforce ratings from 1-5 and one review per customer/performance.
-  - [ ] Save the event rating, venue rating, and comment together.
+- [x] **Finish event and performance setup.**
+  - [x] Require organizer ownership, valid segment/genre, at least one artist/team, and billing order.
+  - [x] Add performances with a valid venue, future/past date-time as appropriate, and active status.
+  - [x] Set and update the event resale-cap value.
+  - [x] Return created event/performance IDs to the terminal.
+- [x] **Finish performance pricing.**
+  - [x] Create named tiers with positive prices.
+  - [x] Assign every section of the selected venue to exactly one tier for that performance.
+  - [x] Reject missing, duplicate, cross-performance, or cross-venue assignments.
+  - [x] Display the completed tier/section map for confirmation.
+- [x] **Build the safe tier-price update.**
+  - [x] Lock the tier and relevant ticket rows.
+  - [x] Confirm the performance is in the future.
+  - [x] Reject the update if any ticket has been sold from the tier and explain why.
+  - [x] Update and commit only when both conditions pass.
+- [x] **Build seat blocking and unblocking.**
+  - [x] Accept performance and reserved-seat IDs.
+  - [x] Lock the performance-seat inventory row.
+  - [x] Block only an available seat, reject a sold seat, and allow only a blocked seat to be unblocked.
+  - [x] Retain performance-specific status so the physical seat can differ across performances.
+- [x] **Build attendance reviews.**
+  - [x] Accept customer, performance, event rating, venue rating, and free-form comment.
+  - [x] Confirm the performance occurred within the documented “recent” period.
+  - [x] Confirm the customer held a non-cancelled ticket for that performance.
+  - [x] Enforce ratings from 1-5 and one review per customer/performance.
+  - [x] Save the event rating, venue rating, and comment together.
 - [ ] **Build Q1: nearby performances.**
   - [ ] Accept latitude, longitude, optional search distance, and sort choice.
   - [ ] Apply the documented default distance when none is supplied.
@@ -262,27 +258,29 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Support city, segment, genre, date range, cheapest-ticket price range, minimum availability, reserved seating, and general admission in any combination.
   - [ ] Use prepared parameters for values and safely add only the selected filters.
   - [ ] Ensure cheapest price and availability include both reserved and general-admission inventory.
-- [ ] **Check event setup, pricing, blocking, reviews, and each Q1-Q5 sort/filter path with known data.**
+- [x] **Check event setup, pricing, blocking, and reviews with known data.**
+- [ ] **Check each Q1-Q5 sort/filter path with known data.**
 
 ### Shared work
 
-- [ ] Integrate every operation and query into the terminal.
-- [ ] Test two customers attempting to buy the same reserved seat.
-- [ ] Test general-admission requests below, equal to, and above remaining capacity.
-- [ ] Test failed multi-seat booking and confirm the entire order rolls back.
-- [ ] Test customer cancellation more than and fewer than seven days before the performance.
-- [ ] Verify a cancelled performance cannot accept new bookings.
-- [ ] Test two buyers attempting to purchase the same resale listing.
+- [x] Integrate every required operation into the terminal.
+- [ ] Integrate every Q1-Q7 query into the terminal.
+- [x] Test two customers attempting to buy the same reserved seat.
+- [x] Test general-admission requests below, equal to, and above remaining capacity.
+- [x] Test failed multi-seat booking and confirm the entire order rolls back.
+- [x] Test customer cancellation more than and fewer than seven days before the performance.
+- [x] Verify a cancelled performance cannot accept new bookings.
+- [x] Test two buyers attempting to purchase the same resale listing.
 - [ ] Verify Q6 totals against raw inventory counts.
 - [ ] Test Q7 success, budget failure, insufficient quantity, and nonconsecutive-seat cases.
 - [ ] Cross-review all ownership, authorization, and transaction checks.
 
 ### Block exit criteria
 
-- [ ] All required operations are implemented and reachable from the terminal.
-- [ ] Reserved and general-admission inventory cannot be oversold.
-- [ ] Cancellation, resale, and ownership-history rules work.
-- [ ] Review and possible-scalper restrictions work.
+- [x] All required operations are implemented and reachable from the terminal.
+- [x] Reserved and general-admission inventory cannot be oversold.
+- [x] Cancellation, resale, and ownership-history rules work.
+- [x] Review eligibility and duplicate-review restrictions work.
 - [ ] Q1-Q7 return verified results.
 
 ## August 4-6 — reports, toolkit, sample data, integration, and documents
@@ -291,29 +289,30 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 - [ ] **Build R4: possible scalpers by city.**
   - [ ] Group by venue city.
-  - [ ] Use the past-year purchase/listing window.
-  - [ ] Return customers who purchased at least 10 tickets and listed more than half.
-  - [ ] Make sure the result matches the application’s scalper flag/prohibition logic.
+  - [x] Use the past-year purchase/listing window.
+  - [x] Return customers who purchased at least 10 tickets and listed more than half.
+  - [ ] Flag the identified customers and prohibit the actions chosen by the design.
+  - [ ] Add the R4 report and prohibition result to terminal option 8.
 - [ ] **Build R5: customer order rankings.**
-  - [ ] Rank customers by order count for a requested period.
-  - [ ] Rank customers by the city of the performance venue.
-  - [ ] Apply the at-least-two-orders-in-the-year rule to the city ranking.
+  - [x] Rank customers by order count for a requested period.
+  - [x] Rank customers by the city of the performance venue.
+  - [x] Apply the at-least-two-orders-in-the-year rule to the city ranking.
   - [ ] Add terminal period/city inputs, headings, and empty-result handling.
-- [ ] **Build R6: cancellation rankings.**
-  - [ ] Use the required one-year reporting window.
-  - [ ] Rank customers by cancelled-ticket count.
-  - [ ] Rank organizers by cancelled-performance count.
-  - [ ] Keep customer and organizer results clearly separated.
+- [x] **Build R6: cancellation rankings.**
+  - [x] Use the required one-year reporting window.
+  - [x] Rank customers by cancelled-ticket count.
+  - [x] Rank organizers by cancelled-performance count.
+  - [x] Keep customer and organizer results clearly separated.
 - [ ] **Build R7: sell-through reports.**
-  - [ ] Calculate sellable capacity with blocked reserved seats excluded and general-admission capacity included.
-  - [ ] Report sell-through per performance and per performance tier.
+  - [x] Calculate sellable capacity with blocked reserved seats excluded and general-admission capacity included.
+  - [x] Report sell-through per performance and per performance tier.
   - [ ] Accept month and city for sold-out and below-25% performance results.
   - [ ] Handle zero-capacity cases safely.
-- [ ] **Build R8: resale reports.**
-  - [ ] Report completed resale count per event.
-  - [ ] Calculate average markup over face value.
-  - [ ] Calculate the fraction of listings priced exactly at the cap.
-  - [ ] Accept a period for the top 10 events by resale volume.
+- [x] **Build R8: resale reports.**
+  - [x] Report completed resale count per event.
+  - [x] Calculate average markup over face value.
+  - [x] Calculate the fraction of listings priced exactly at the cap.
+  - [x] Accept a period for the top 10 events by resale volume.
 - [ ] **Finish the R4-R8 terminal screens.**
   - [ ] Add prompts and check date, city, and period inputs.
   - [ ] Use clear headings, money/percentage formatting, and empty-result messages.
@@ -345,24 +344,24 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member B
 
-- [ ] **Build R1: sales and revenue.**
-  - [ ] Accept a date range.
-  - [ ] Return total sold-ticket count and gross revenue by city.
-  - [ ] Support the venue-within-city breakdown.
-- [ ] **Build R2: event and performance counts.**
-  - [ ] Count events and performances per segment and genre.
-  - [ ] Produce country, country/city, and country/city/venue rollups.
-- [ ] **Build R3: organizer revenue rankings.**
-  - [ ] Rank organizers by gross revenue overall and per country.
-  - [ ] Support optional city refinement.
-- [ ] **Build R9: popular noun phrases.**
-  - [ ] Query comments grouped by event.
-  - [ ] Extract noun phrases with the chosen Java text-processing approach.
-  - [ ] Rank or count phrases and display the most popular set per event.
-  - [ ] Do not spend time building a visualization.
-- [ ] **Finish the R1-R3 and R9 terminal screens.**
-  - [ ] Add prompts and check date, location, and grouping inputs.
-  - [ ] Use clear headings, money formatting, and empty-result messages.
+- [x] **Build R1: sales and revenue.**
+  - [x] Accept a date range.
+  - [x] Return total sold-ticket count and gross revenue by city.
+  - [x] Support the venue-within-city breakdown.
+- [x] **Build R2: event and performance counts.**
+  - [x] Count events and performances per segment and genre.
+  - [x] Produce country, country/city, and country/city/venue rollups.
+- [x] **Build R3: organizer revenue rankings.**
+  - [x] Rank organizers by gross revenue overall and per country.
+  - [x] Support optional city refinement.
+- [x] **Build R9: popular noun phrases.**
+  - [x] Query comments grouped by event.
+  - [x] Extract noun phrases with the chosen Java text-processing approach.
+  - [x] Rank or count phrases and display the most popular set per event.
+  - [x] Do not spend time building a visualization.
+- [x] **Finish the R1-R3 and R9 terminal screens.**
+  - [x] Add prompts and check date, location, and grouping inputs.
+  - [x] Use clear headings, money formatting, and empty-result messages.
 - [ ] **Build the organizer toolkit.**
   - [ ] Find comparable performances using genre, venue capacity, city, and recent dates.
   - [ ] Suggest tier count, a price for each tier, and capacity share per tier.

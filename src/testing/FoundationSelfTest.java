@@ -5,6 +5,8 @@ import common.OperationStatus;
 import data.DevelopmentDataGenerator;
 import database.ConnectionProvider;
 import database.TransactionManager;
+import operations.booking.BookingOperations;
+import operations.cancellation.CancellationOperations;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
@@ -18,6 +20,8 @@ import operations.pricing.TierInput;
 import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
+import operations.resale.ResaleOperations;
+import operations.review.ReviewOperations;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -26,6 +30,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -53,9 +58,15 @@ public final class FoundationSelfTest {
         test("SQL failure rolls back safely", this::sqlFailureRollsBack);
         test("inventory calculations are consistent", this::inventoryCalculations);
         test("duplicate artist billing rank is rejected", this::duplicateBillingRejected);
+        test("artist billing rank is capped by artist count", this::billingRankCapRejected);
         test("invalid organizer/taxonomy IDs are rejected", this::invalidEventIdsRejected);
         test("invalid pricing setup and unsafe replacement are rejected", this::pricingShapeRejected);
         test("cross-venue coverage is rejected", this::pricingCoverageRejected);
+        test("tier-price and seat-state rules are enforced", this::organizerControlsValidated);
+        test("booking request shapes are validated", this::bookingRequestsValidated);
+        test("customer cancellation deadline is inclusive", this::cancellationDeadlineValidated);
+        test("resale cap uses decimal money", this::resaleCapValidated);
+        test("review rules are validated", this::reviewRulesValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -156,6 +167,19 @@ public final class FoundationSelfTest {
         assertTrue(OrganizerEventOperations.validateEvent(event).contains("unique"));
     }
 
+    private void billingRankCapRejected() {
+        EventInput event = new EventInput(
+                1,
+                "Test Event",
+                null,
+                new BigDecimal("1.20"),
+                1,
+                List.of(new ArtistBillingInput(1, 1), new ArtistBillingInput(2, 3))
+        );
+        assertTrue(OrganizerEventOperations.validateEvent(event)
+                .contains("number of artists or teams"));
+    }
+
     private void invalidEventIdsRejected() {
         EventInput event = new EventInput(
                 0,
@@ -238,12 +262,78 @@ public final class FoundationSelfTest {
         assertTrue(error.contains("Missing"));
     }
 
+    private void organizerControlsValidated() {
+        assertTrue(PerformancePricingOperations.validateTierPriceUpdate(true, false) == null);
+        assertTrue(PerformancePricingOperations.validateTierPriceUpdate(false, false)
+                .contains("scheduled future"));
+        assertTrue(PerformancePricingOperations.validateTierPriceUpdate(true, true)
+                .contains("already been sold"));
+        assertTrue(operations.inventory.InventoryOperations.validateSeatChange(
+                false,
+                false,
+                true
+        ) == null);
+        assertTrue(operations.inventory.InventoryOperations.validateSeatChange(
+                false,
+                true,
+                true
+        ).contains("sold seat"));
+        assertTrue(operations.inventory.InventoryOperations.validateSeatChange(
+                false,
+                false,
+                false
+        ).contains("not blocked"));
+    }
+
+    private void bookingRequestsValidated() {
+        assertTrue(BookingOperations.validateReservedRequest(1, 1, List.of(10, 11)) == null);
+        assertTrue(BookingOperations.validateReservedRequest(1, 1, List.of(10, 10))
+                .contains("only once"));
+        assertTrue(BookingOperations.validateReservedRequest(1, 1, List.of())
+                .contains("At least one"));
+        assertTrue(BookingOperations.validateGeneralRequest(1, 1, "Floor", 2) == null);
+        assertTrue(BookingOperations.validateGeneralRequest(1, 1, "Floor", 0)
+                .contains("positive"));
+    }
+
+    private void cancellationDeadlineValidated() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 5, 12, 0);
+        assertTrue(CancellationOperations.meetsSevenDayDeadline(now, now.plusDays(7)));
+        assertTrue(!CancellationOperations.meetsSevenDayDeadline(
+                now,
+                now.plusDays(7).minusMinutes(1)
+        ));
+        assertTrue(CancellationOperations.validateCustomerCancellation(1, List.of(7, 8)) == null);
+        assertTrue(CancellationOperations.validateCustomerCancellation(1, List.of(7, 7))
+                .contains("only once"));
+    }
+
+    private void resaleCapValidated() {
+        assertEquals(
+                new BigDecimal("138.00"),
+                ResaleOperations.calculateCapPrice(
+                        new BigDecimal("120.00"),
+                        new BigDecimal("1.15")
+                )
+        );
+    }
+
+    private void reviewRulesValidated() {
+        assertTrue(ReviewOperations.validateReview(1, 1, 5, 1, "A useful comment.") == null);
+        assertTrue(ReviewOperations.validateReview(1, 1, 0, 5, "A useful comment.")
+                .contains("1 to 5"));
+        assertTrue(ReviewOperations.validateReview(1, 1, 5, 5, " ")
+                .contains("required"));
+    }
+
     private void dataGenerationDeterministic() {
         String first = DevelopmentDataGenerator.generateSql();
         String second = DevelopmentDataGenerator.generateSql();
         assertEquals(first, second);
         assertTrue(first.contains("(7001, 2001, 2101"));
         assertTrue(first.contains("(8002, 7002, 6002"));
+        assertTrue(first.contains("(2001, 'Avery Adams',"));
+        assertTrue(!first.contains("'Avery Adams 001'"));
     }
 
     private void test(String name, CheckedTest test) {

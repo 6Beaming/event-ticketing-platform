@@ -10,8 +10,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public final class UserProfileOperations {
@@ -119,6 +122,89 @@ public final class UserProfileOperations {
         });
     }
 
+    public OperationResult<List<CustomerOrderHistoryEntry>> getCustomerOrderHistory(
+            int customerId
+    ) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            if (!customerExists(connection, customerId)) {
+                return OperationResult.notFound("Customer not found.");
+            }
+
+            String sql = """
+                    SELECT tr.transaction_id, tr.transaction_type, tr.transaction_date,
+                           tr.payment_card_number,
+                           t.ticket_id, t.performance_id, t.tier_code,
+                           t.status AS ticket_status,
+                           e.title AS event_title, p.date_time AS performance_date_time,
+                           p.status AS performance_status,
+                           v.name AS venue_name, v.city AS venue_city,
+                           COALESCE(rl.listing_price, t.face_value) AS purchase_price,
+                           COALESCE(ps.section_name, gac.section_name) AS section_name,
+                           ps.row_name, ps.seat_number,
+                           own.acquired_at, own.ended_at AS ownership_ended_at,
+                           tc.cancellation_date,
+                           COALESCE(ref.amount, 0) AS refund_amount
+                    FROM Transactions tr
+                    JOIN TicketOwnership own
+                      ON own.acquired_transaction_id = tr.transaction_id
+                     AND own.customer_id = tr.customer_id
+                    JOIN Tickets t ON t.ticket_id = own.ticket_id
+                    JOIN Performance p ON p.performance_id = t.performance_id
+                    JOIN Event e ON e.event_id = p.event_id
+                    JOIN Venue v ON v.venue_id = p.venue_id
+                    LEFT JOIN ResaleListing rl
+                      ON rl.listing_id = own.acquired_listing_id
+                    LEFT JOIN PerformanceSeats ps
+                      ON ps.performance_seat_id = t.performance_seats_ref
+                     AND ps.performance_id = t.performance_id
+                    LEFT JOIN GeneralAdmissionCapacity gac
+                      ON gac.ga_capacity_id = t.general_seats_ref
+                     AND gac.performance_id = t.performance_id
+                    LEFT JOIN TicketCancellation tc
+                      ON tc.ownership_id = own.ownership_id
+                    LEFT JOIN Refund ref ON ref.cancellation_id = tc.cancellation_id
+                    WHERE tr.customer_id = ?
+                    ORDER BY tr.transaction_date DESC, tr.transaction_id DESC, t.ticket_id
+                    """;
+            List<CustomerOrderHistoryEntry> history = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, customerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        history.add(new CustomerOrderHistoryEntry(
+                                rows.getInt("transaction_id"),
+                                rows.getString("transaction_type"),
+                                rows.getTimestamp("transaction_date").toLocalDateTime(),
+                                maskCard(rows.getString("payment_card_number")),
+                                rows.getInt("ticket_id"),
+                                rows.getInt("performance_id"),
+                                rows.getString("event_title"),
+                                rows.getTimestamp("performance_date_time").toLocalDateTime(),
+                                rows.getString("performance_status"),
+                                rows.getString("venue_name"),
+                                rows.getString("venue_city"),
+                                rows.getString("tier_code"),
+                                rows.getBigDecimal("purchase_price"),
+                                rows.getString("ticket_status"),
+                                rows.getString("section_name"),
+                                rows.getString("row_name"),
+                                nullableInt(rows, "seat_number"),
+                                rows.getTimestamp("acquired_at").toLocalDateTime(),
+                                nullableDateTime(rows, "ownership_ended_at"),
+                                nullableDateTime(rows, "cancellation_date"),
+                                rows.getBigDecimal("refund_amount")
+                        ));
+                    }
+                }
+            }
+            return OperationResult.success("Customer order and ticket history retrieved.", history);
+        });
+    }
+
     public OperationResult<Void> deactivateUser(int userId) {
         if (userId <= 0) {
             return OperationResult.invalidInput("User ID must be positive.");
@@ -163,6 +249,17 @@ public final class UserProfileOperations {
         String sql = "SELECT 1 FROM Users WHERE email = ? LIMIT 1";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, email.trim());
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
+            }
+        }
+    }
+
+    private boolean customerExists(Connection connection, int customerId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM Customer WHERE user_id = ?"
+        )) {
+            statement.setInt(1, customerId);
             try (ResultSet rows = statement.executeQuery()) {
                 return rows.next();
             }
@@ -245,6 +342,17 @@ public final class UserProfileOperations {
         }
         int visibleStart = Math.max(0, cardNumber.length() - 4);
         return "****" + cardNumber.substring(visibleStart);
+    }
+
+    private Integer nullableInt(ResultSet rows, String column) throws SQLException {
+        int value = rows.getInt(column);
+        return rows.wasNull() ? null : value;
+    }
+
+    private java.time.LocalDateTime nullableDateTime(ResultSet rows, String column)
+            throws SQLException {
+        Timestamp value = rows.getTimestamp(column);
+        return value == null ? null : value.toLocalDateTime();
     }
 
     private LocalDate todayUtc() {

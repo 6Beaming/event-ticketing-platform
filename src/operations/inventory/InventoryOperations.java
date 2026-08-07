@@ -6,13 +6,18 @@ import database.TransactionManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public final class InventoryOperations {
+    private static final String SEAT_BLOCKING_PERFORMANCE_CONFLICT =
+            "Seats can be blocked only for a scheduled future performance.";
+
     private final TransactionManager transactions;
 
     public InventoryOperations(TransactionManager transactions) {
@@ -28,9 +33,8 @@ public final class InventoryOperations {
         }
 
         return transactions.execute(connection -> {
-            OperationResult<Void> saleable = checkSaleablePerformance(connection, performanceId);
-            if (!saleable.isSuccess()) {
-                return copyFailure(saleable);
+            if (!performanceExists(connection, performanceId)) {
+                return OperationResult.notFound("Performance not found.");
             }
 
             String sql = """
@@ -82,9 +86,8 @@ public final class InventoryOperations {
         }
 
         return transactions.execute(connection -> {
-            OperationResult<Void> saleable = checkSaleablePerformance(connection, performanceId);
-            if (!saleable.isSuccess()) {
-                return copyFailure(saleable);
+            if (!performanceExists(connection, performanceId)) {
+                return OperationResult.notFound("Performance not found.");
             }
 
             String sql = """
@@ -124,37 +127,250 @@ public final class InventoryOperations {
         });
     }
 
-    private OperationResult<Void> checkSaleablePerformance(
+    public OperationResult<Void> blockSeat(
+            int performanceId,
+            String rowName,
+            int seatNumber
+    ) {
+        return changeSeatBlock(performanceId, rowName, seatNumber, true);
+    }
+
+    public OperationResult<Void> unblockSeat(
+            int performanceId,
+            String rowName,
+            int seatNumber
+    ) {
+        return changeSeatBlock(performanceId, rowName, seatNumber, false);
+    }
+
+    public OperationResult<Void> checkPerformanceForSeatBlocking(int performanceId) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+
+        return transactions.execute(
+                connection -> checkPerformanceForSeatBlocking(
+                        connection,
+                        performanceId,
+                        false
+                )
+        );
+    }
+
+    public OperationResult<List<Integer>> resolveReservedSeatIds(
+            int performanceId,
+            List<ReservedSeatLocation> locations
+    ) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+        if (locations == null || locations.isEmpty()) {
+            return OperationResult.invalidInput("At least one reserved seat is required.");
+        }
+
+        Set<String> uniqueLocations = new HashSet<>();
+        for (ReservedSeatLocation location : locations) {
+            if (location == null || location.getRowName() == null
+                    || location.getRowName().isBlank() || location.getSeatNumber() <= 0) {
+                return OperationResult.invalidInput(
+                        "Every reserved seat requires a row and a positive seat number."
+                );
+            }
+            String key = location.getRowName().trim().toLowerCase(Locale.ROOT)
+                    + ":" + location.getSeatNumber();
+            if (!uniqueLocations.add(key)) {
+                return OperationResult.invalidInput(
+                        "A reserved seat can be requested only once per booking."
+                );
+            }
+        }
+
+        return transactions.execute(connection -> {
+            if (!performanceExists(connection, performanceId)) {
+                return OperationResult.notFound("Performance not found.");
+            }
+
+            String sql = """
+                    SELECT performance_seat_id
+                    FROM PerformanceSeats
+                    WHERE performance_id = ? AND row_name = ? AND seat_number = ?
+                    ORDER BY performance_seat_id
+                    """;
+            List<Integer> seatIds = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                for (ReservedSeatLocation location : locations) {
+                    String rowName = location.getRowName().trim();
+                    statement.setInt(1, performanceId);
+                    statement.setString(2, rowName);
+                    statement.setInt(3, location.getSeatNumber());
+                    try (ResultSet rows = statement.executeQuery()) {
+                        if (!rows.next()) {
+                            return OperationResult.notFound(
+                                    "Reserved row " + rowName + ", seat "
+                                            + location.getSeatNumber()
+                                            + " was not found for this performance."
+                            );
+                        }
+                        int seatId = rows.getInt("performance_seat_id");
+                        if (rows.next()) {
+                            return OperationResult.conflict(
+                                    "Row " + rowName + ", seat "
+                                            + location.getSeatNumber()
+                                            + " exists in more than one reserved section."
+                            );
+                        }
+                        seatIds.add(seatId);
+                    }
+                }
+            }
+            return OperationResult.success(
+                    "Reserved seats found.",
+                    List.copyOf(seatIds)
+            );
+        });
+    }
+
+    private OperationResult<Void> changeSeatBlock(
+            int performanceId,
+            String rowName,
+            int seatNumber,
+            boolean targetBlocked
+    ) {
+        if (performanceId <= 0 || rowName == null || rowName.isBlank() || seatNumber <= 0) {
+            return OperationResult.invalidInput(
+                    "Performance ID, row, and a positive seat number are required."
+            );
+        }
+
+        return transactions.execute(connection -> {
+            OperationResult<Void> performanceCheck = checkPerformanceForSeatBlocking(
+                    connection,
+                    performanceId,
+                    true
+            );
+            if (!performanceCheck.isSuccess()) {
+                return performanceCheck;
+            }
+
+            String sql = """
+                    SELECT ps.performance_seat_id, ps.blocked_status
+                    FROM PerformanceSeats ps
+                    WHERE ps.performance_id = ?
+                      AND ps.row_name = ?
+                      AND ps.seat_number = ?
+                    FOR UPDATE
+                    """;
+            int performanceSeatId;
+            boolean currentlyBlocked;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                statement.setString(2, rowName.trim());
+                statement.setInt(3, seatNumber);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound(
+                                "Reserved row " + rowName.trim() + ", seat " + seatNumber
+                                        + " was not found for this performance."
+                        );
+                    }
+                    performanceSeatId = rows.getInt("performance_seat_id");
+                    currentlyBlocked = rows.getBoolean("blocked_status");
+                    if (rows.next()) {
+                        return OperationResult.conflict(
+                                "Row " + rowName.trim() + ", seat " + seatNumber
+                                        + " exists in more than one reserved section."
+                        );
+                    }
+                }
+            }
+
+            boolean sold = activeTicketExists(connection, performanceSeatId);
+            String rejection = validateSeatChange(currentlyBlocked, sold, targetBlocked);
+            if (rejection != null) {
+                return OperationResult.conflict(rejection);
+            }
+
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE PerformanceSeats SET blocked_status = ? "
+                            + "WHERE performance_id = ? AND performance_seat_id = ?"
+            )) {
+                statement.setBoolean(1, targetBlocked);
+                statement.setInt(2, performanceId);
+                statement.setInt(3, performanceSeatId);
+                statement.executeUpdate();
+            }
+            return OperationResult.success(
+                    targetBlocked ? "Seat blocked." : "Seat unblocked."
+            );
+        });
+    }
+
+    private OperationResult<Void> checkPerformanceForSeatBlocking(
             java.sql.Connection connection,
-            int performanceId
+            int performanceId,
+            boolean lockForUpdate
     ) throws SQLException {
-        String sql = "SELECT status, date_time FROM Performance WHERE performance_id = ?";
+        String sql = """
+                SELECT status, date_time
+                FROM Performance
+                WHERE performance_id = ?
+                """ + (lockForUpdate ? " FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, performanceId);
             try (ResultSet rows = statement.executeQuery()) {
                 if (!rows.next()) {
                     return OperationResult.notFound("Performance not found.");
                 }
-                if (!"scheduled".equals(rows.getString("status"))) {
-                    return OperationResult.conflict("Only scheduled performances have saleable inventory.");
+                if (!"scheduled".equals(rows.getString("status"))
+                        || !rows.getTimestamp("date_time").toLocalDateTime()
+                        .isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
+                    return OperationResult.conflict(SEAT_BLOCKING_PERFORMANCE_CONFLICT);
                 }
-                Timestamp dateTime = rows.getTimestamp("date_time");
-                if (dateTime.toLocalDateTime().isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
-                    return OperationResult.conflict("Past performances do not have saleable inventory.");
-                }
-                return OperationResult.success("Performance is saleable.");
+                return OperationResult.success("Performance is open for seat blocking.");
             }
         }
     }
 
-    private <T> OperationResult<T> copyFailure(OperationResult<?> result) {
-        return switch (result.getStatus()) {
-            case INVALID_INPUT -> OperationResult.invalidInput(result.getMessage());
-            case NOT_FOUND -> OperationResult.notFound(result.getMessage());
-            case FORBIDDEN -> OperationResult.forbidden(result.getMessage());
-            case CONFLICT -> OperationResult.conflict(result.getMessage());
-            case DATABASE_FAILURE -> OperationResult.databaseFailure(result.getMessage());
-            case SUCCESS -> throw new IllegalArgumentException("Cannot copy a successful result as failure");
-        };
+    public static String validateSeatChange(
+            boolean currentlyBlocked,
+            boolean sold,
+            boolean targetBlocked
+    ) {
+        if (sold) {
+            return targetBlocked
+                    ? "A sold seat cannot be blocked; it can be freed only through cancellation."
+                    : "A sold seat cannot be unblocked; it can be freed only through cancellation.";
+        }
+        if (targetBlocked && currentlyBlocked) {
+            return "The seat is already blocked.";
+        }
+        if (!targetBlocked && !currentlyBlocked) {
+            return "The seat is not blocked.";
+        }
+        return null;
+    }
+
+    private boolean activeTicketExists(java.sql.Connection connection, int performanceSeatId)
+            throws SQLException {
+        String sql = "SELECT 1 FROM Tickets WHERE active_reserved_seat_ref = ? LIMIT 1";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceSeatId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
+            }
+        }
+    }
+
+    private boolean performanceExists(
+            java.sql.Connection connection,
+            int performanceId
+    ) throws SQLException {
+        String sql = "SELECT 1 FROM Performance WHERE performance_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
+            }
+        }
     }
 }

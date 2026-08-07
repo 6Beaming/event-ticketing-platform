@@ -4,62 +4,64 @@ The dated work blocks below are complete only when every item in this section is
 
 ### Information and constraints to represent
 
-- [ ] Venues store name, latitude, longitude, street address, postal code, city, and country.
-- [ ] Each venue has named sections.
-- [ ] A section is either reserved seating or general admission, never both.
-- [ ] Reserved sections have named rows and numbered seats.
-- [ ] General-admission sections have standing capacity but no rows or seats.
-- [ ] Section names are unique within a venue, row names within a section, and seat numbers within a row.
-- [ ] Each event is managed by an organizer.
-- [ ] Events use the official Ticketmaster segment/genre taxonomy.
-- [ ] Each event has one or more artists or teams with billing order.
-- [ ] Each event has one or more performances and a resale price cap.
-- [ ] Each performance has a venue, date, and time.
-- [ ] Every performance has price tiers and assigns every venue section to exactly one tier.
-- [ ] Section-to-tier assignments can differ between performances at the same venue.
-- [ ] General-admission tickets reduce the remaining performance-section capacity.
-- [ ] Individual reserved seats can be blocked for a particular performance.
-- [ ] Users store name, address, email, and date of birth and must be at least 18.
-- [ ] A user can be a customer or organizer.
-- [ ] Customers have fictional payment information and orders retain a payment snapshot.
-- [ ] No real payment processing or card-number validation is required; only fictional order payment data is recorded.
-- [ ] Customer order/ticket history and organizer event/sales history are retained.
-- [ ] Every order belongs to one customer and one performance and contains at least one ticket.
-- [ ] Each ticket records its face value at the time of sale.
-- [ ] A ticket identifies either a reserved seat or a general-admission section allocation.
-- [ ] Customer and organizer cancellations, refunds, and their history are retained.
-- [ ] Resale listings enforce the event cap and support active, sold, and withdrawn states.
-- [ ] Every ticket retains its complete ownership history.
-- [ ] Reviews store free-form comments plus separate event and venue ratings from 1-5.
-- [ ] Review eligibility requires a past, non-cancelled attended performance and is limited to once per customer/performance.
-- [ ] The chosen meaning of “recently attended” is documented as a project assumption.
+- [x] Venues store name, latitude, longitude, street address, postal code, city, and country.
+- [x] Each venue has named sections.
+- [x] A section is either reserved seating or general admission, never both.
+- [x] Reserved sections have named rows and numbered seats.
+- [x] General-admission sections have standing capacity but no rows or seats.
+- [x] Section names are unique within a venue, row names within a section, and seat numbers within a row.
+- [x] Each event is managed by an organizer.
+- [x] Events use the official Ticketmaster segment/genre taxonomy.
+- [x] Each event has one or more artists or teams with billing order.
+- [x] Each event has one or more performances and a resale price cap.
+- [x] Each performance has a venue, date, and time.
+- [x] Every performance has price tiers and assigns every venue section to exactly one tier.
+- [x] Section-to-tier assignments can differ between performances at the same venue.
+- [x] General-admission tickets reduce the remaining performance-section capacity.
+- [x] Individual reserved seats can be blocked for a particular performance.
+- [x] Users store name, address, email, and date of birth and must be at least 18.
+- [x] A user can be a customer or organizer.
+- [x] Customers have fictional payment information and orders retain a payment snapshot.
+- [x] No real payment processing or card-number validation is required; only fictional order payment data is recorded.
+- [x] Customer order/ticket history and organizer event/sales history are retained.
+- [x] Every order belongs to one customer and one performance and contains at least one ticket.
+- [x] Each ticket records its face value at the time of sale.
+- [x] A ticket identifies either a reserved seat or a general-admission section allocation.
+- [x] Customer and organizer cancellations, refunds, and their history are retained.
+- [x] Resale listings enforce the event cap and support active, sold, and withdrawn states.
+- [x] Every ticket retains its complete ownership history.
+- [x] Reviews store free-form comments plus separate event and venue ratings from 1-5.
+- [x] Review eligibility requires a past, non-cancelled attended performance and is limited to once per customer/performance.
+- [x] The chosen meaning of “recently attended” is documented as a project assumption.
 
 ### Operations to support
 
-- [ ] Create customer and organizer profiles while collecting all required information.
-- [ ] Delete users according to a documented history-preserving policy.
-- [ ] Create an event and associate its organizer, taxonomy, artists, and billing order.
-- [ ] Add performances to an event.
-- [ ] Define performance price tiers and prices.
-- [ ] Assign every venue section to one tier for the performance.
-- [ ] Set the event resale cap.
-- [ ] Update a future tier price only when no ticket has been sold in that tier.
-- [ ] Inform the organizer when a tier-price change is rejected.
-- [ ] Block only an available seat for a performance and unblock it later.
-- [ ] Reject blocking a sold seat.
-- [ ] Book available reserved seats without double-selling.
-- [ ] Book general-admission tickets without exceeding capacity.
-- [ ] Reject the entire booking if any requested inventory is unavailable.
-- [ ] Allow only the customer who placed the order to cancel its eligible tickets.
-- [ ] Enforce the seven-day customer cancellation deadline and full refund.
-- [ ] Allow only the event organizer to cancel its performance.
-- [ ] Refund every active ticket when a performance is cancelled.
-- [ ] Restore or close inventory consistently and retain cancellation history.
-- [ ] List only a currently owned ticket at or below its resale cap.
-- [ ] Withdraw an unsold resale listing.
-- [ ] Purchase another customer’s active listing and transfer ownership atomically.
-- [ ] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
-- [ ] Flag and prohibit customers who satisfy the possible-scalper rule.
+- [x] Create customer and organizer profiles while collecting all required information.
+- [x] Delete users according to a documented history-preserving policy.
+- [x] View a customer's complete past and upcoming order/ticket history in the terminal.
+- [x] Create an event and associate its organizer, taxonomy, artists, and billing order.
+- [x] Add performances to an event.
+- [x] View an organizer's managed events and complete performance sales history in the terminal.
+- [x] Define performance price tiers and prices.
+- [x] Assign every venue section to one tier for the performance.
+- [x] Set the event resale cap.
+- [x] Update a future tier price only when no ticket has been sold in that tier.
+- [x] Inform the organizer when a tier-price change is rejected.
+- [x] Block only an available seat for a performance and unblock it later.
+- [x] Reject blocking a sold seat.
+- [x] Book available reserved seats without double-selling.
+- [x] Book general-admission tickets without exceeding capacity.
+- [x] Reject the entire booking if any requested inventory is unavailable.
+- [x] Allow only the customer who placed the order to cancel its eligible tickets.
+- [x] Enforce the seven-day customer cancellation deadline and full refund.
+- [x] Allow only the event organizer to cancel its performance.
+- [x] Refund every active ticket when a performance is cancelled.
+- [x] Restore or close inventory consistently and retain cancellation history.
+- [x] List only a currently owned ticket at or below its resale cap.
+- [x] Withdraw an unsold resale listing.
+- [x] Purchase another customer’s active listing and transfer ownership atomically.
+- [x] View a ticket's complete ownership-transfer history in the terminal.
+- [x] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
 
 ### Queries Q1-Q7
 
@@ -78,17 +80,18 @@ The dated work blocks below are complete only when every item in this section is
 
 All reports must be implemented in SQL and invoked from Java. R9 may use Java text processing only for noun-phrase extraction.
 
-- [ ] **R1:** Ticket count and gross revenue for a date range by city and by venue within a city.
-- [ ] **R2:** Event/performance totals per segment and genre at country, country/city, and country/city/venue levels.
-- [ ] **R3:** Organizer gross-revenue rankings overall, per country, and optionally by city.
+- [x] **R1:** Ticket count and gross revenue for a date range by city and by venue within a city.
+- [x] **R2:** Event/performance totals per segment and genre at country, country/city, and country/city/venue levels.
+- [x] **R3:** Organizer gross-revenue rankings overall, per country, and optionally by city.
 - [ ] **R4:** For every city, customers who bought at least 10 tickets and listed more than half within the past year.
-- [ ] **R5:** Customer order rankings for a time period and by venue city; city ranking includes customers with at least two orders in the year.
-- [ ] **R6:** Customers with the most cancelled tickets and organizers with the most cancelled performances within a year.
+- [ ] **R4:** Flag and prohibit customers identified as possible scalpers.
+- [x] **R5:** Customer order rankings for a time period and by venue city; city ranking includes customers with at least two orders in the year.
+- [x] **R6:** Customers with the most cancelled tickets and organizers with the most cancelled performances within a year.
 - [ ] **R7:** Performance and tier sell-through using sellable capacity, excluding blocked seats and including general-admission capacity.
 - [ ] **R7:** For a given month/city, report sold-out performances and those below 25% sell-through.
-- [ ] **R8:** Per-event completed resales, average markup over face value, and fraction of listings exactly at the cap.
-- [ ] **R8:** Top 10 events by resale volume in a requested period.
-- [ ] **R9:** Most popular noun phrases for each event; no word-cloud visualization is required.
+- [x] **R8:** Per-event completed resales, average markup over face value, and fraction of listings exactly at the cap.
+- [x] **R8:** Top 10 events by resale volume in a requested period.
+- [x] **R9:** Most popular noun phrases for each event; no word-cloud visualization is required.
 
 ### Organizer toolkit
 
@@ -138,12 +141,12 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 ### Submission and implementation requirements
 
 - [ ] Final archive is named after the group, for example `mytix_lastname1_lastname2.zip`.
-- [ ] Application uses Java embedded SQL with MySQL 8.
+- [x] Application uses Java embedded SQL with MySQL 8.
 - [ ] Terminal interface exposes every required operation, query, report, and toolkit function.
-- [ ] `sql/schema.sql` creates all tables and constraints in one execution.
-- [ ] `sql/drop.sql` drops the complete schema safely.
+- [x] `sql/schema.sql` creates all tables and constraints in one execution.
+- [x] `sql/drop.sql` drops the complete schema safely.
 - [x] `sql/load.sql` loads all sample data in one execution.
-- [ ] `run.sh` compiles and runs the application with one command.
-- [ ] The extensionless `README` contains only names, student numbers, and `run.sh`.
-- [ ] Reasonable assumptions are documented and do not conflict with the PDF.
+- [x] `run.sh` compiles and runs the application with one command.
+- [x] The extensionless `README` contains only names, student numbers, and `run.sh`.
+- [x] Reasonable assumptions are documented and do not conflict with the PDF.
 - [ ] Both members understand the full codebase and record their contributions.

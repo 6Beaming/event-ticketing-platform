@@ -13,7 +13,11 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 ## Required operations
 
 - Create and delete user profiles.
+- View each customer's complete order and ticket history, including past and upcoming
+  performances, resale acquisitions, ownership changes, cancellations, and refunds.
 - Create events and performances.
+- View every event managed by an organizer and the complete sales history of each
+  performance, including original sales, cancellations, refunds, and completed resales.
 - Define price tiers and assign venue sections to them per performance.
 - Change an unsold future tier's price and reject changes after a ticket in that tier is sold.
 - Block or unblock an available seat without allowing a sold seat to be blocked.
@@ -22,8 +26,8 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - Cancel an entire performance and refund every sold ticket.
 - List an owned ticket for resale at or below the event cap, withdraw a listing, and purchase another customer's listing.
 - Preserve every ticket ownership transfer.
+- Inspect the complete ownership history of a ticket in the terminal.
 - Submit one eligible event and venue review per attended performance.
-- Flag and prohibit customers who meet the project's possible-scalper rule.
 
 ## Required queries
 
@@ -78,7 +82,7 @@ mytix/
 └── src/                    # Full Java source code of your application
     ├── Main.java           # Entry point for the application
     ├── database/           # JDBC configuration and connection lifecycle
-    ├── operations/         # Future user, organizer, customer, and booking logic
+    ├── operations/         # Profile, organizer, booking, cancellation, resale, and review logic
     ├── queries/            # Q1–Q7 SQL search query implementations
     ├── reports/            # R1–R9 SQL report generators and text analysis
     └── ui/                 # Persistent text-based terminal loop
@@ -106,7 +110,7 @@ The application defaults to the local `mytix` database with the username
 `config.properties` copied from `config.properties.example`. If the initial
 connection fails, the terminal starts in offline mode and option 10 can retry.
 
-### Foundation development commands
+### Development commands
 
 ```sh
 sh run.sh --generate-data
@@ -116,8 +120,9 @@ sh run.sh --database-check
 
 - `--generate-data` deterministically rewrites `data/development-data.sql`.
 - `--self-test` checks validation, commit/rollback behavior, inventory math,
-  event/pricing rejection rules, and deterministic generation without MySQL.
+  organizer controls, booking/cancellation/resale rules, reviews,
+  and deterministic generation without MySQL.
 - `--database-check` drops and recreates only the configured MyTix tables,
-  executes `schema.sql` and `load.sql`, exercises the foundation operations,
+  executes `schema.sql` and `load.sql`, exercises all required operations,
   and restores the deterministic dataset. Use it only against the development
   MyTix database.
