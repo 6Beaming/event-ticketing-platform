@@ -3,6 +3,7 @@ package operations.resale;
 import common.OperationResult;
 import database.JdbcSupport;
 import database.TransactionManager;
+import operations.restriction.CustomerRestrictionGuard;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -19,12 +20,14 @@ import java.util.List;
 
 public final class ResaleOperations {
     private final TransactionManager transactions;
+    private final CustomerRestrictionGuard restrictions;
 
     public ResaleOperations(TransactionManager transactions) {
         if (transactions == null) {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
+        this.restrictions = new CustomerRestrictionGuard();
     }
 
     public OperationResult<List<OwnedResaleTicket>> getOwnedTickets(int customerId) {
@@ -168,6 +171,14 @@ public final class ResaleOperations {
         return transactions.execute(connection -> {
             if (!lockActiveCustomer(connection, sellerId)) {
                 return OperationResult.notFound("Active seller account not found.");
+            }
+            OperationResult<Void> restriction = restrictions.checkCustomerAllowed(
+                    connection,
+                    sellerId,
+                    LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
+            );
+            if (!restriction.isSuccess()) {
+                return OperationResult.forbidden(restriction.getMessage());
             }
             TicketForListing ticket = lockTicketForListing(connection, ticketId);
             if (ticket == null) {
@@ -333,6 +344,14 @@ public final class ResaleOperations {
                 return OperationResult.notFound(
                         "An active buyer with saved payment information was not found."
                 );
+            }
+            OperationResult<Void> restriction = restrictions.checkCustomerAllowed(
+                    connection,
+                    buyerId,
+                    LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
+            );
+            if (!restriction.isSuccess()) {
+                return OperationResult.forbidden(restriction.getMessage());
             }
             ListingForPurchase listing = lockListingForPurchase(
                     connection,

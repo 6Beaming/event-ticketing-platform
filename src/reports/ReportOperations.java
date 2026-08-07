@@ -2,6 +2,8 @@ package reports;
 
 import common.OperationResult;
 import database.TransactionManager;
+import operations.restriction.CustomerRestrictionGuard;
+import operations.restriction.ScalperCandidate;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +46,8 @@ public OperationResult<List<TicketRevenueReport>> report1a(
                 JOIN Venue v
                     ON v.venue_id = p.venue_id
                 WHERE t.status = 'active'
-                  AND p.date_time BETWEEN ? AND ?
+                  AND p.date_time >= ?
+                  AND p.date_time < ?
                 GROUP BY v.city
                 ORDER BY gross_revenue DESC
                 """;
@@ -104,7 +107,8 @@ public OperationResult<List<TicketRevenueReport>> report1b(
                     ON v.venue_id = p.venue_id
                 WHERE t.status = 'active'
                   AND v.city = ?
-                  AND p.date_time BETWEEN ? AND ?
+                  AND p.date_time >= ?
+                  AND p.date_time < ?
                 GROUP BY v.city, v.name
                 ORDER BY gross_revenue DESC
                 """;
@@ -526,89 +530,26 @@ public OperationResult<List<ScalperDetectionReport>> report4(
 ) {
 
     return transactions.execute(connection -> {
+        CustomerRestrictionGuard restrictions = new CustomerRestrictionGuard();
+        List<ScalperCandidate> candidates = restrictions.findCandidates(
+                connection,
+                oneYearAgo
+        );
+        restrictions.refreshPossibleScalperRestrictions(connection, candidates);
 
-        String sql = """
-                SELECT purchases.customer_id,
-                       u.name,
-                       v.city,
-                       purchases.num_purchased,
-                       COALESCE(listed.num_listed, 0) AS num_listed
-                FROM (
-                    SELECT tr.customer_id,
-                           p.venue_id,
-                           COUNT(*) AS num_purchased
-                    FROM Tickets t
-                    JOIN Transactions tr
-                        ON tr.transaction_id = t.purchase_id
-                    JOIN Performance p
-                        ON p.performance_id = t.performance_id
-                    WHERE tr.transaction_type = 'purchase'
-                      AND tr.transaction_date >= ?
-                    GROUP BY tr.customer_id, p.venue_id
-                ) AS purchases
-                JOIN Venue v
-                    ON v.venue_id = purchases.venue_id
-                JOIN Users u
-                    ON u.user_id = purchases.customer_id
-                LEFT JOIN (
-                    SELECT o.customer_id,
-                           p.venue_id,
-                           COUNT(*) AS num_listed
-                    FROM ResaleListing rl
-                    JOIN TicketOwnership o
-                        ON o.ownership_id = rl.seller_ownership_id
-                    JOIN Tickets t
-                        ON t.ticket_id = o.ticket_id
-                    JOIN Performance p
-                        ON p.performance_id = t.performance_id
-                    WHERE rl.listed_date >= ?
-                    GROUP BY o.customer_id, p.venue_id
-                ) AS listed
-                    ON listed.customer_id = purchases.customer_id
-                   AND listed.venue_id = purchases.venue_id
-                WHERE purchases.num_purchased >= 10
-                  AND COALESCE(listed.num_listed, 0) > purchases.num_purchased / 2
-                ORDER BY v.city, num_listed DESC
-                """;
-
-
-        List<ScalperDetectionReport> reports = new ArrayList<>();
-
-
-        try (PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
-
-
-            statement.setTimestamp(
-                    1,
-                    Timestamp.valueOf(oneYearAgo)
-            );
-
-            statement.setTimestamp(
-                    2,
-                    Timestamp.valueOf(oneYearAgo)
-            );
-
-
-            try (ResultSet rows = statement.executeQuery()) {
-
-
-                while (rows.next()) {
-
-                    reports.add(new ScalperDetectionReport(
-                            rows.getInt("customer_id"),
-                            rows.getString("name"),
-                            rows.getString("city"),
-                            rows.getInt("num_purchased"),
-                            rows.getInt("num_listed")
-                    ));
-                }
-            }
-        }
+        List<ScalperDetectionReport> reports = candidates.stream()
+                .map(candidate -> new ScalperDetectionReport(
+                        candidate.getCustomerId(),
+                        candidate.getCustomerName(),
+                        candidate.getCity(),
+                        candidate.getTicketsPurchased(),
+                        candidate.getTicketsListed()
+                ))
+                .toList();
 
 
         return OperationResult.success(
-                "Scalper detection report generated.",
+                "Scalper detection report generated and restrictions refreshed.",
                 List.copyOf(reports)
         );
 
@@ -638,7 +579,8 @@ public OperationResult<List<CustomerOrderRankingReport>> report5a(
                 JOIN Users u
                     ON u.user_id = tr.customer_id
                 WHERE tr.transaction_type = 'purchase'
-                  AND tr.transaction_date BETWEEN ? AND ?
+                  AND tr.transaction_date >= ?
+                  AND tr.transaction_date < ?
                 GROUP BY tr.customer_id, u.name
                 ORDER BY num_orders DESC
                 """;
@@ -879,7 +821,7 @@ public OperationResult<List<ResaleReport>> report8a() {
                        COUNT(*) AS num_completed_resales,
                        ROUND(
                            AVG((rl.listing_price - t.face_value)
-                           / t.face_value), 4
+                           / NULLIF(t.face_value, 0)), 4
                        ) AS avg_markup_pct,
                        ROUND(
                            SUM(
@@ -891,6 +833,9 @@ public OperationResult<List<ResaleReport>> report8a() {
                            ) / COUNT(*), 4
                        ) AS pct_at_cap
                 FROM ResaleListing rl
+                JOIN Transactions tr
+                    ON tr.listing_id = rl.listing_id
+                   AND tr.transaction_type = 'resale'
                 JOIN Tickets t
                     ON t.ticket_id = rl.ticket_id
                 JOIN Performance p
@@ -899,6 +844,7 @@ public OperationResult<List<ResaleReport>> report8a() {
                     ON e.event_id = p.event_id
                 WHERE rl.status = 'sold'
                 GROUP BY e.event_id, e.title
+                ORDER BY num_completed_resales DESC, e.event_id
                 """;
 
 
@@ -945,6 +891,9 @@ public OperationResult<List<ResaleReport>> report8b(
                        e.title,
                        COUNT(*) AS resale_volume
                 FROM ResaleListing rl
+                JOIN Transactions tr
+                    ON tr.listing_id = rl.listing_id
+                   AND tr.transaction_type = 'resale'
                 JOIN Tickets t
                     ON t.ticket_id = rl.ticket_id
                 JOIN Performance p
@@ -952,9 +901,10 @@ public OperationResult<List<ResaleReport>> report8b(
                 JOIN Event e
                     ON e.event_id = p.event_id
                 WHERE rl.status = 'sold'
-                  AND rl.listed_date BETWEEN ? AND ?
+                  AND tr.transaction_date >= ?
+                  AND tr.transaction_date < ?
                 GROUP BY e.event_id, e.title
-                ORDER BY resale_volume DESC
+                ORDER BY resale_volume DESC, e.event_id
                 LIMIT 10
                 """;
 
@@ -1096,7 +1046,12 @@ public OperationResult<List<SellThroughReport>> report7a() {
                         GROUP BY performance_id
                     ) seats
                         ON seats.performance_id = p2.performance_id
-                    LEFT JOIN GeneralAdmissionCapacity ga
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               SUM(total_capacity) AS total_capacity
+                        FROM GeneralAdmissionCapacity
+                        GROUP BY performance_id
+                    ) ga
                         ON ga.performance_id = p2.performance_id
                 ) sellable
                     ON sellable.performance_id = p.performance_id
@@ -1167,8 +1122,8 @@ public OperationResult<List<SellThroughTierReport>> report7b() {
                            SUM(
                                CASE
                                    WHEN s.section_type = 'reserved'
-                                   THEN seat_ct.n
-                                   ELSE ga.total_capacity
+                                   THEN COALESCE(seat_ct.n, 0)
+                                   ELSE COALESCE(ga.total_capacity, 0)
                                END
                            ) AS capacity
                     FROM SectionTierAssignment sta
@@ -1209,6 +1164,7 @@ public OperationResult<List<SellThroughTierReport>> report7b() {
                 ) tier_sold
                     ON tier_sold.performance_id = pt.performance_id
                    AND tier_sold.tier_code = pt.tier_code
+                WHERE tier_cap.capacity > 0
                 """;
 
 
@@ -1285,7 +1241,12 @@ public OperationResult<List<SellThroughBucketReport>> report7c(
                         GROUP BY performance_id
                     ) seats
                         ON seats.performance_id = p2.performance_id
-                    LEFT JOIN GeneralAdmissionCapacity ga
+                    LEFT JOIN (
+                        SELECT performance_id,
+                               SUM(total_capacity) AS total_capacity
+                        FROM GeneralAdmissionCapacity
+                        GROUP BY performance_id
+                    ) ga
                         ON ga.performance_id = p2.performance_id
                 ) sellable
                     ON sellable.performance_id = p.performance_id
@@ -1298,8 +1259,8 @@ public OperationResult<List<SellThroughBucketReport>> report7c(
                 ) sold
                     ON sold.performance_id = p.performance_id
                 WHERE sellable.capacity > 0
-                  AND YEAR(p.date_time) = ?
-                  AND MONTH(p.date_time) = ?
+                  AND p.date_time >= ?
+                  AND p.date_time < ?
                 HAVING bucket IS NOT NULL
                 ORDER BY v.city
                 """;
@@ -1312,8 +1273,11 @@ public OperationResult<List<SellThroughBucketReport>> report7c(
                      connection.prepareStatement(sql)) {
 
 
-            statement.setInt(1, year);
-            statement.setInt(2, month);
+            LocalDateTime monthStart = java.time.YearMonth.of(year, month)
+                    .atDay(1)
+                    .atStartOfDay();
+            statement.setTimestamp(1, Timestamp.valueOf(monthStart));
+            statement.setTimestamp(2, Timestamp.valueOf(monthStart.plusMonths(1)));
 
 
             try (ResultSet rows = statement.executeQuery()) {

@@ -2,6 +2,7 @@ package testing;
 
 import common.OperationResult;
 import common.OperationStatus;
+import common.DateRange;
 import data.DevelopmentDataGenerator;
 import database.ConnectionProvider;
 import database.TransactionManager;
@@ -71,6 +72,7 @@ public final class FoundationSelfTest {
         test("review rules are validated", this::reviewRulesValidated);
         test("Q4 and Q5 search inputs are validated", this::searchInputsValidated);
         test("Q4 and Q5 SQL parameters are bound", this::searchSqlParametersBound);
+        test("date-only ranges include the complete end date", this::dateRangesAreInclusive);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -472,6 +474,32 @@ public final class FoundationSelfTest {
         for (int parameter = 1; parameter <= placeholderCount; parameter++) {
             assertTrue(recorder.boundParameters.contains(parameter));
         }
+    }
+
+    private void dateRangesAreInclusive() {
+        DateRange range = DateRange.fromInclusiveDates(
+                LocalDate.of(2026, 8, 7),
+                LocalDate.of(2026, 8, 7)
+        );
+        assertEquals(
+                LocalDateTime.of(2026, 8, 7, 0, 0),
+                range.getStartInclusive()
+        );
+        assertEquals(
+                LocalDateTime.of(2026, 8, 8, 0, 0),
+                range.getEndExclusive()
+        );
+
+        boolean rejected = false;
+        try {
+            DateRange.fromInclusiveDates(
+                    LocalDate.of(2026, 8, 8),
+                    LocalDate.of(2026, 8, 7)
+            );
+        } catch (IllegalArgumentException exception) {
+            rejected = true;
+        }
+        assertTrue(rejected);
     }
 
     private void dataGenerationDeterministic() {

@@ -368,9 +368,17 @@ public final class DevelopmentDataGenerator {
             for (int performanceOrderIndex = alreadyCreated;
                     performanceOrderIndex < target; performanceOrderIndex++) {
                 int customerId;
-                if (performance.id == 6003 && performanceOrderIndex < 3) {
+                if (performance.id == 6001 && performanceOrderIndex == 2) {
                     customerId = 2001;
-                } else if (performance.id == 6003 && performanceOrderIndex < 6) {
+                    regularCustomerOffset++;
+                } else if (performance.id == 6002 && performanceOrderIndex == 2) {
+                    customerId = 2002;
+                    regularCustomerOffset++;
+                } else if (performance.id == 6003 && performanceOrderIndex < 2) {
+                    customerId = 2001 + performanceOrderIndex;
+                } else if (performance.id == 6007 && performanceOrderIndex < 2) {
+                    customerId = 2001;
+                } else if (performance.id == 6007 && performanceOrderIndex < 4) {
                     customerId = 2002;
                 } else {
                     customerId = 2003 + (regularCustomerOffset % 98);
@@ -556,21 +564,34 @@ public final class DevelopmentDataGenerator {
     }
 
     private static void createScalperListings(Dataset dataset, int customerId, int buyerBase) {
-        List<TicketSpec> past = new ArrayList<>();
-        List<TicketSpec> future = new ArrayList<>();
+        Map<String, List<TicketSpec>> pastByCity = new LinkedHashMap<>();
+        Map<String, List<TicketSpec>> futureByCity = new LinkedHashMap<>();
         for (TicketSpec ticket : dataset.tickets) {
             if (ticket.customerId != customerId || !"active".equals(ticket.status)) {
                 continue;
             }
             PerformanceSpec performance = performanceById(dataset, ticket.performanceId);
+            String city = venueById(dataset, performance.venueId).city;
             if (performance.offsetDays < 0) {
-                past.add(ticket);
+                pastByCity.computeIfAbsent(city, ignored -> new ArrayList<>()).add(ticket);
             } else if ("scheduled".equals(performance.status)) {
-                future.add(ticket);
+                futureByCity.computeIfAbsent(city, ignored -> new ArrayList<>()).add(ticket);
             }
         }
-        require(past.size() >= 5 && future.size() >= 2,
-                "Each deterministic scalper needs past and future tickets.");
+
+        String targetCity = pastByCity.keySet().stream()
+                .filter(city -> pastByCity.get(city).size() >= 5)
+                .filter(city -> futureByCity.getOrDefault(city, List.of()).size() >= 2)
+                .filter(city -> pastByCity.get(city).size()
+                        + futureByCity.get(city).size() >= 10)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Each deterministic scalper needs ten purchases and seven "
+                                + "listable tickets in one city."
+                ));
+
+        List<TicketSpec> past = pastByCity.get(targetCity);
+        List<TicketSpec> future = futureByCity.get(targetCity);
 
         List<TicketSpec> selected = new ArrayList<>();
         selected.addAll(past.subList(0, 5));
@@ -873,12 +894,33 @@ public final class DevelopmentDataGenerator {
     }
 
     private static void validateScalper(Dataset dataset, int customerId) {
-        long purchasedTickets = dataset.tickets.stream()
-                .filter(ticket -> ticket.customerId == customerId).count();
-        long listings = dataset.listings.stream()
+        Map<String, Long> purchasesByCity = dataset.tickets.stream()
+                .filter(ticket -> ticket.customerId == customerId)
+                .collect(java.util.stream.Collectors.groupingBy(
+                        ticket -> venueById(
+                                dataset,
+                                performanceById(dataset, ticket.performanceId).venueId
+                        ).city,
+                        java.util.stream.Collectors.counting()
+                ));
+        Map<String, Long> listingsByCity = dataset.listings.stream()
                 .filter(listing -> ticketById(dataset, listing.ticketId).customerId == customerId)
-                .count();
-        require(purchasedTickets >= 10 && listings * 2 > purchasedTickets,
+                .collect(java.util.stream.Collectors.groupingBy(
+                        listing -> {
+                            TicketSpec ticket = ticketById(dataset, listing.ticketId);
+                            return venueById(
+                                    dataset,
+                                    performanceById(dataset, ticket.performanceId).venueId
+                            ).city;
+                        },
+                        java.util.stream.Collectors.counting()
+                ));
+        boolean qualifiesByCity = purchasesByCity.entrySet().stream().anyMatch(entry ->
+                entry.getValue() >= 10
+                        && listingsByCity.getOrDefault(entry.getKey(), 0L) * 2
+                        > entry.getValue()
+        );
+        require(qualifiesByCity,
                 "Customer " + customerId + " must satisfy the possible-scalper threshold.");
     }
 

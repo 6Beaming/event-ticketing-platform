@@ -385,7 +385,8 @@ public OperationResult<List<DateRangePerformanceQuery>> query4(
                     ON availability.performance_id = p.performance_id
                 WHERE p.status = 'scheduled'
                   AND p.date_time > NOW()
-                  AND p.date_time BETWEEN ? AND ?
+                  AND p.date_time >= ?
+                  AND p.date_time < ?
                   AND availability.total_available >= ?
                 """.formatted(distanceExpression));
 
@@ -539,7 +540,8 @@ public OperationResult<List<FilteredPerformanceQuery>> query5(
             sql.append("  AND g.genre_name = ?\n");
         }
         if (startDate != null) {
-            sql.append("  AND p.date_time BETWEEN ? AND ?\n");
+            sql.append("  AND p.date_time >= ?\n");
+            sql.append("  AND p.date_time < ?\n");
         }
         if (minPrice != null) {
             sql.append("  AND availability.cheapest_available_price >= ?\n");

@@ -3,6 +3,7 @@ package operations.booking;
 import common.OperationResult;
 import database.JdbcSupport;
 import database.TransactionManager;
+import operations.restriction.CustomerRestrictionGuard;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -21,12 +22,14 @@ import java.util.Set;
 
 public final class BookingOperations {
     private final TransactionManager transactions;
+    private final CustomerRestrictionGuard restrictions;
 
     public BookingOperations(TransactionManager transactions) {
         if (transactions == null) {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
+        this.restrictions = new CustomerRestrictionGuard();
     }
 
     public OperationResult<BookingSummary> bookReservedSeats(
@@ -50,6 +53,14 @@ public final class BookingOperations {
                 return OperationResult.notFound(
                         "An active customer with saved payment information was not found."
                 );
+            }
+            OperationResult<Void> restriction = restrictions.checkCustomerAllowed(
+                    connection,
+                    customerId,
+                    LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
+            );
+            if (!restriction.isSuccess()) {
+                return copyFailure(restriction);
             }
             OperationResult<Void> performance = lockSaleablePerformance(connection, performanceId);
             if (!performance.isSuccess()) {
@@ -138,6 +149,14 @@ public final class BookingOperations {
                 return OperationResult.notFound(
                         "An active customer with saved payment information was not found."
                 );
+            }
+            OperationResult<Void> restriction = restrictions.checkCustomerAllowed(
+                    connection,
+                    customerId,
+                    LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
+            );
+            if (!restriction.isSuccess()) {
+                return copyFailure(restriction);
             }
             OperationResult<Void> performance = lockSaleablePerformance(connection, performanceId);
             if (!performance.isSuccess()) {

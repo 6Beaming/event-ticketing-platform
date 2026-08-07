@@ -1,6 +1,7 @@
 package ui;
 
 import common.OperationResult;
+import common.DateRange;
 import database.DatabaseConnection;
 import database.TransactionManager;
 import operations.booking.BookingOperations;
@@ -2264,26 +2265,28 @@ private void showReports() {
 
 private LocalDateTime[] readReportDateRange() {
     while (running) {
-        LocalDateTime startDate = readDateTimeWithRetry(
-                "Start date/time (YYYY-MM-DD HH:mm): "
-        );
-        if (startDate == null) {
+        String startValue = readLine("Start date (YYYY-MM-DD): ");
+        if (!running) {
             return null;
         }
 
-        LocalDateTime endDate = readDateTimeWithRetry(
-                "End date/time (YYYY-MM-DD HH:mm): "
-        );
-        if (endDate == null) {
+        String endValue = readLine("End date (YYYY-MM-DD, inclusive): ");
+        if (!running) {
             return null;
         }
 
-        if (!startDate.isBefore(endDate)) {
-            printInputError("Start date/time must be before end date/time.");
-        } else if (endDate.isAfter(LocalDateTime.now())) {
-            printInputError("End date/time cannot be in the future.");
-        } else {
-            return new LocalDateTime[]{startDate, endDate};
+        try {
+            LocalDate startDate = LocalDate.parse(startValue);
+            LocalDate endDate = LocalDate.parse(endValue);
+            DateRange range = DateRange.fromInclusiveDates(startDate, endDate);
+            return new LocalDateTime[]{
+                    range.getStartInclusive(),
+                    range.getEndExclusive()
+            };
+        } catch (DateTimeParseException exception) {
+            printInputError("Enter dates in YYYY-MM-DD format.");
+        } catch (IllegalArgumentException exception) {
+            printInputError("Start date cannot be after end date.");
         }
 
         if (!promptToRetry()) {
@@ -2297,8 +2300,8 @@ private LocalDateTime[] readSearchDateRange(boolean optional) {
     while (running) {
         String startValue = readLine(
                 optional
-                        ? "Start date/time (YYYY-MM-DD HH:mm, blank to skip): "
-                        : "Start date/time (YYYY-MM-DD HH:mm): "
+                        ? "Start date (YYYY-MM-DD, blank to skip): "
+                        : "Start date (YYYY-MM-DD): "
         );
         if (!running) {
             return null;
@@ -2307,21 +2310,23 @@ private LocalDateTime[] readSearchDateRange(boolean optional) {
             return new LocalDateTime[0];
         }
 
-        String endValue = readLine("End date/time (YYYY-MM-DD HH:mm): ");
+        String endValue = readLine("End date (YYYY-MM-DD, inclusive): ");
         if (!running) {
             return null;
         }
 
         try {
-            LocalDateTime startDate = LocalDateTime.parse(startValue, DATE_TIME_FORMAT);
-            LocalDateTime endDate = LocalDateTime.parse(endValue, DATE_TIME_FORMAT);
-            if (!startDate.isBefore(endDate)) {
-                printInputError("Start date/time must be before end date/time.");
-            } else {
-                return new LocalDateTime[]{startDate, endDate};
-            }
+            LocalDate startDate = LocalDate.parse(startValue);
+            LocalDate endDate = LocalDate.parse(endValue);
+            DateRange range = DateRange.fromInclusiveDates(startDate, endDate);
+            return new LocalDateTime[]{
+                    range.getStartInclusive(),
+                    range.getEndExclusive()
+            };
         } catch (DateTimeParseException exception) {
-            printInputError("Enter date and time in YYYY-MM-DD HH:mm format.");
+            printInputError("Enter dates in YYYY-MM-DD format.");
+        } catch (IllegalArgumentException exception) {
+            printInputError("Start date cannot be after end date.");
         }
 
         if (!promptToRetry()) {
@@ -2604,7 +2609,7 @@ private void report4() {
 
 
     LocalDateTime oneYearAgo =
-            LocalDateTime.now().minusYears(1);
+            LocalDateTime.now(ZoneOffset.UTC).minusYears(1);
 
 
     OperationResult<List<ScalperDetectionReport>> result =
@@ -2683,7 +2688,7 @@ private void report5() {
         case "2" -> {
 
             result = reports.report5b(
-                    LocalDateTime.now().minusYears(1)
+                    LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
             );
         }
 
@@ -2745,7 +2750,7 @@ private void report6() {
 
 
     LocalDateTime oneYearAgo =
-            LocalDateTime.now().minusYears(1);
+            LocalDateTime.now(ZoneOffset.UTC).minusYears(1);
 
 
     switch (readLine("Select option: ")) {
@@ -2863,7 +2868,7 @@ private void report7a() {
                     row.getCity(),
                     row.getCapacity(),
                     row.getNumSold(),
-                    row.getSellThroughRate()
+                    formatPercentage(row.getSellThroughRate())
             );
         }
 
@@ -2911,7 +2916,7 @@ private void report7b() {
                     row.getTierCode(),
                     row.getCapacity(),
                     row.getNumSold(),
-                    row.getSellThroughRate()
+                    formatPercentage(row.getSellThroughRate())
             );
         }
 
@@ -2982,7 +2987,7 @@ private void report7c() {
                     safe(row.getCity()),
                     row.getPerformanceId(),
                     row.getTitle(),
-                    row.getSellThroughRate(),
+                    formatPercentage(row.getSellThroughRate()),
                     row.getBucket()
             );
         }
@@ -3065,12 +3070,8 @@ private void report8() {
                     row.getEventId(),
                     row.getEventTitle(),
                     row.getResaleCount(),
-                    row.getAvgMarkupPct() == null
-                            ? "-"
-                            : row.getAvgMarkupPct(),
-                    row.getPctAtCap() == null
-                            ? "-"
-                            : row.getPctAtCap()
+                    formatPercentage(row.getAvgMarkupPct()),
+                    formatPercentage(row.getPctAtCap())
             );
         }
 
@@ -3842,6 +3843,15 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
 
     private String nullable(Object value) {
         return value == null ? "Not available" : value.toString();
+    }
+
+    private String formatPercentage(BigDecimal fraction) {
+        if (fraction == null) {
+            return "-";
+        }
+        return fraction.multiply(BigDecimal.valueOf(100))
+                .stripTrailingZeros()
+                .toPlainString() + "%";
     }
 
     private String repeat(char character, int count) {

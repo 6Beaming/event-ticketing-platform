@@ -42,6 +42,9 @@ import queries.DateRangePerformanceQuery;
 import queries.FilteredPerformanceQuery;
 import queries.LocationSearchInput;
 import queries.QueryOperations;
+import reports.ReportOperations;
+import reports.ResaleReport;
+import reports.ScalperDetectionReport;
 
 import java.math.BigDecimal;
 import java.nio.file.Paths;
@@ -49,6 +52,7 @@ import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.YearMonth;
 import java.util.List;
 
 public final class FoundationDatabaseCheck {
@@ -107,6 +111,7 @@ public final class FoundationDatabaseCheck {
         ResaleOperations resale = new ResaleOperations(transactions);
         ReviewOperations reviews = new ReviewOperations(transactions);
         QueryOperations queries = new QueryOperations(transactions);
+        ReportOperations reports = new ReportOperations(transactions);
 
         LocalDateTime queryStart = LocalDateTime.now(ZoneOffset.UTC).plusDays(1);
         LocalDateTime queryEnd = queryStart.plusDays(120);
@@ -171,6 +176,79 @@ public final class FoundationDatabaseCheck {
                 ),
                 "Q5 partial filter combination"
         );
+
+        LocalDateTime reportEnd = LocalDateTime.now(ZoneOffset.UTC).plusDays(1);
+        LocalDateTime reportStart = reportEnd.minusYears(2);
+        OperationResult<List<ScalperDetectionReport>> scalpers = reports.report4(
+                LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
+        );
+        requireRows(scalpers, "R4 possible-scalper report");
+        for (int customerId : List.of(2001, 2002)) {
+            ScalperDetectionReport row = scalpers.getValue().orElseThrow().stream()
+                    .filter(candidate -> candidate.getCustomerId() == customerId)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "R4 omitted seeded possible scalper " + customerId
+                    ));
+            if (!"Toronto".equals(row.getCity())
+                    || row.getTicketsPurchased() != 12
+                    || row.getTicketsListed() != 7) {
+                throw new IllegalStateException(
+                        "R4 did not return the expected Toronto 12-purchased/7-listed row"
+                );
+            }
+        }
+        if (bookings.bookGeneralAdmission(
+                2001,
+                DevelopmentIds.PERFORMANCE_RESERVED,
+                "General Floor",
+                1
+        ).getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("R4 restriction did not prohibit primary booking");
+        }
+        if (resale.listTicket(
+                2001,
+                8004,
+                new BigDecimal("50.00")
+        ).getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("R4 restriction did not prohibit resale listing");
+        }
+        if (resale.purchaseListingByTicket(2001, 8002).getStatus()
+                != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException("R4 restriction did not prohibit resale purchase");
+        }
+
+        requireRows(reports.report5a(reportStart, reportEnd), "R5 period ranking");
+        requireRows(
+                reports.report5b(LocalDateTime.now(ZoneOffset.UTC).minusYears(1)),
+                "R5 city ranking"
+        );
+        requireRows(
+                reports.report6a(LocalDateTime.now(ZoneOffset.UTC).minusYears(1)),
+                "R6 customer cancellation ranking"
+        );
+        requireRows(
+                reports.report6b(LocalDateTime.now(ZoneOffset.UTC).minusYears(1)),
+                "R6 organizer cancellation ranking"
+        );
+        requireRows(reports.report7a(), "R7 performance sell-through");
+        requireRows(reports.report7b(), "R7 tier sell-through");
+        YearMonth bucketMonth = YearMonth.from(LocalDate.now(ZoneOffset.UTC).minusDays(30));
+        requireRows(
+                reports.report7c(bucketMonth.getYear(), bucketMonth.getMonthValue()),
+                "R7 monthly city buckets"
+        );
+        OperationResult<List<ResaleReport>> resaleStatistics = reports.report8a();
+        requireRows(resaleStatistics, "R8 event resale statistics");
+        int completedResales = resaleStatistics.getValue().orElseThrow().stream()
+                .mapToInt(ResaleReport::getResaleCount)
+                .sum();
+        if (completedResales != 8) {
+            throw new IllegalStateException(
+                    "R8 completed resale total was " + completedResales + " instead of 8"
+            );
+        }
+        requireRows(reports.report8b(reportStart, reportEnd), "R8 top resale volume");
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"
