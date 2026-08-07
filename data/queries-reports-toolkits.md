@@ -14,6 +14,16 @@ From the repository root:
 3. Run `sh run.sh`.
 4. Confirm that the main menu displays `Database: CONNECTED`.
 
+### Input conflicts and retry behavior
+
+For Q1-Q7, R1-R9, and the organizer toolkit, invalid formats, out-of-range
+values, unknown required IDs, and incompatible search constraints are shown
+immediately as `CONFLICT: <reason>`. The next prompt is
+`Try again? (y/n):`; `y` repeats the affected input/request, while `n` returns
+without executing it. A valid search or report that simply has no matching
+rows is still a successful empty result unless the feature requires a concrete
+selection, such as Q6 inventory or a Q7 seat group.
+
 The sample SQL calculates dates from `UTC_TIMESTAMP()` when `sql/load.sql` is
 run. Therefore, performance, order, cancellation, listing, and review dates
 move with the load date.

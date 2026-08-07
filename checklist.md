@@ -142,7 +142,7 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 
 - [ ] Final archive is named after the group, for example `mytix_lastname1_lastname2.zip`.
 - [x] Application uses Java embedded SQL with MySQL 8.
-- [ ] Terminal interface exposes every required operation, query, report, and toolkit function.
+- [x] Terminal interface exposes every required operation, query, report, and toolkit function.
 - [x] `sql/schema.sql` creates all tables and constraints in one execution.
 - [x] `sql/drop.sql` drops the complete schema safely.
 - [x] `sql/load.sql` loads all sample data in one execution.

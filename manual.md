@@ -51,6 +51,12 @@ Every operation begins with a status:
 
 Blank optional fields are shown in the prompt. For comma-separated input, do not repeat an ID. Money is displayed in dollars and percentages are clearly labelled.
 
+Within searches, reports, and the organizer toolkit, an invalid value or an
+identifier/filter that cannot be used is displayed immediately as
+`CONFLICT: <reason>`, followed by `Try again? (y/n):`. Enter `y` to re-enter
+the affected value or request. Enter `n` to leave that input path without
+running the invalid request.
+
 ## 6. Sample data IDs
 
 The sample data is regenerated relative to the date on which `sql/load.sql` runs, but these identifier ranges and special cases are stable on a fresh load.

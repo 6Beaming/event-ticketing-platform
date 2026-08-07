@@ -28,6 +28,7 @@ import queries.QueryOperations;
 import toolkit.PricingRecommendationInput;
 import toolkit.RevenueImpactInput;
 import toolkit.ToolkitOperations;
+import ui.FeatureInputPolicy;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -73,10 +74,11 @@ public final class FoundationSelfTest {
         test("customer cancellation deadline is inclusive", this::cancellationDeadlineValidated);
         test("resale cap uses decimal money", this::resaleCapValidated);
         test("review rules are validated", this::reviewRulesValidated);
-        test("Q4 and Q5 search inputs are validated", this::searchInputsValidated);
+        test("Q1-Q7 search inputs are validated", this::searchInputsValidated);
         test("Q4 and Q5 SQL parameters are bound", this::searchSqlParametersBound);
         test("date-only ranges include the complete end date", this::dateRangesAreInclusive);
         test("organizer toolkit rejects invalid requests", this::toolkitRequestsValidated);
+        test("feature input conflicts use the retry policy", this::featureRetryPolicyValidated);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -340,6 +342,33 @@ public final class FoundationSelfTest {
         LocalDateTime start = LocalDateTime.of(2026, 8, 8, 0, 0);
         LocalDateTime end = start.plusDays(30);
 
+        assertTrue(QueryOperations.validateQuery1(
+                43.64,
+                -79.38,
+                50,
+                "distance"
+        ) == null);
+        assertTrue(QueryOperations.validateQuery1(
+                91,
+                -79.38,
+                50,
+                "distance"
+        ).contains("Latitude"));
+        assertTrue(QueryOperations.validateQuery1(
+                43.64,
+                -79.38,
+                0,
+                "distance"
+        ).contains("greater than zero"));
+        assertTrue(QueryOperations.validateQuery2(" ").contains("Postal code"));
+        assertTrue(QueryOperations.validateQuery3("").contains("Address"));
+        assertTrue(QueryOperations.validateQuery6(0).contains("Performance ID"));
+        assertTrue(QueryOperations.validateQuery7(6001, 4, null) == null);
+        assertTrue(QueryOperations.validateQuery7(6001, 0, null)
+                .contains("seats required"));
+        assertTrue(QueryOperations.validateQuery7(6001, 4, -1.0)
+                .contains("Budget"));
+
         assertTrue(QueryOperations.validateQuery4(
                 LocationSearchInput.coordinates(43.64, -79.38, 50, "distance"),
                 start,
@@ -563,6 +592,19 @@ public final class FoundationSelfTest {
         assertEquals(OperationStatus.INVALID_INPUT, missingComparables.getStatus());
         assertEquals(0, fake.commits);
         assertEquals(0, fake.rollbacks);
+    }
+
+    private void featureRetryPolicyValidated() {
+        assertEquals(
+                "CONFLICT: Latitude must be between -90 and 90.",
+                FeatureInputPolicy.conflictMessage(
+                        " Latitude must be between -90 and 90. "
+                )
+        );
+        assertTrue(FeatureInputPolicy.isRetryable(OperationStatus.INVALID_INPUT));
+        assertTrue(FeatureInputPolicy.isRetryable(OperationStatus.NOT_FOUND));
+        assertTrue(FeatureInputPolicy.isRetryable(OperationStatus.CONFLICT));
+        assertTrue(!FeatureInputPolicy.isRetryable(OperationStatus.DATABASE_FAILURE));
     }
 
     private static final class QueryRecorder implements InvocationHandler {

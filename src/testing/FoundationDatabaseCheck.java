@@ -124,6 +124,23 @@ public final class FoundationDatabaseCheck {
         LocalDateTime queryEnd = queryStart.plusDays(120);
 
         requireRows(
+                queries.query1(
+                        43.643500,
+                        -79.379100,
+                        50,
+                        "distance"
+                ),
+                "Q1 nearby performance search"
+        );
+        requireRows(
+                queries.query2("M5J 2X2"),
+                "Q2 postal-code search"
+        );
+        requireRows(
+                queries.query3("40 Bay Street"),
+                "Q3 exact-address search"
+        );
+        requireRows(
                 queries.query4(
                         LocationSearchInput.coordinates(
                                 43.643500,
@@ -183,9 +200,34 @@ public final class FoundationDatabaseCheck {
                 ),
                 "Q5 partial filter combination"
         );
+        requireRows(
+                queries.query6(DevelopmentIds.PERFORMANCE_RESERVED),
+                "Q6 seat-map summary"
+        );
+        OperationResult<?> bestAvailable = queries.query7(
+                DevelopmentIds.PERFORMANCE_RESERVED,
+                4,
+                null
+        );
+        requireSuccess(bestAvailable, "Q7 best-available search");
+        if (bestAvailable.getValue().isEmpty()) {
+            throw new IllegalStateException("Q7 best-available search returned no seats");
+        }
 
         LocalDateTime reportEnd = LocalDateTime.now(ZoneOffset.UTC).plusDays(1);
         LocalDateTime reportStart = reportEnd.minusYears(2);
+        requireRows(reports.report1a(reportStart, reportEnd), "R1 revenue by city");
+        requireRows(
+                reports.report1b("Toronto", reportStart, reportEnd),
+                "R1 revenue by Toronto venue"
+        );
+        requireRows(reports.report2a(), "R2 segment and genre counts");
+        requireRows(reports.report2b(), "R2 country counts");
+        requireRows(reports.report2c(), "R2 country and city counts");
+        requireRows(reports.report2d(), "R2 country, city, and venue counts");
+        requireRows(reports.report3a(), "R3 overall organizer revenue");
+        requireRows(reports.report3b(), "R3 organizer revenue by country");
+        requireRows(reports.report3c(), "R3 organizer revenue by city");
         OperationResult<List<ScalperDetectionReport>> scalpers = reports.report4(
                 LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
         );
@@ -256,6 +298,7 @@ public final class FoundationDatabaseCheck {
             );
         }
         requireRows(reports.report8b(reportStart, reportEnd), "R8 top resale volume");
+        requireRows(reports.report9(), "R9 noun-phrase report");
 
         OperationResult<PricingRecommendation> toolkitRecommendation =
                 toolkit.recommendPricing(new PricingRecommendationInput(

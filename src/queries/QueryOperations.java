@@ -19,6 +19,54 @@ public final class QueryOperations {
         this.transactions = transactions;
     }
 
+    public static String validateQuery1(
+            double latitude,
+            double longitude,
+            double radiusKm,
+            String sortBy
+    ) {
+        if (!Double.isFinite(latitude) || latitude < -90 || latitude > 90) {
+            return "Latitude must be between -90 and 90.";
+        }
+        if (!Double.isFinite(longitude) || longitude < -180 || longitude > 180) {
+            return "Longitude must be between -180 and 180.";
+        }
+        if (!Double.isFinite(radiusKm) || radiusKm <= 0) {
+            return "Search distance must be greater than zero.";
+        }
+        if (!"distance".equals(sortBy)
+                && !"price_asc".equals(sortBy)
+                && !"price_desc".equals(sortBy)) {
+            return "Select a supported sort option.";
+        }
+        return null;
+    }
+
+    public static String validateQuery2(String postalCode) {
+        return isBlank(postalCode) ? "Postal code is required." : null;
+    }
+
+    public static String validateQuery3(String address) {
+        return isBlank(address) ? "Address is required." : null;
+    }
+
+    public static String validateQuery6(int performanceId) {
+        return performanceId <= 0 ? "Performance ID must be positive." : null;
+    }
+
+    public static String validateQuery7(int performanceId, int quantity, Double budget) {
+        if (performanceId <= 0) {
+            return "Performance ID must be positive.";
+        }
+        if (quantity <= 0) {
+            return "Number of seats required must be positive.";
+        }
+        if (budget != null && (!Double.isFinite(budget) || budget <= 0)) {
+            return "Budget must be positive when supplied.";
+        }
+        return null;
+    }
+
 
 /*************************************************************************************************************
  QUERY-1
@@ -30,6 +78,10 @@ public OperationResult<List<UpcomingPerformanceQuery>> query1(
         double radiusKm,
         String sortBy
 ) {
+    String validationError = validateQuery1(latitude, longitude, radiusKm, sortBy);
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
 
     return transactions.execute(connection -> {
 
@@ -166,6 +218,10 @@ ORDER BY
 public OperationResult<List<PostalCodePerformanceQuery>> query2(
         String postalCode
 ) {
+    String validationError = validateQuery2(postalCode);
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
 
     return transactions.execute(connection -> {
 
@@ -241,6 +297,10 @@ public OperationResult<List<PostalCodePerformanceQuery>> query2(
 public OperationResult<List<AddressPerformanceQuery>> query3(
         String address
 ) {
+    String validationError = validateQuery3(address);
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
 
     return transactions.execute(connection -> {
 
@@ -773,6 +833,10 @@ private static boolean isBlank(String value) {
 public OperationResult<List<SeatMapSummaryQuery>> query6(
         int performanceId
 ) {
+    String validationError = validateQuery6(performanceId);
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
 
     return transactions.execute(connection -> {
 
@@ -883,6 +947,10 @@ public OperationResult<BestAvailableQuery> query7(
         int q,
         Double budget
 ) {
+    String validationError = validateQuery7(performanceId, q, budget);
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
 
     return transactions.execute(connection -> {
 

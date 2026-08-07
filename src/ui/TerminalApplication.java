@@ -107,6 +107,7 @@ public final class TerminalApplication {
     private final ToolkitOperations toolkit;
 
     private boolean running;
+    private boolean featureInputMode;
 
     public TerminalApplication(Scanner input, DatabaseConnection database) {
         if (input == null || database == null) {
@@ -172,9 +173,9 @@ public final class TerminalApplication {
             case "4" -> showBookingAndCancellationMenu();
             case "5" -> showResaleMenu();
             case "6" -> showReviewMenu();
-            case "7" -> showSearches();
-            case "8" -> showReports();
-            case "9" -> showToolkit();
+            case "7" -> runFeatureAction(this::showSearches);
+            case "8" -> runFeatureAction(this::showReports);
+            case "9" -> runOnlineAction(() -> runFeatureAction(this::showToolkit));
             case "10" -> showDatabaseMenu();
             case "0" -> {
                 running = false;
@@ -380,6 +381,10 @@ public final class TerminalApplication {
     }
 
     private void printInputError(String message) {
+        if (featureInputMode) {
+            printFeatureConflict(message);
+            return;
+        }
         System.out.println("INVALID_INPUT: " + message);
     }
 
@@ -1609,7 +1614,12 @@ public final class TerminalApplication {
                 case "6" -> runOnlineAction(this::query6);
                 case "7" -> runOnlineAction(this::query7);
                 case "0" -> inMenu = false;
-                default -> System.out.println("Unknown search option.");
+                default -> {
+                    printFeatureConflict("Enter a search option from 0 to 7.");
+                    if (!promptToRetry()) {
+                        inMenu = false;
+                    }
+                }
             }
         }
     }
@@ -1618,22 +1628,36 @@ public final class TerminalApplication {
 
     printHeading("Upcoming Performances Near Location");
 
+    Double latitude = readValidatedDouble(
+            "Latitude: ",
+            value -> value < -90 || value > 90
+                    ? Optional.of("Latitude must be between -90 and 90.")
+                    : Optional.empty()
+    );
+    if (latitude == null) {
+        return;
+    }
 
-    double latitude =
-            Double.parseDouble(readLine("Latitude: "));
+    Double longitude = readValidatedDouble(
+            "Longitude: ",
+            value -> value < -180 || value > 180
+                    ? Optional.of("Longitude must be between -180 and 180.")
+                    : Optional.empty()
+    );
+    if (longitude == null) {
+        return;
+    }
 
-    double longitude =
-            Double.parseDouble(readLine("Longitude: "));
-
-
-    String radiusInput =
-            readLine("Maximum distance in km (default 50): ");
-
-
-    double radiusKm =
-            radiusInput.isBlank()
-                    ? 50.0
-                    : Double.parseDouble(radiusInput);
+    Double radiusKm = readDoubleWithDefaultRetry(
+            "Maximum distance in km (default 50): ",
+            50.0,
+            value -> value <= 0
+                    ? Optional.of("Search distance must be greater than zero.")
+                    : Optional.empty()
+    );
+    if (radiusKm == null) {
+        return;
+    }
 
 
     System.out.println("1. Rank by distance");
@@ -1641,27 +1665,21 @@ public final class TerminalApplication {
     System.out.println("3. Rank by cheapest price descending");
 
 
-    String sortBy;
-
-
-    switch (readLine("Select option: ")) {
-
-        case "1" ->
-                sortBy = "distance";
-
-        case "2" ->
-                sortBy = "price_asc";
-
-        case "3" ->
-                sortBy = "price_desc";
-
-        default -> {
-            System.out.println("Unknown search option.");
-            pause();
-            return;
-        }
+    Integer sortChoice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 3
+                    ? Optional.of("Select sort option 1, 2, or 3.")
+                    : Optional.empty()
+    );
+    if (sortChoice == null) {
+        return;
     }
 
+    String sortBy = switch (sortChoice) {
+        case 2 -> "price_asc";
+        case 3 -> "price_desc";
+        default -> "distance";
+    };
 
     OperationResult<List<UpcomingPerformanceQuery>> result =
             queries.query1(
@@ -1717,9 +1735,15 @@ private void query2() {
 
     printHeading("Search Performances By Postal Code");
 
-
-    String postalCode =
-            readLine("Enter postal code: ");
+    String postalCode = readValidatedText(
+            "Enter postal code: ",
+            value -> value.isBlank()
+                    ? Optional.of("Postal code is required.")
+                    : Optional.empty()
+    );
+    if (postalCode == null) {
+        return;
+    }
 
 
     OperationResult<List<PostalCodePerformanceQuery>> result =
@@ -1770,9 +1794,15 @@ private void query3() {
 
     printHeading("Search Venue By Exact Address");
 
-
-    String address =
-            readLine("Enter address: ");
+    String address = readValidatedText(
+            "Enter address: ",
+            value -> value.isBlank()
+                    ? Optional.of("Address is required.")
+                    : Optional.empty()
+    );
+    if (address == null) {
+        return;
+    }
 
 
     OperationResult<List<AddressPerformanceQuery>> result =
@@ -2030,10 +2060,29 @@ private void query5() {
         return;
     }
 
-    if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
-        printInputError("Minimum price cannot exceed maximum price.");
-        pause();
-        return;
+    while (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+        printFeatureConflict("Minimum price cannot exceed maximum price.");
+        if (!promptToRetry()) {
+            return;
+        }
+        minPrice = readOptionalDoubleWithRetry(
+                "Minimum price: ",
+                value -> value < 0
+                        ? Optional.of("Minimum price must be zero or greater.")
+                        : Optional.empty()
+        );
+        if (!running) {
+            return;
+        }
+        maxPrice = readOptionalDoubleWithRetry(
+                "Maximum price: ",
+                value -> value < 0
+                        ? Optional.of("Maximum price must be zero or greater.")
+                        : Optional.empty()
+        );
+        if (!running) {
+            return;
+        }
     }
 
     Integer minAvailable = readOptionalPositiveIntWithRetry(
@@ -2116,28 +2165,42 @@ private void query6() {
 
     printHeading("Seat Map Summary");
 
-
-    int performanceId =
-            Integer.parseInt(
-                    readLine("Performance ID: ")
-            );
-
-
-    OperationResult<List<SeatMapSummaryQuery>> result =
-            queries.query6(performanceId);
-
-
-    printResult(result);
-
-
-    result.getValue().ifPresent(rows -> {
-
-        if (rows.isEmpty()) {
-            System.out.println("No data found.");
+    while (running) {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                inputChecks::checkPerformance
+        );
+        if (performanceId == null) {
             return;
         }
 
 
+        OperationResult<List<SeatMapSummaryQuery>> result =
+                queries.query6(performanceId);
+
+        if (!result.isSuccess()) {
+            boolean retry = promptAfterFeatureFailure(result);
+            if (retry) {
+                continue;
+            }
+            if (!FeatureInputPolicy.isRetryable(result.getStatus())) {
+                pause();
+            }
+            return;
+        }
+
+        List<SeatMapSummaryQuery> rows = result.getValue().orElseThrow();
+        if (rows.isEmpty()) {
+            printFeatureConflict(
+                    "No seat-map inventory is configured for this performance."
+            );
+            if (promptToRetry()) {
+                continue;
+            }
+            return;
+        }
+
+        printResult(result);
         System.out.printf(
                 "%-20s %-10s %-10s %-10s %-10s %-10s%n",
                 "Section",
@@ -2148,9 +2211,7 @@ private void query6() {
                 "Blocked"
         );
 
-
         for (SeatMapSummaryQuery row : rows) {
-
             System.out.printf(
                     "%-20s %-10s %-10.2f %-10d %-10d %-10d%n",
                     row.getSectionName(),
@@ -2162,53 +2223,69 @@ private void query6() {
             );
         }
 
-    });
-
-
-    pause();
+        pause();
+        return;
+    }
 }
 
 private void query7() {
 
     printHeading("Best Available Seats");
 
+    while (running) {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                inputChecks::checkPerformance
+        );
+        if (performanceId == null) {
+            return;
+        }
 
-    int performanceId =
-            Integer.parseInt(
-                    readLine("Performance ID: ")
+        Integer quantity = readPositiveIntWithRetry("Number of seats required: ");
+        if (quantity == null) {
+            return;
+        }
+
+        Double budget = readOptionalDoubleWithRetry(
+                "Budget (optional): ",
+                value -> value <= 0
+                        ? Optional.of("Budget must be positive when supplied.")
+                        : Optional.empty()
+        );
+        if (!running) {
+            return;
+        }
+
+        OperationResult<BestAvailableQuery> result =
+                queries.query7(
+                        performanceId,
+                        quantity,
+                        budget
+                );
+
+        if (!result.isSuccess()) {
+            boolean retry = promptAfterFeatureFailure(result);
+            if (retry) {
+                continue;
+            }
+            if (!FeatureInputPolicy.isRetryable(result.getStatus())) {
+                pause();
+            }
+            return;
+        }
+
+        BestAvailableQuery row = result.getValue().orElse(null);
+        if (row == null) {
+            printFeatureConflict(
+                    "No available seat group satisfies the quantity and budget."
             );
+            if (promptToRetry()) {
+                continue;
+            }
+            return;
+        }
 
-
-    int quantity =
-            Integer.parseInt(
-                    readLine("Number of seats required: ")
-            );
-
-
-    String budgetInput =
-            readLine("Budget (optional): ");
-
-
-    Double budget = null;
-
-    if (!budgetInput.isBlank()) {
-        budget = Double.parseDouble(budgetInput);
-    }
-
-
-    OperationResult<BestAvailableQuery> result =
-            queries.query7(
-                    performanceId,
-                    quantity,
-                    budget
-            );
-
-
-    printResult(result);
-
-
-    result.getValue().ifPresent(row -> {
-
+        printResult(result);
         System.out.println();
 
         System.out.printf(
@@ -2223,10 +2300,9 @@ private void query7() {
                 row.getTotalPrice()
         );
 
-    });
-
-
-    pause();
+        pause();
+        return;
+    }
 }
 
 
@@ -2258,7 +2334,12 @@ private void showReports() {
             case "8" -> runOnlineAction(this::report8);
             case "9" -> runOnlineAction(this::report9);
             case "0" -> inMenu = false;
-            default -> System.out.println("Unknown report option.");
+            default -> {
+                printFeatureConflict("Enter a report option from 0 to 9.");
+                if (!promptToRetry()) {
+                    inMenu = false;
+                }
+            }
         }
     }
 }
@@ -2391,9 +2472,8 @@ private void report1() {
     OperationResult<List<TicketRevenueReport>> result;
     LocalDateTime[] dates = readReportDateRange();
     if (dates == null) {
-    pause();
-    return;
-}
+        return;
+    }
 
     switch (choice) {
         case 1 -> {
@@ -2471,24 +2551,23 @@ private void report2() {
     System.out.println("4. By country, city and venue");
 
 
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 4
+                    ? Optional.of("Select report option 1, 2, 3, or 4.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
+
     OperationResult<List<EventPerformanceReport>> result;
-
-
-    switch (readLine("Select option: ")) {
-
-        case "1" -> result = reports.report2a();
-
-        case "2" -> result = reports.report2b();
-
-        case "3" -> result = reports.report2c();
-
-        case "4" -> result = reports.report2d();
-
-        default -> {
-            System.out.println("Unknown report option.");
-            pause();
-            return;
-        }
+    switch (choice) {
+        case 1 -> result = reports.report2a();
+        case 2 -> result = reports.report2b();
+        case 3 -> result = reports.report2c();
+        case 4 -> result = reports.report2d();
+        default -> throw new IllegalStateException("Unexpected R2 option");
     }
 
 
@@ -2547,22 +2626,22 @@ private void report3() {
     System.out.println("3. Organizer ranking by city");
 
 
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 3
+                    ? Optional.of("Select report option 1, 2, or 3.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
+
     OperationResult<List<OrganizerRevenueReport>> result;
-
-
-    switch (readLine("Select option: ")) {
-
-        case "1" -> result = reports.report3a();
-
-        case "2" -> result = reports.report3b();
-
-        case "3" -> result = reports.report3c();
-
-        default -> {
-            System.out.println("Unknown report option.");
-            pause();
-            return;
-        }
+    switch (choice) {
+        case 1 -> result = reports.report3a();
+        case 2 -> result = reports.report3b();
+        case 3 -> result = reports.report3c();
+        default -> throw new IllegalStateException("Unexpected R3 option");
     }
 
 
@@ -2665,17 +2744,23 @@ private void report5() {
     System.out.println("2. Ranking by city (past year)");
 
 
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 2
+                    ? Optional.of("Select report option 1 or 2.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
+
     OperationResult<List<CustomerOrderRankingReport>> result;
-
-
-    switch (readLine("Select option: ")) {
-
-        case "1" -> {
+    switch (choice) {
+        case 1 -> {
 
             LocalDateTime[] dates = readReportDateRange();
 
             if (dates == null) {
-                pause();
                 return;
             }
 
@@ -2686,7 +2771,7 @@ private void report5() {
         }
 
 
-        case "2" -> {
+        case 2 -> {
 
             result = reports.report5b(
                     LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
@@ -2694,11 +2779,7 @@ private void report5() {
         }
 
 
-        default -> {
-            System.out.println("Unknown report option.");
-            pause();
-            return;
-        }
+        default -> throw new IllegalStateException("Unexpected R5 option");
     }
 
 
@@ -2754,18 +2835,20 @@ private void report6() {
             LocalDateTime.now(ZoneOffset.UTC).minusYears(1);
 
 
-    switch (readLine("Select option: ")) {
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 2
+                    ? Optional.of("Select report option 1 or 2.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
 
-        case "1" -> result = reports.report6a(oneYearAgo);
-
-        case "2" -> result = reports.report6b(oneYearAgo);
-
-
-        default -> {
-            System.out.println("Unknown report option.");
-            pause();
-            return;
-        }
+    switch (choice) {
+        case 1 -> result = reports.report6a(oneYearAgo);
+        case 2 -> result = reports.report6b(oneYearAgo);
+        default -> throw new IllegalStateException("Unexpected R6 option");
     }
 
 
@@ -2813,18 +2896,21 @@ private void report7() {
     System.out.println("3. Sold-out / under 25% by city");
 
 
-    switch (readLine("Select option: ")) {
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 3
+                    ? Optional.of("Select report option 1, 2, or 3.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
 
-        case "1" -> report7a();
-
-        case "2" -> report7b();
-
-        case "3" -> report7c();
-
-        default -> {
-            System.out.println("Unknown report option.");
-            pause();
-        }
+    switch (choice) {
+        case 1 -> report7a();
+        case 2 -> report7b();
+        case 3 -> report7c();
+        default -> throw new IllegalStateException("Unexpected R7 option");
     }
 }
 
@@ -3008,21 +3094,24 @@ private void report8() {
     System.out.println("2. Top 10 events by resale volume");
 
 
+    Integer choice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 2
+                    ? Optional.of("Select report option 1 or 2.")
+                    : Optional.empty()
+    );
+    if (choice == null) {
+        return;
+    }
+
     OperationResult<List<ResaleReport>> result;
-
-
-    switch (readLine("Select option: ")) {
-
-
-        case "1" -> result = reports.report8a();
-
-
-        case "2" -> {
+    switch (choice) {
+        case 1 -> result = reports.report8a();
+        case 2 -> {
 
             LocalDateTime[] dates = readReportDateRange();
 
             if (dates == null) {
-                pause();
                 return;
             }
 
@@ -3033,11 +3122,7 @@ private void report8() {
         }
 
 
-        default -> {
-            System.out.println("Unknown report option.");
-            pause();
-            return;
-        }
+        default -> throw new IllegalStateException("Unexpected R8 option");
     }
 
 
@@ -3143,31 +3228,52 @@ private void report9() {
 }
     private void showToolkit() {
         printHeading("Performance pricing recommendation");
-        int genreId = readPositiveIntWithRetry("Genre ID: ");
-        String city = readValidatedText(
-                "City: ",
-                value -> value == null || value.isBlank()
-                        ? Optional.of("City is required.")
-                        : Optional.empty()
-        );
-        if (city == null) {
-            return;
-        }
-        int venueCapacity = readPositiveIntWithRetry("Venue capacity: ");
+        PricingRecommendation recommendation = null;
+        while (running) {
+            Integer genreId = readPositiveIntWithRetry("Genre ID: ");
+            if (genreId == null) {
+                return;
+            }
+            String city = readValidatedText(
+                    "City: ",
+                    value -> value == null || value.isBlank()
+                            ? Optional.of("City is required.")
+                            : Optional.empty()
+            );
+            if (city == null) {
+                return;
+            }
+            Integer venueCapacity = readPositiveIntWithRetry("Venue capacity: ");
+            if (venueCapacity == null) {
+                return;
+            }
 
-        PricingRecommendationInput input = new PricingRecommendationInput(
-                genreId,
-                city.trim(),
-                venueCapacity,
-                0.25,
-                24,
-                20
-        );
-        OperationResult<PricingRecommendation> result = toolkit.recommendPricing(input);
-        printResult(result);
-        PricingRecommendation recommendation = result.getValue().orElse(null);
+            PricingRecommendationInput input = new PricingRecommendationInput(
+                    genreId,
+                    city.trim(),
+                    venueCapacity,
+                    0.25,
+                    24,
+                    20
+            );
+            OperationResult<PricingRecommendation> result =
+                    toolkit.recommendPricing(input);
+            if (!result.isSuccess()) {
+                boolean retry = promptAfterFeatureFailure(result);
+                if (retry) {
+                    continue;
+                }
+                if (!FeatureInputPolicy.isRetryable(result.getStatus())) {
+                    pause();
+                }
+                return;
+            }
+
+            printResult(result);
+            recommendation = result.getValue().orElseThrow();
+            break;
+        }
         if (recommendation == null) {
-            pause();
             return;
         }
 
@@ -3235,7 +3341,12 @@ private void report9() {
                 case "0" -> {
                     return;
                 }
-                default -> System.out.println("Unknown toolkit option.");
+                default -> {
+                    printFeatureConflict("Select toolkit option 1 or 0.");
+                    if (!promptToRetry()) {
+                        return;
+                    }
+                }
             }
         }
     }
@@ -3244,10 +3355,10 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
     if (lastRecommendation == null
             || lastRecommendation.getComparablePerformanceIds().isEmpty()) {
         System.out.println();
-        System.out.println(
+        printFeatureConflict(
                 "No comparable performances available — run a pricing recommendation above first."
         );
-        pause();
+        promptToRetry();
         return;
     }
     List<Integer> comparablePerformanceIds =
@@ -3261,41 +3372,58 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
             + " comparable performance(s) from the recommendation above."
     );
 
-    BigDecimal currentPrice = readDecimalWithRetry(
-            "Current price: $",
-            value -> value.signum() > 0
-                    ? Optional.empty()
-                    : Optional.of("Current price must be positive.")
-    );
-    BigDecimal proposedPrice = readDecimalWithRetry(
-            "Proposed price: $",
-            value -> value.signum() > 0
-                    ? Optional.empty()
-                    : Optional.of("Proposed price must be positive.")
-    );
-    BigDecimal bandWidth = readDecimalWithRetry(
-            "Band width ($): ",
-            value -> value.signum() > 0
-                    ? Optional.empty()
-                    : Optional.of("Band width must be positive.")
-    );
-    if (currentPrice == null || proposedPrice == null || bandWidth == null) {
-        return;
-    }
+    while (running) {
+        BigDecimal currentPrice = readDecimalWithRetry(
+                "Current price: $",
+                value -> value.signum() > 0
+                        ? Optional.empty()
+                        : Optional.of("Current price must be positive.")
+        );
+        if (currentPrice == null) {
+            return;
+        }
+        BigDecimal proposedPrice = readDecimalWithRetry(
+                "Proposed price: $",
+                value -> value.signum() > 0
+                        ? Optional.empty()
+                        : Optional.of("Proposed price must be positive.")
+        );
+        if (proposedPrice == null) {
+            return;
+        }
+        BigDecimal bandWidth = readDecimalWithRetry(
+                "Band width ($): ",
+                value -> value.signum() > 0
+                        ? Optional.empty()
+                        : Optional.of("Band width must be positive.")
+        );
+        if (bandWidth == null) {
+            return;
+        }
 
-    RevenueImpactInput input =
-            new RevenueImpactInput(
-                    comparablePerformanceIds,
-                    currentPrice,
-                    proposedPrice,
-                    bandWidth
-            );
+        RevenueImpactInput input =
+                new RevenueImpactInput(
+                        comparablePerformanceIds,
+                        currentPrice,
+                        proposedPrice,
+                        bandWidth
+                );
 
-    OperationResult<RevenueImpactEstimate> result =
-            toolkit.estimateRevenueImpact(input);
-    printResult(result);
+        OperationResult<RevenueImpactEstimate> result =
+                toolkit.estimateRevenueImpact(input);
+        if (!result.isSuccess()) {
+            boolean retry = promptAfterFeatureFailure(result);
+            if (retry) {
+                continue;
+            }
+            if (!FeatureInputPolicy.isRetryable(result.getStatus())) {
+                pause();
+            }
+            return;
+        }
 
-    result.getValue().ifPresent(estimate -> {
+        printResult(result);
+        RevenueImpactEstimate estimate = result.getValue().orElseThrow();
         System.out.println();
         System.out.println("Current-price comparable tiers: "
                 + estimate.getCurrentSampleSize());
@@ -3315,9 +3443,10 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
                 + estimate.getProposedExpectedRevenue().toPlainString());
         System.out.println("Estimated revenue change: $"
                 + estimate.getExpectedRevenueChange().toPlainString());
-    });
 
-    pause();
+        pause();
+        return;
+    }
 }
 
     private void showDatabaseMenu() {
@@ -3350,6 +3479,29 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
             return;
         }
         action.run();
+    }
+
+    private void runFeatureAction(Runnable action) {
+        boolean previousMode = featureInputMode;
+        featureInputMode = true;
+        try {
+            action.run();
+        } finally {
+            featureInputMode = previousMode;
+        }
+    }
+
+    private void printFeatureConflict(String message) {
+        System.out.println(FeatureInputPolicy.conflictMessage(message));
+    }
+
+    private boolean promptAfterFeatureFailure(OperationResult<?> result) {
+        if (!FeatureInputPolicy.isRetryable(result.getStatus())) {
+            printResult(result);
+            return false;
+        }
+        printFeatureConflict(result.getMessage());
+        return promptToRetry();
     }
 
     private void printResult(OperationResult<?> result) {
@@ -3581,7 +3733,11 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
             if (result.isSuccess()) {
                 return id;
             }
-            printResult(result);
+            if (featureInputMode && FeatureInputPolicy.isRetryable(result.getStatus())) {
+                printFeatureConflict(result.getMessage());
+            } else {
+                printResult(result);
+            }
             if (!promptToRetry()) {
                 return null;
             }
@@ -3609,7 +3765,11 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
             if (result.isSuccess()) {
                 return value;
             }
-            printResult(result);
+            if (featureInputMode && FeatureInputPolicy.isRetryable(result.getStatus())) {
+                printFeatureConflict(result.getMessage());
+            } else {
+                printResult(result);
+            }
             if (!promptToRetry()) {
                 return null;
             }

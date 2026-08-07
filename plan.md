@@ -378,7 +378,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - [ ] **Finish organizer, search, report, and toolkit terminal integration.**
   - [ ] Check that organizer/event/pricing, blocking, review, Q1-Q5, R1-R3, R9, and toolkit screens accept the documented inputs.
   - [ ] Use consistent date/location filters, table headings, empty results, and validation messages.
-  - [ ] Confirm the final location, review, report, and toolkit data produces the documented results.
+  - [x] Confirm the final location, review, report, and toolkit data produces the documented results.
 - [ ] **Write expected results** for organizer/pricing/review operations, Q1-Q5, R1-R3, R9, and the toolkit using stable IDs.
 - [ ] **Write and finalize `report.pdf`.**
   - [ ] Document purpose, conceptual problems, assumptions, and justified decisions.
@@ -400,14 +400,14 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   2. `sql/schema.sql`
   3. `sql/load.sql`
   4. `run.sh`
-- [ ] Confirm every feature is testable immediately after `load.sql`.
+- [x] Confirm every feature is testable immediately after `load.sql`.
 - [ ] Cross-review `report.pdf` and `manual.pdf` against the assignment PDF.
 - [ ] Fix integration, data, and documentation inconsistencies.
 - [ ] Freeze code, data, and documents by the end of August 6.
 
 ### Block exit criteria
 
-- [ ] R1-R9 are complete and verified.
+- [x] R1-R9 are complete and verified.
 - [x] The organizer toolkit produces documented suggestions.
 - [x] Sample data satisfies every minimum and supports every test case.
 - [ ] The full terminal application works after a clean schema and data load.
