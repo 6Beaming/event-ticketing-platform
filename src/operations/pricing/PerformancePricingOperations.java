@@ -168,6 +168,65 @@ public final class PerformancePricingOperations {
         });
     }
 
+    public OperationResult<Void> checkPerformanceForTierPriceUpdate(int performanceId) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            PerformanceDetails performance = findPerformance(connection, performanceId, false);
+            if (performance == null) {
+                return OperationResult.notFound("Performance not found.");
+            }
+            boolean futureScheduled = "scheduled".equals(performance.status)
+                    && performance.dateTime.isAfter(LocalDateTime.now(ZoneOffset.UTC));
+            String rejection = validateTierPriceUpdate(futureScheduled, false);
+            if (rejection != null) {
+                return OperationResult.conflict(rejection);
+            }
+            if (!pricingExists(connection, performanceId)) {
+                return OperationResult.notFound("The performance has no price tiers to update.");
+            }
+            return OperationResult.success("Performance is open for tier-price updates.");
+        });
+    }
+
+    public OperationResult<Void> checkTierForPriceUpdate(
+            int performanceId,
+            String tierCode
+    ) {
+        if (performanceId <= 0 || tierCode == null || tierCode.isBlank()) {
+            return OperationResult.invalidInput("Performance ID and tier code are required.");
+        }
+
+        return transactions.execute(connection -> {
+            String normalizedTierCode = tierCode.trim();
+            String sql = """
+                    SELECT 1
+                    FROM PriceTier
+                    WHERE performance_id = ? AND tier_code = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                statement.setString(2, normalizedTierCode);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound(
+                                "Price tier not found for this performance."
+                        );
+                    }
+                }
+            }
+            if (ticketsExistWithoutLock(connection, performanceId, normalizedTierCode)) {
+                return OperationResult.conflict(
+                        "The tier price cannot be changed because a ticket has already been sold "
+                                + "from this tier."
+                );
+            }
+            return OperationResult.success("Price tier is open for an update.");
+        });
+    }
+
     public static String validateTierPriceUpdate(boolean futureScheduled, boolean ticketsExist) {
         if (!futureScheduled) {
             return "A tier price can be changed only for a scheduled future performance.";
@@ -316,6 +375,28 @@ public final class PerformancePricingOperations {
             statement.setString(2, tierCode);
             try (ResultSet rows = statement.executeQuery()) {
                 return rows.next();
+            }
+        }
+    }
+
+    private boolean ticketsExistWithoutLock(
+            Connection connection,
+            int performanceId,
+            String tierCode
+    ) throws SQLException {
+        String sql = """
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM Tickets
+                    WHERE performance_id = ? AND tier_code = ?
+                )
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, performanceId);
+            statement.setString(2, tierCode);
+            try (ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                return rows.getBoolean(1);
             }
         }
     }

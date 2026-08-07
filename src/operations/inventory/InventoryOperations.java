@@ -126,16 +126,18 @@ public final class InventoryOperations {
 
     public OperationResult<Void> blockSeat(
             int performanceId,
-            int performanceSeatId
+            String rowName,
+            int seatNumber
     ) {
-        return changeSeatBlock(performanceId, performanceSeatId, true);
+        return changeSeatBlock(performanceId, rowName, seatNumber, true);
     }
 
     public OperationResult<Void> unblockSeat(
             int performanceId,
-            int performanceSeatId
+            String rowName,
+            int seatNumber
     ) {
-        return changeSeatBlock(performanceId, performanceSeatId, false);
+        return changeSeatBlock(performanceId, rowName, seatNumber, false);
     }
 
     public OperationResult<Void> checkPerformanceForSeatBlocking(int performanceId) {
@@ -154,12 +156,13 @@ public final class InventoryOperations {
 
     private OperationResult<Void> changeSeatBlock(
             int performanceId,
-            int performanceSeatId,
+            String rowName,
+            int seatNumber,
             boolean targetBlocked
     ) {
-        if (performanceId <= 0 || performanceSeatId <= 0) {
+        if (performanceId <= 0 || rowName == null || rowName.isBlank() || seatNumber <= 0) {
             return OperationResult.invalidInput(
-                    "Performance and seat IDs must be positive."
+                    "Performance ID, row, and a positive seat number are required."
             );
         }
 
@@ -174,22 +177,34 @@ public final class InventoryOperations {
             }
 
             String sql = """
-                    SELECT ps.blocked_status
+                    SELECT ps.performance_seat_id, ps.blocked_status
                     FROM PerformanceSeats ps
-                    WHERE ps.performance_id = ? AND ps.performance_seat_id = ?
+                    WHERE ps.performance_id = ?
+                      AND ps.row_name = ?
+                      AND ps.seat_number = ?
                     FOR UPDATE
                     """;
+            int performanceSeatId;
             boolean currentlyBlocked;
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setInt(1, performanceId);
-                statement.setInt(2, performanceSeatId);
+                statement.setString(2, rowName.trim());
+                statement.setInt(3, seatNumber);
                 try (ResultSet rows = statement.executeQuery()) {
                     if (!rows.next()) {
                         return OperationResult.notFound(
-                                "Reserved seat inventory was not found for this performance."
+                                "Reserved row " + rowName.trim() + ", seat " + seatNumber
+                                        + " was not found for this performance."
                         );
                     }
+                    performanceSeatId = rows.getInt("performance_seat_id");
                     currentlyBlocked = rows.getBoolean("blocked_status");
+                    if (rows.next()) {
+                        return OperationResult.conflict(
+                                "Row " + rowName.trim() + ", seat " + seatNumber
+                                        + " exists in more than one reserved section."
+                        );
+                    }
                 }
             }
 

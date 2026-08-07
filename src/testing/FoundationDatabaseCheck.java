@@ -546,6 +546,35 @@ public final class FoundationDatabaseCheck {
         }
 
         requireSuccess(
+                pricing.checkPerformanceForTierPriceUpdate(
+                        DevelopmentIds.PERFORMANCE_RESERVED
+                ),
+                "future performance tier-price preflight"
+        );
+        requireSuccess(
+                pricing.checkTierForPriceUpdate(
+                        DevelopmentIds.PERFORMANCE_RESERVED,
+                        "P3"
+                ),
+                "unsold tier-price preflight"
+        );
+        OperationResult<Void> soldTierPreflight = pricing.checkTierForPriceUpdate(
+                DevelopmentIds.PERFORMANCE_RESERVED,
+                "P1"
+        );
+        if (soldTierPreflight.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException("sold tier preflight was not rejected");
+        }
+        OperationResult<Void> completedTierPricePreflight =
+                pricing.checkPerformanceForTierPriceUpdate(
+                        DevelopmentIds.PERFORMANCE_PAST
+                );
+        if (completedTierPricePreflight.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException(
+                    "completed performance tier-price preflight was not rejected"
+            );
+        }
+        requireSuccess(
                 pricing.updateTierPrice(
                         DevelopmentIds.PERFORMANCE_RESERVED,
                         "P3",
@@ -584,20 +613,23 @@ public final class FoundationDatabaseCheck {
         requireSuccess(
                 inventory.blockSeat(
                         DevelopmentIds.PERFORMANCE_RESERVED,
-                        610001
+                        "A",
+                        1
                 ),
                 "available seat block"
         );
         requireSuccess(
                 inventory.unblockSeat(
                         DevelopmentIds.PERFORMANCE_RESERVED,
-                        610001
+                        "A",
+                        1
                 ),
                 "blocked seat unblock"
         );
         OperationResult<Void> soldSeatBlock = inventory.blockSeat(
                 DevelopmentIds.PERFORMANCE_RESERVED,
-                610005
+                "A",
+                5
         );
         if (soldSeatBlock.getStatus() != OperationStatus.CONFLICT) {
             throw new IllegalStateException("sold seat block was not rejected");

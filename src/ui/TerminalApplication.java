@@ -587,20 +587,20 @@ public final class TerminalApplication {
         boolean inMenu = true;
         while (running && inMenu) {
             printHeading("Performance pricing and inventory");
-            System.out.println("1. Configure tiers and all section assignments");
-            System.out.println("2. Update one tier price");
-            System.out.println("3. Block a reserved seat");
-            System.out.println("4. Unblock a reserved seat");
-            System.out.println("5. View reserved-seat inventory");
-            System.out.println("6. View general-admission inventory");
+            System.out.println("1. View reserved-seat inventory");
+            System.out.println("2. View general-admission inventory");
+            System.out.println("3. Configure tiers and all section assignments");
+            System.out.println("4. Update one tier price");
+            System.out.println("5. Block a reserved seat");
+            System.out.println("6. Unblock a reserved seat");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
-                case "1" -> runOnlineAction(this::configurePricing);
-                case "2" -> runOnlineAction(this::updateTierPrice);
-                case "3" -> runOnlineAction(() -> changeSeatBlock(true));
-                case "4" -> runOnlineAction(() -> changeSeatBlock(false));
-                case "5" -> runOnlineAction(this::viewReservedInventory);
-                case "6" -> runOnlineAction(this::viewGeneralInventory);
+                case "1" -> runOnlineAction(this::viewReservedInventory);
+                case "2" -> runOnlineAction(this::viewGeneralInventory);
+                case "3" -> runOnlineAction(this::configurePricing);
+                case "4" -> runOnlineAction(this::updateTierPrice);
+                case "5" -> runOnlineAction(() -> changeSeatBlock(true));
+                case "6" -> runOnlineAction(() -> changeSeatBlock(false));
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown pricing/inventory option.");
             }
@@ -710,51 +710,11 @@ public final class TerminalApplication {
             tiers.add(new TierInput(code, price));
         }
 
-        Integer assignmentCount = readValidatedInteger(
-                "Number of venue sections to assign: ",
-                value -> value != requiredAssignments
-                        ? Optional.of("This venue has " + requiredAssignments
-                                + " sections; enter " + requiredAssignments + " assignments.")
-                        : Optional.empty()
-        );
-        if (assignmentCount == null) {
-            return null;
-        }
-
-        Set<String> validSections = new HashSet<>();
-        for (String section : venueSections) {
-            validSections.add(normalize(section));
-        }
-        Set<String> assignedSections = new HashSet<>();
         Set<String> assignedTierCodes = new HashSet<>();
         List<SectionTierInput> assignments = new ArrayList<>();
-        for (int index = 1; index <= assignmentCount; index++) {
-            String section = readValidatedText(
-                    "Section " + index + " name: ",
-                    value -> {
-                        String normalized = normalize(value);
-                        if (normalized.isEmpty()) {
-                            return Optional.of("A section name is required.");
-                        }
-                        if (!validSections.contains(normalized)) {
-                            return Optional.of(
-                                    "Enter a section belonging to the performance venue."
-                            );
-                        }
-                        if (assignedSections.contains(normalized)) {
-                            return Optional.of(
-                                    "A section can be assigned only once for a performance."
-                            );
-                        }
-                        return Optional.empty();
-                    }
-            );
-            if (section == null) {
-                return null;
-            }
-            assignedSections.add(normalize(section));
-
-            int remainingAssignments = assignmentCount - index;
+        for (int index = 0; index < requiredAssignments; index++) {
+            String section = venueSections.get(index);
+            int remainingAssignments = requiredAssignments - index - 1;
             String tierCode = readValidatedText(
                     "Tier code for " + section + ": ",
                     value -> {
@@ -783,53 +743,80 @@ public final class TerminalApplication {
     }
 
     private void updateTierPrice() {
-        Integer performanceId = readCheckedId(
-                "Performance ID: ",
-                inputChecks::checkPerformance
-        );
-        if (performanceId == null) {
-            return;
+        while (running) {
+            Integer performanceId = readCheckedId(
+                    "Performance ID: ",
+                    pricing::checkPerformanceForTierPriceUpdate
+            );
+            if (performanceId == null) {
+                return;
+            }
+            String tierCode = readCheckedText(
+                    "Tier: ",
+                    value -> pricing.checkTierForPriceUpdate(performanceId, value)
+            );
+            if (tierCode == null) {
+                return;
+            }
+            BigDecimal price = readDecimalWithRetry(
+                    "New tier price: ",
+                    value -> value.compareTo(BigDecimal.ZERO) <= 0
+                            ? Optional.of("Tier price must be positive.")
+                            : Optional.empty()
+            );
+            if (price == null) {
+                return;
+            }
+            OperationResult<Void> result = pricing.updateTierPrice(
+                    performanceId,
+                    tierCode,
+                    price
+            );
+            printResult(result);
+            if (result.isSuccess()) {
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
         }
-        String tierCode = readCheckedText(
-                "Tier: ",
-                value -> inputChecks.checkTier(performanceId, value)
-        );
-        if (tierCode == null) {
-            return;
-        }
-        BigDecimal price = readDecimalWithRetry(
-                "New tier price: ",
-                value -> value.compareTo(BigDecimal.ZERO) <= 0
-                        ? Optional.of("Tier price must be positive.")
-                        : Optional.empty()
-        );
-        if (price == null) {
-            return;
-        }
-        printResult(pricing.updateTierPrice(performanceId, tierCode, price));
-        pause();
     }
 
     private void changeSeatBlock(boolean block) {
-        Integer performanceId = readCheckedId(
-                "Performance ID: ",
-                inventory::checkPerformanceForSeatBlocking
-        );
-        if (performanceId == null) {
-            return;
+        while (running) {
+            Integer performanceId = readCheckedId(
+                    "Performance ID: ",
+                    inventory::checkPerformanceForSeatBlocking
+            );
+            if (performanceId == null) {
+                return;
+            }
+            String rowName = readValidatedText(
+                    "Row: ",
+                    value -> value.isBlank()
+                            ? Optional.of("A row letter is required.")
+                            : Optional.empty()
+            );
+            if (rowName == null) {
+                return;
+            }
+            Integer seatNumber = readPositiveIntWithRetry("Seat#: ");
+            if (seatNumber == null) {
+                return;
+            }
+            OperationResult<Void> result = block
+                    ? inventory.blockSeat(performanceId, rowName, seatNumber)
+                    : inventory.unblockSeat(performanceId, rowName, seatNumber);
+            printResult(result);
+            if (result.isSuccess()) {
+                pause();
+                return;
+            }
+            if (!promptToRetry()) {
+                return;
+            }
         }
-        Integer performanceSeatId = readCheckedId(
-                "Reserved seat inventory ID: ",
-                id -> inputChecks.checkReservedSeat(performanceId, id)
-        );
-        if (performanceSeatId == null) {
-            return;
-        }
-        OperationResult<Void> result = block
-                ? inventory.blockSeat(performanceId, performanceSeatId)
-                : inventory.unblockSeat(performanceId, performanceSeatId);
-        printResult(result);
-        pause();
     }
 
     private void viewReservedInventory() {
@@ -846,11 +833,10 @@ public final class TerminalApplication {
                 System.out.println("No reserved seats are configured for this performance.");
                 return;
             }
-            System.out.printf("%-8s %-20s %-8s %-6s %-8s %-10s %-10s%n",
-                    "Seat ID", "Section", "Row", "Seat", "Tier", "Price", "Status");
+            System.out.printf("%-20s %-8s %-6s %-8s %-10s %-10s%n",
+                    "Section", "Row", "Seat", "Tier", "Price", "Status");
             for (ReservedSeatAvailability seat : seats) {
-                System.out.printf("%-8d %-20s %-8s %-6d %-8s $%-9s %-10s%n",
-                        seat.getPerformanceSeatId(),
+                System.out.printf("%-20s %-8s %-6d %-8s $%-9s %-10s%n",
                         seat.getSectionName(),
                         seat.getRowName(),
                         seat.getSeatNumber(),
