@@ -1105,7 +1105,7 @@ public final class TerminalApplication {
         List<Integer> seatIds = null;
         while (running) {
             List<ReservedSeatLocation> locations = readReservedSeatLocationsWithRetry(
-                    "Reserved seats (Row Seat#, comma-separated): "
+                    "Reserved seats (Row Seat#, comma-separated; e.g., A 1, A 2): "
             );
             if (locations == null) {
                 return;
@@ -1171,7 +1171,10 @@ public final class TerminalApplication {
                 }
                 continue;
             }
-            System.out.println("General-admission sections: " + String.join(", ", sectionNames));
+            System.out.println(
+                    "General-admission sections of this performance: "
+                            + String.join(", ", sectionNames)
+            );
             performanceId = candidatePerformanceId;
             break;
         }
