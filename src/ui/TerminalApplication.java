@@ -52,6 +52,7 @@ import reports.SellThroughReport;
 import reports.SellThroughTierReport;
 import reports.SellThroughBucketReport;
 
+
 import queries.QueryOperations;
 import queries.UpcomingPerformanceQuery;
 import queries.PostalCodePerformanceQuery;
@@ -60,6 +61,13 @@ import queries.DateRangePerformanceQuery;
 import queries.FilteredPerformanceQuery;
 import queries.SeatMapSummaryQuery;
 import queries.BestAvailableQuery;
+
+import toolkit.ToolkitOperations;
+import toolkit.PricingRecommendation;
+import toolkit.PricingRecommendationInput;
+import toolkit.TierRecommendation;
+import toolkit.RevenueImpactInput;
+import toolkit.RevenueImpactEstimate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -93,6 +101,7 @@ public final class TerminalApplication {
     private final OperationInputChecks inputChecks;
     private final ReportOperations reports;
     private final QueryOperations queries;
+    private final ToolkitOperations toolkit;
 
     private boolean running;
 
@@ -114,6 +123,7 @@ public final class TerminalApplication {
         this.inputChecks = new OperationInputChecks(transactions);
         this.reports = new ReportOperations(transactions);
         this.queries = new QueryOperations(transactions);
+        this.toolkit = new ToolkitOperations(transactions);
     }
 
     public void run() {
@@ -161,10 +171,7 @@ public final class TerminalApplication {
             case "6" -> showReviewMenu();
             case "7" -> showSearches();
             case "8" -> showReports();
-            case "9" -> showLaterModule(
-                    "Organizer toolkit",
-                    "Pricing and tier-structure suggestions are scheduled for August 4-6."
-            );
+            case "9" -> showToolkit();
             case "10" -> showDatabaseMenu();
             case "0" -> {
                 running = false;
@@ -1575,35 +1582,34 @@ public final class TerminalApplication {
         pause();
     }
 
-private void showSearches() {
-    boolean inMenu = true;
+    private void showSearches() {
+        boolean inMenu = true;
 
-    while (running && inMenu) {
-        printHeading("Required Searches");
+        while (running && inMenu) {
+            printHeading("Required Searches");
 
-        System.out.println("1. Upcoming performances near a location");
-        System.out.println("2. Search by postal code");
-        System.out.println("3. Search by exact address");
-        System.out.println("4. Date range and ticket availability");
-        System.out.println("5. Performance filter search");
-        System.out.println("6. Seat map summary");
-        System.out.println("7. Best available seats");
-        System.out.println("0. Back");
+            System.out.println("1. Upcoming performances near a location");
+            System.out.println("2. Search by postal code");
+            System.out.println("3. Search by exact address");
+            System.out.println("4. Date range and ticket availability");
+            System.out.println("5. Performance filter search");
+            System.out.println("6. Seat map summary");
+            System.out.println("7. Best available seats");
+            System.out.println("0. Back");
 
-        switch (readLine("Select an option: ")) {
-            case "1" -> runOnlineAction(this::query1);
-            case "2" -> runOnlineAction(this::query2);
-            case "3" -> runOnlineAction(this::query3);
-            case "4" -> runOnlineAction(this::query4);
-            case "5" -> runOnlineAction(this::query5);
-            case "6" -> runOnlineAction(this::query6);
-            case "7" -> runOnlineAction(this::query7);
-            case "0" -> inMenu = false;
-            default -> System.out.println("Unknown search option.");
+            switch (readLine("Select an option: ")) {
+                case "1" -> runOnlineAction(this::query1);
+                case "2" -> runOnlineAction(this::query2);
+                case "3" -> runOnlineAction(this::query3);
+                case "4" -> runOnlineAction(this::query4);
+                case "5" -> runOnlineAction(this::query5);
+                case "6" -> runOnlineAction(this::query6);
+                case "7" -> runOnlineAction(this::query7);
+                case "0" -> inMenu = false;
+                default -> System.out.println("Unknown search option.");
+            }
         }
     }
-}
-
 
  private void query1() {
 
@@ -2285,7 +2291,6 @@ private void report1() {
     });
     pause();
 }
-
 
 private void report2() {
 
@@ -2971,7 +2976,125 @@ private void report9() {
 
     pause();
 }
+private void showToolkit(){
+    printHeading("Performance Pricing Recommendation");
+    int genreId = readPositiveIntWithRetry("Genre ID :");
+    String city = readLine("City : ");
+    int venueCapacity = readPositiveIntWithRetry("Venue capacity: ");
+    PricingRecommendationInput input =
+        new PricingRecommendationInput(
+                genreId,
+                city,
+                venueCapacity,
+                0.25,
+                24,
+                20
+        );
+    OperationResult<PricingRecommendation> result =
+            toolkit.recommendPricing(input);
+    printResult(result);
 
+    PricingRecommendation recommendation = result.getValue().orElse(null);
+
+    result.getValue().ifPresent(rec -> {
+        System.out.println();
+        System.out.println(
+                "Comparable performances used: "
+                + rec.getComparablesUsed()
+        );
+        System.out.println(
+                "Recommended number of tiers: "
+                + rec.getTierCount()
+        );
+        System.out.println();
+        System.out.printf(
+                "%-12s %-20s %-20s%n",
+                "Tier",
+                "Capacity %",
+                "Suggested Price"
+        );
+        System.out.println(
+                "------------------------------------------------"
+        );
+        for (TierRecommendation tier :
+                rec.getTiers()) {
+            System.out.printf(
+                    "%-12d %-20s $%-20s%n",
+                    tier.getTierRank(),
+                    tier.getCapacityPct(),
+                    tier.getSuggestedPrice()
+            );
+        }
+    });
+    pause();
+    System.out.println("\n----------------------------------------\n");
+    boolean inMenu = true;
+        while (running && inMenu) {
+            System.out.println("1. Estimate revenue impact of changing a price tier : \n");
+            System.out.println("0. Back");
+            switch (readLine("Select an option: ")) {
+                case "1" -> {estimateRevenueImpact(recommendation); return;}
+                case "0" -> { return; }
+                default -> System.out.println("Unknown profile option.");
+            }
+        }
+}
+
+private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
+    if (lastRecommendation == null
+            || lastRecommendation.getComparablePerformanceIds().isEmpty()) {
+        System.out.println();
+        System.out.println(
+                "No comparable performances available — run a pricing recommendation above first."
+        );
+        pause();
+        return;
+    }
+    List<Integer> comparablePerformanceIds =
+            lastRecommendation.getComparablePerformanceIds();
+
+    System.out.println();
+    System.out.println("=== Revenue Impact Estimate ===");
+    System.out.println(
+            "Using "
+            + comparablePerformanceIds.size()
+            + " comparable performance(s) from the recommendation above."
+    );
+
+    BigDecimal currentPrice = BigDecimal.valueOf(readPositiveIntWithRetry("Current price: $"));
+    BigDecimal proposedPrice = BigDecimal.valueOf(readPositiveIntWithRetry("Proposed price: $"));
+    BigDecimal bandWidth = BigDecimal.valueOf(readPositiveIntWithRetry("Band width ($): "));
+
+    RevenueImpactInput input =
+            new RevenueImpactInput(
+                    comparablePerformanceIds,
+                    currentPrice,
+                    proposedPrice,
+                    bandWidth
+            );
+
+    OperationResult<RevenueImpactEstimate> result =
+            toolkit.estimateRevenueImpact(input);
+    printResult(result);
+
+    result.getValue().ifPresent(estimate -> {
+        System.out.println();
+        System.out.println(
+                "Comparable tiers used: "
+                + estimate.getSampleSize()
+        );
+        System.out.printf(
+                "Expected sell-through: %.1f%%%n",
+                estimate.getExpectedSellThroughPct()
+        );
+        System.out.println(
+                "Expected revenue at proposed price: $"
+                + estimate.getExpectedRevenue()
+        );
+    });
+
+    pause();
+}
 
     private void showDatabaseMenu() {
         printHeading("Database connection");
