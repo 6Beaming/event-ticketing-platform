@@ -152,6 +152,8 @@ Use performance `6006` or `6013` to demonstrate full pricing replacement because
 4. Enter an active, unrestricted customer ID, then performance `6001`.
 5. Enter seats as `Row Seat#`, separated by commas, for example `A 1, A 2`. Use the actual available values shown in step 1.
 
+For both reserved and general-admission booking, the terminal checks the R4 restriction immediately after the customer ID. A possible scalper receives `FORBIDDEN` and cannot continue to the performance or ticket inputs. The booking transaction checks the restriction again before creating an order.
+
 On success, the terminal prints one transaction ID, the new ticket IDs, and the total. The complete booking commits atomically. If another purchase has taken a seat, no part of this booking is saved.
 
 ### 10.2 Book general admission

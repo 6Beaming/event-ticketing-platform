@@ -231,6 +231,25 @@ public final class BookingOperations {
         );
     }
 
+    public OperationResult<Void> checkCustomerForBooking(int customerId) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            PaymentSnapshot payment = lockCustomerPayment(connection, customerId);
+            if (payment == null) {
+                return OperationResult.notFound(
+                        "An active customer with saved payment information was not found."
+                );
+            }
+            return restrictions.checkCustomerAllowed(
+                    connection,
+                    customerId,
+                    LocalDateTime.now(ZoneOffset.UTC).minusYears(1)
+            );
+        });
+    }
+
     public static String validateReservedRequest(
             int customerId,
             int performanceId,

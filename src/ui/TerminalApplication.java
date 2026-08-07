@@ -1091,7 +1091,7 @@ public final class TerminalApplication {
     }
 
     private void bookReservedSeats() {
-        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
+        Integer customerId = readCheckedId("Customer ID: ", bookings::checkCustomerForBooking);
         if (customerId == null) {
             return;
         }
@@ -1136,7 +1136,7 @@ public final class TerminalApplication {
     }
 
     private void bookGeneralAdmission() {
-        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
+        Integer customerId = readCheckedId("Customer ID: ", bookings::checkCustomerForBooking);
         if (customerId == null) {
             return;
         }

@@ -247,6 +247,38 @@ public final class FoundationDatabaseCheck {
                 );
             }
         }
+        if (bookings.checkCustomerForBooking(2001).getStatus()
+                != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException(
+                    "R4 restriction did not reject the booking-menu customer check"
+            );
+        }
+        requireSuccess(
+                bookings.checkCustomerForBooking(2003),
+                "unrestricted booking-menu customer check"
+        );
+        OperationResult<List<ReservedSeatAvailability>> restrictedReservedInventory =
+                inventory.getReservedInventory(DevelopmentIds.PERFORMANCE_RESERVED);
+        requireSuccess(
+                restrictedReservedInventory,
+                "reserved inventory for R4 restriction check"
+        );
+        int availableReservedSeatId = restrictedReservedInventory.getValue().orElseThrow().stream()
+                .filter(seat -> seat.getState() == InventoryState.AVAILABLE)
+                .map(ReservedSeatAvailability::getPerformanceSeatId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No available reserved seat for R4 restriction check"
+                ));
+        if (bookings.bookReservedSeats(
+                2001,
+                DevelopmentIds.PERFORMANCE_RESERVED,
+                List.of(availableReservedSeatId)
+        ).getStatus() != OperationStatus.FORBIDDEN) {
+            throw new IllegalStateException(
+                    "R4 restriction did not prohibit reserved-seat booking"
+            );
+        }
         if (bookings.bookGeneralAdmission(
                 2001,
                 DevelopmentIds.PERFORMANCE_RESERVED,
