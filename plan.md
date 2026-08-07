@@ -362,13 +362,13 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - [x] **Finish the R1-R3 and R9 terminal screens.**
   - [x] Add prompts and check date, location, and grouping inputs.
   - [x] Use clear headings, money formatting, and empty-result messages.
-- [ ] **Build the organizer toolkit.**
+- [x] **Build the organizer toolkit.**
   - [x] Find comparable performances using genre, venue capacity, city, and recent dates.
   - [x] Suggest tier count, a price for each tier, and capacity share per tier.
-  - [ ] Ensure capacity shares total 100%.
-  - [ ] Provide a fallback when comparable data is insufficient.
-  - [ ] Explain which comparable performances influenced the recommendation.
-  - [ ] Attempt expected-revenue-change estimation only after all required features pass.
+  - [x] Ensure capacity shares total 100%.
+  - [x] Provide a fallback when comparable data is insufficient.
+  - [x] Explain which comparable performances influenced the recommendation.
+  - [x] Attempt expected-revenue-change estimation only after all required features pass.
 - [x] **Finish the repeatable sample-data generator and `sql/load.sql`.**
   - [x] Generate every count and edge case in `checklist.md`, including Member A’s transaction records.
   - [x] Keep the load order safe for foreign keys and preserve stable IDs.
@@ -408,7 +408,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 ### Block exit criteria
 
 - [ ] R1-R9 are complete and verified.
-- [ ] The organizer toolkit produces documented suggestions.
+- [x] The organizer toolkit produces documented suggestions.
 - [x] Sample data satisfies every minimum and supports every test case.
 - [ ] The full terminal application works after a clean schema and data load.
 - [ ] `report.pdf` and `manual.pdf` are complete.

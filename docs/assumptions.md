@@ -33,3 +33,15 @@
 - R8 measures the requested top-10 period by the completed resale transaction's `Transactions.transaction_date`, not by when the listing was created. A completed resale must have both a sold listing and its linked `resale` transaction; markup is measured against the ticket’s stored face value.
 
 - R9 defines a noun phrase as a contiguous sequence of at least two adjective or noun tokens identified by the bundled English OpenNLP part-of-speech model. Phrases are lowercased, counted by occurrence, and limited to the ten highest counts per event; no graphical word cloud is produced.
+
+## Organizer toolkit assumptions
+
+- The PDF leaves the toolkit strategy open. MyTix first selects completed performances from the previous 24 months in the requested city, with venue capacity within 25% of the target. Exact-genre matches rank ahead of performances in another genre of the same segment. Three comparable performances is the minimum treated as a normal-confidence pool.
+
+- When fewer than three primary matches exist, the toolkit expands to completed same-genre or same-segment performances from any city within the previous 36 months and 50% of the requested capacity. This may mix different local markets because the schema has no metro-area, exchange-rate, or currency model. If no comparable tier data exists at all, the documented rule-based fallback is three value/mid/premium tiers: 50% at $60, 30% at $100, and 20% at $150.
+
+- Historical tiers are ranked from lowest to highest price. The most common tier count is recommended; if tier counts tie in frequency, the smaller count wins. Capacity shares are averaged by price rank, normalized, rounded to one decimal place, and the rounding remainder is applied to the largest tier so the displayed shares total exactly 100%.
+
+- Toolkit revenue means organizer primary-ticket revenue from `Tickets.face_value`; resale proceeds are excluded. Blocked reserved seats are excluded from sellable capacity. The displayed historical revenue is the average primary-ticket revenue of the comparable performances with the recommended tier count.
+
+- The optional revenue-change estimate is a heuristic, not a causal forecast. It separately averages capacity and sell-through for historical tiers within the entered price band around the current and proposed prices, projects revenue at each price, and reports proposed minus current revenue. Small samples and broad price bands should be treated as low-confidence estimates.

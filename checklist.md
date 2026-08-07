@@ -99,7 +99,7 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 - [x] Suggest a price for each tier.
 - [x] Suggest the share of venue capacity assigned to each tier.
 - [x] Use documented comparable-performance criteria such as genre, venue capacity, city, and recent dates.
-- [ ] Document and justify the algorithm, assumptions, insufficient-data fallback, and an example result.
+- [x] Document and justify the algorithm, assumptions, insufficient-data fallback, and an example result.
 - [x] Optional extra credit: estimate the expected revenue change from a suggested tier-price change.
 
 ### Required sample data

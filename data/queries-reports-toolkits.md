@@ -331,9 +331,10 @@ application can load `models/en-pos-maxent.bin`.
 ## 9. Organizer toolkit
 
 Option 9 immediately runs a pricing recommendation before displaying its
-one-item submenu. It uses completed performances from the previous 24 months,
-the exact city, the selected genre or another genre in the same segment, venue
-capacity within 25% of the input, and at most 20 comparable performances.
+one-item submenu. The primary pool uses completed performances from the
+previous 24 months, the exact city, the selected genre or another genre in the
+same segment, venue capacity within 25% of the input, and at most 20 comparable
+performances. Exact-genre matches rank before same-segment matches.
 
 ### 9: Pricing and tier recommendation
 
@@ -346,10 +347,21 @@ Venue capacity: 120
 Expected: success. The Rock/Music input finds completed Toronto performances
 with comparable capacities and displays:
 
+- the recommendation method and whether fallback matching was needed;
 - comparable performance count;
 - recommended number of tiers;
-- recommended capacity percentage for each tier; and
-- suggested price for each tier.
+- recommended capacity percentage for each tier, totalling exactly 100%;
+- suggested price for each tier; and
+- every comparable performance that influenced the result, including its
+  genre, segment, venue, city, capacity, and selection reason.
+
+Three primary comparables are treated as a normal-confidence pool. With fewer
+than three, the toolkit expands to any city, the previous 36 months, and venues
+within 50% of the requested capacity while retaining the genre/segment match.
+The output explicitly identifies this fallback and labels a result based on
+fewer than three total matches as low confidence. If no usable historical tier
+data exists, the toolkit still returns its documented three-tier rule-based
+fallback instead of returning an empty recommendation.
 
 After reviewing the recommendation, press Enter. Enter `0` at `Select an
 option:` to return to the main menu without running the extra-credit estimate.
@@ -367,8 +379,12 @@ Band width ($): 20
 ```
 
 Expected: success. The estimate reuses the comparable performances from the
-recommendation, finds historical tiers priced from `$100` through `$140`, and
-prints the number of comparable tiers, expected sell-through percentage, and
-expected revenue at the proposed price.
+recommendation. It finds historical tiers near both the current and proposed
+prices using the entered band. It then prints the sample size, expected
+sell-through, and expected revenue for each price, followed by the estimated
+revenue change (`proposed revenue - current revenue`). If one side has no
+historical tiers, increase the band and try again.
 
-Toolkit price inputs currently accept positive whole numbers only.
+Toolkit price inputs accept positive decimal values. The comparable strategy,
+rule-based fallback, normalization rule, and revenue-estimation limitations are
+recorded in `docs/assumptions.md`.
