@@ -92,9 +92,11 @@ performances are returned. The address comparison is exact.
 
 ### 7 -> 4 (Q4): Date range and minimum availability
 
-Intended sample inputs, assuming the data was loaded on 2026-08-07:
+Q4 first asks which Q1-Q3 location search to refine. This postal-code example
+assumes the data was loaded on 2026-08-07:
 
 ```text
+Select option: 2
 Enter postal code: M5J 2X2
 Start date/time (YYYY-MM-DD HH:mm): 2026-08-08 00:00
 End date/time (YYYY-MM-DD HH:mm): 2026-12-06 00:00
@@ -104,15 +106,16 @@ Minimum available tickets: 1
 After a different load date, use a start one day after the load and an end 121
 days after the load.
 
-Current result: the terminal rejects the end date with `End date/time cannot be
-in the future.` No successful terminal input currently exists for Q4 because
-the query selects only `scheduled` performances while the shared date reader
-does not permit a future end date. The inputs above describe the intended
-successful search once that terminal validation conflict is corrected.
+Expected: success. Matching upcoming performances in the `M5J` postal-code
+group are limited to the entered date range and minimum availability. Use
+location option `1` to refine the coordinate/distance search, including its
+distance or cheapest-price sort, or option `3` to refine an exact-address
+search.
 
 ### 7 -> 5 (Q5): Combined filters
 
-Intended sample inputs, assuming the data was loaded on 2026-08-07:
+Every Q5 prompt is optional; press Enter to skip a filter. This full-combination
+example assumes the data was loaded on 2026-08-07:
 
 ```text
 City: Toronto
@@ -130,9 +133,11 @@ After a different load date, use a start one day after the load and an end 180
 days after the load. `general` can replace `reserved` to test the other section
 type.
 
-Current result: the terminal rejects the future end date for the same reason as
-Q4. No successful terminal input currently exists for Q5, even though the
-sample data contains matching scheduled Rock performances in Toronto.
+Expected: success. Matching scheduled Rock performances in Toronto are
+returned with venue, date, cheapest available price, and available quantity.
+Repeat with only one or two populated fields to verify that filters work in any
+combination. When `reserved` or `general` is supplied, cheapest price and
+availability are calculated only from available inventory of that type.
 
 ### 7 -> 6 (Q6): Seat-map summary
 

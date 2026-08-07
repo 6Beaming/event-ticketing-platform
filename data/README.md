@@ -13,6 +13,11 @@ mysql -u root -p database_name < sql/load.sql
 The command rewrites `data/development-data.sql`, which `sql/load.sql` loads in
 one execution. 
 
+## Time-relative validity
+
+Performances, purchases, cancellations, refunds, resale activity, ownership
+transfers, and reviews use `UTC_TIMESTAMP()` relative to load time to keep sample dates valid at load time.
+
 
 
 
@@ -83,11 +88,21 @@ ticketing workflows.
 
 ### Ticket IDs category
 
-| Category | Stable ID |
-|---|---:|
-| Representative reserved ticket | `8001` |
-| Representative general-admission ticket | `8002` |
-| Ticket with two completed resale transfers | `8007` |
+Ticket categories overlap because one ticket can participate in several workflows.
+
+| Testing category | Ticket IDs | Brief use |
+|---|---|---|
+| Representative reserved ticket | `8001` | Active ticket for performance `6001`; currently listed for resale. |
+| Representative general-admission ticket | `8002` | Active GA ticket for performance `6002`; currently listed for resale. |
+| Future unlisted reserved ticket | `8004` | Owned by customer `2001` for performance `6001`, which is more than seven days away. |
+| Near-deadline unlisted GA ticket | `8006` | Owned by customer `2002` for performance `6002`; customer cancellation must be rejected. |
+| Active resale listings | `8001`, `8003`, `8002`, `8005` | Visible through option **5 -> 2** for performances `6001` and `6002`. |
+| Completed resale transfers | `8028`-`8030`, `8037`-`8039` | Sold once and transferred to their resale buyers. |
+| Withdrawn resale listings | `8031`, `8032`, `8040`, `8041` | Listings retained as withdrawn history. |
+| Listings priced at the resale cap | `8001`, `8002`, `8007`, `8028`, `8037` | Exact-cap examples for resale reporting and validation. |
+| Ticket with two resale transfers | `8007` | Ownership chain `2003` -> `2099` -> `2100`; view with option **5 -> 6**. |
+| Customer-cancelled tickets | `8274`, `8277`, …, `8307` (every third ID) | Cancelled before the seven-day deadline and fully refunded. |
+| Organizer-cancelled tickets | `8919`-`8933`, `8946`-`8960` | Cancelled and refunded with performances `6058` and `6060`. |
 
 ## Generated counts
 

@@ -162,8 +162,8 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Block exit criteria
 
-- [ ] Both members approve the schema contract.
-- [ ] Both members can run the application against the same development data.
+- [x] Both members approve the schema contract.
+- [x] Both members can run the application against the same development data.
 - [x] Customer, organizer, event, performance, tier, and inventory records can be created or retrieved.
 - [x] Database transactions can commit and roll back correctly.
 - [x] No implementation depends on an unresolved schema question.
@@ -200,15 +200,15 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Allow the seller to withdraw only an active unsold listing.
   - [x] When sold, lock the listing, ticket, and ownership records; reject the seller as buyer; save the resale order/payment; end old ownership; add new ownership; and mark the listing sold.
   - [x] Ensure two buyers cannot complete the same listing.
-- [ ] **Build Q6: seat-map summary.**
-  - [ ] Accept a performance ID.
-  - [ ] Return every section with tier, price, available/remaining capacity, sold, and blocked counts.
-  - [ ] Handle reserved and general-admission sections in one consistent result.
-- [ ] **Build Q7: best consecutive seats.**
-  - [ ] Accept performance ID, quantity `q`, and optional budget.
-  - [ ] Find consecutive numeric seats in the same row.
-  - [ ] Exclude sold and blocked seats.
-  - [ ] Return the qualifying group with the lowest total tier price, or a clear no-result message.
+- [x] **Build Q6: seat-map summary.**
+  - [x] Accept a performance ID.
+  - [x] Return every section with tier, price, available/remaining capacity, sold, and blocked counts.
+  - [x] Handle reserved and general-admission sections in one consistent result.
+- [x] **Build Q7: best consecutive seats.**
+  - [x] Accept performance ID, quantity `q`, and optional budget.
+  - [x] Find consecutive numeric seats in the same row.
+  - [x] Exclude sold and blocked seats.
+  - [x] Return the qualifying group with the lowest total tier price, or a clear no-result message.
 - [x] Demonstrate the required booking, cancellation, and resale success/rejection behavior before marking each operation complete.
 - [ ] Demonstrate the required Q6 and Q7 success/rejection behavior.
 
@@ -240,31 +240,31 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Confirm the customer held a non-cancelled ticket for that performance.
   - [x] Enforce ratings from 1-5 and one review per customer/performance.
   - [x] Save the event rating, venue rating, and comment together.
-- [ ] **Build Q1: nearby performances.**
-  - [ ] Accept latitude, longitude, optional search distance, and sort choice.
-  - [ ] Apply the documented default distance when none is supplied.
-  - [ ] Return upcoming performances within range.
-  - [ ] Support distance ranking and cheapest-available-price ranking in ascending or descending order.
-- [ ] **Build Q2: postal-code search.**
-  - [ ] Accept a postal code and apply the documented same/adjacent-postal-code rule.
-  - [ ] Return upcoming performances with venue and date/time information.
-- [ ] **Build Q3: exact-address search.**
-  - [ ] Accept an exact address.
-  - [ ] Return the matching venue and its upcoming performances or a clear no-result message.
-- [ ] **Build Q4: date and availability refinement.**
-  - [ ] Accept start date, end date, and minimum available quantity.
-  - [ ] Reject invalid ranges and filter out performances without enough inventory.
-- [ ] **Build Q5: combined filters.**
-  - [ ] Support city, segment, genre, date range, cheapest-ticket price range, minimum availability, reserved seating, and general admission in any combination.
-  - [ ] Use prepared parameters for values and safely add only the selected filters.
-  - [ ] Ensure cheapest price and availability include both reserved and general-admission inventory.
+- [x] **Build Q1: nearby performances.**
+  - [x] Accept latitude, longitude, optional search distance, and sort choice.
+  - [x] Apply the documented default distance when none is supplied.
+  - [x] Return upcoming performances within range.
+  - [x] Support distance ranking and cheapest-available-price ranking in ascending or descending order.
+- [x] **Build Q2: postal-code search.**
+  - [x] Accept a postal code and apply the documented same/adjacent-postal-code rule.
+  - [x] Return upcoming performances with venue and date/time information.
+- [x] **Build Q3: exact-address search.**
+  - [x] Accept an exact address.
+  - [x] Return the matching venue and its upcoming performances or a clear no-result message.
+- [x] **Build Q4: date and availability refinement.**
+  - [x] Accept start date, end date, and minimum available quantity.
+  - [x] Reject invalid ranges and filter out performances without enough inventory.
+- [x] **Build Q5: combined filters.**
+  - [x] Support city, segment, genre, date range, cheapest-ticket price range, minimum availability, reserved seating, and general admission in any combination.
+  - [x] Use prepared parameters for values and safely add only the selected filters.
+  - [x] Ensure cheapest price and availability include both reserved and general-admission inventory.
 - [x] **Check event setup, pricing, blocking, and reviews with known data.**
 - [ ] **Check each Q1-Q5 sort/filter path with known data.**
 
 ### Shared work
 
 - [x] Integrate every required operation into the terminal.
-- [ ] Integrate every Q1-Q7 query into the terminal.
+- [x] Integrate every Q1-Q7 query into the terminal.
 - [x] Test two customers attempting to buy the same reserved seat.
 - [x] Test general-admission requests below, equal to, and above remaining capacity.
 - [x] Test failed multi-seat booking and confirm the entire order rolls back.
@@ -307,7 +307,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Calculate sellable capacity with blocked reserved seats excluded and general-admission capacity included.
   - [x] Report sell-through per performance and per performance tier.
   - [ ] Accept month and city for sold-out and below-25% performance results.
-  - [ ] Handle zero-capacity cases safely.
+  - [x] Handle zero-capacity cases safely.
 - [x] **Build R8: resale reports.**
   - [x] Report completed resale count per event.
   - [x] Calculate average markup over face value.
@@ -363,8 +363,8 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [x] Add prompts and check date, location, and grouping inputs.
   - [x] Use clear headings, money formatting, and empty-result messages.
 - [ ] **Build the organizer toolkit.**
-  - [ ] Find comparable performances using genre, venue capacity, city, and recent dates.
-  - [ ] Suggest tier count, a price for each tier, and capacity share per tier.
+  - [x] Find comparable performances using genre, venue capacity, city, and recent dates.
+  - [x] Suggest tier count, a price for each tier, and capacity share per tier.
   - [ ] Ensure capacity shares total 100%.
   - [ ] Provide a fallback when comparable data is insufficient.
   - [ ] Explain which comparable performances influenced the recommendation.

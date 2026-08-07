@@ -65,16 +65,16 @@ The dated work blocks below are complete only when every item in this section is
 
 ### Queries Q1-Q7
 
-- [ ] **Q1:** Accept latitude/longitude plus a user-selectable distance with a documented default.
-- [ ] **Q1:** Return nearby upcoming performances ranked by the chosen distance calculation.
-- [ ] **Q1:** Alternatively rank by cheapest available ticket, ascending or descending.
-- [ ] **Q2:** Return upcoming performances in the same and adjacent postal codes.
-- [ ] **Q2:** Document how postal-code adjacency is determined.
-- [ ] **Q3:** Find a venue by exact address and return its upcoming performances.
-- [ ] **Q4:** Apply date-range and minimum-ticket-availability refinement to the location searches.
-- [ ] **Q5:** Support city, segment, genre, date, cheapest-price range, minimum availability, reserved seating, and general admission in any combination.
-- [ ] **Q6:** For every section report tier, price, available count/remaining capacity, sold count, and blocked count.
-- [ ] **Q7:** Given performance, quantity `q`, and optional budget, return the lowest-total-price `q` consecutive seat numbers in one row.
+- [x] **Q1:** Accept latitude/longitude plus a user-selectable distance with a documented default.
+- [x] **Q1:** Return nearby upcoming performances ranked by the chosen distance calculation.
+- [x] **Q1:** Alternatively rank by cheapest available ticket, ascending or descending.
+- [x] **Q2:** Return upcoming performances in the same and adjacent postal codes.
+- [x] **Q2:** Document how postal-code adjacency is determined.
+- [x] **Q3:** Find a venue by exact address and return its upcoming performances.
+- [x] **Q4:** Apply date-range and minimum-ticket-availability refinement to the location searches.
+- [x] **Q5:** Support city, segment, genre, date, cheapest-price range, minimum availability, reserved seating, and general admission in any combination.
+- [x] **Q6:** For every section report tier, price, available count/remaining capacity, sold count, and blocked count.
+- [x] **Q7:** Given performance, quantity `q`, and optional budget, return the lowest-total-price `q` consecutive seat numbers in one row.
 
 ### Reports R1-R9
 
@@ -87,20 +87,20 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 - [ ] **R4:** Flag and prohibit customers identified as possible scalpers.
 - [x] **R5:** Customer order rankings for a time period and by venue city; city ranking includes customers with at least two orders in the year.
 - [x] **R6:** Customers with the most cancelled tickets and organizers with the most cancelled performances within a year.
-- [ ] **R7:** Performance and tier sell-through using sellable capacity, excluding blocked seats and including general-admission capacity.
-- [ ] **R7:** For a given month/city, report sold-out performances and those below 25% sell-through.
+- [x] **R7:** Performance and tier sell-through using sellable capacity, excluding blocked seats and including general-admission capacity.
+- [x] **R7:** For a given month/city, report sold-out performances and those below 25% sell-through.
 - [x] **R8:** Per-event completed resales, average markup over face value, and fraction of listings exactly at the cap.
 - [x] **R8:** Top 10 events by resale volume in a requested period.
 - [x] **R9:** Most popular noun phrases for each event; no word-cloud visualization is required.
 
 ### Organizer toolkit
 
-- [ ] Provide a working function that suggests the number of tiers.
-- [ ] Suggest a price for each tier.
-- [ ] Suggest the share of venue capacity assigned to each tier.
-- [ ] Use documented comparable-performance criteria such as genre, venue capacity, city, and recent dates.
+- [x] Provide a working function that suggests the number of tiers.
+- [x] Suggest a price for each tier.
+- [x] Suggest the share of venue capacity assigned to each tier.
+- [x] Use documented comparable-performance criteria such as genre, venue capacity, city, and recent dates.
 - [ ] Document and justify the algorithm, assumptions, insufficient-data fallback, and an example result.
-- [ ] Optional extra credit: estimate the expected revenue change from a suggested tier-price change.
+- [x] Optional extra credit: estimate the expected revenue change from a suggested tier-price change.
 
 ### Required sample data
 

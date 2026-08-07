@@ -38,6 +38,10 @@ import operations.resale.ResalePurchaseSummary;
 import operations.resale.TicketOwnershipHistoryEntry;
 import operations.review.CustomerReview;
 import operations.review.ReviewOperations;
+import queries.DateRangePerformanceQuery;
+import queries.FilteredPerformanceQuery;
+import queries.LocationSearchInput;
+import queries.QueryOperations;
 
 import java.math.BigDecimal;
 import java.nio.file.Paths;
@@ -102,6 +106,71 @@ public final class FoundationDatabaseCheck {
         CancellationOperations cancellations = new CancellationOperations(transactions);
         ResaleOperations resale = new ResaleOperations(transactions);
         ReviewOperations reviews = new ReviewOperations(transactions);
+        QueryOperations queries = new QueryOperations(transactions);
+
+        LocalDateTime queryStart = LocalDateTime.now(ZoneOffset.UTC).plusDays(1);
+        LocalDateTime queryEnd = queryStart.plusDays(120);
+
+        requireRows(
+                queries.query4(
+                        LocationSearchInput.coordinates(
+                                43.643500,
+                                -79.379100,
+                                50,
+                                "distance"
+                        ),
+                        queryStart,
+                        queryEnd,
+                        1
+                ),
+                "Q4 coordinate refinement"
+        );
+        requireRows(
+                queries.query4(
+                        LocationSearchInput.postalCode("M5J 2X2"),
+                        queryStart,
+                        queryEnd,
+                        1
+                ),
+                "Q4 postal-code refinement"
+        );
+        requireRows(
+                queries.query4(
+                        LocationSearchInput.address("40 Bay Street"),
+                        queryStart,
+                        queryEnd,
+                        1
+                ),
+                "Q4 exact-address refinement"
+        );
+        requireRows(
+                queries.query5(
+                        "Toronto",
+                        "Music",
+                        "Rock",
+                        queryStart,
+                        queryStart.plusDays(179),
+                        0.0,
+                        500.0,
+                        1,
+                        "reserved"
+                ),
+                "Q5 full filter combination"
+        );
+        requireRows(
+                queries.query5(
+                        "Toronto",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "general"
+                ),
+                "Q5 partial filter combination"
+        );
 
         OperationResult<Void> duplicateEmail = profiles.checkEmailAvailability(
                 "customer001@example.test"
@@ -884,6 +953,13 @@ public final class FoundationDatabaseCheck {
     private static void requireSuccess(OperationResult<?> result, String check) {
         if (!result.isSuccess()) {
             throw new IllegalStateException(check + " failed: " + result.getMessage());
+        }
+    }
+
+    private static void requireRows(OperationResult<? extends List<?>> result, String check) {
+        requireSuccess(result, check);
+        if (result.getValue().orElseThrow().isEmpty()) {
+            throw new IllegalStateException(check + " returned no rows");
         }
     }
 }

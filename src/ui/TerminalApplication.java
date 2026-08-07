@@ -59,6 +59,7 @@ import queries.PostalCodePerformanceQuery;
 import queries.AddressPerformanceQuery;
 import queries.DateRangePerformanceQuery;
 import queries.FilteredPerformanceQuery;
+import queries.LocationSearchInput;
 import queries.SeatMapSummaryQuery;
 import queries.BestAvailableQuery;
 
@@ -1822,29 +1823,125 @@ private void query3() {
 
 private void query4() {
 
-    printHeading("Search Performances By Date Range");
+    printHeading("Location Search With Date and Availability");
 
+    System.out.println("Refine which location search?");
+    System.out.println("1. Coordinates and distance");
+    System.out.println("2. Postal code");
+    System.out.println("3. Exact address");
 
-    String postalCode =
-            readLine("Enter postal code: ");
+    Integer locationChoice = readValidatedInteger(
+            "Select option: ",
+            value -> value < 1 || value > 3
+                    ? Optional.of("Select location option 1, 2, or 3.")
+                    : Optional.empty()
+    );
+    if (locationChoice == null) {
+        return;
+    }
 
-
-    LocalDateTime[] dates = readReportDateRange();
-    if (dates == null) {
-                pause();
+    LocationSearchInput location;
+    switch (locationChoice) {
+        case 1 -> {
+            Double latitude = readValidatedDouble(
+                    "Latitude: ",
+                    value -> value < -90 || value > 90
+                            ? Optional.of("Latitude must be between -90 and 90.")
+                            : Optional.empty()
+            );
+            if (latitude == null) {
                 return;
             }
 
-
-    int minTickets =
-            Integer.parseInt(
-                    readLine("Minimum available tickets: ")
+            Double longitude = readValidatedDouble(
+                    "Longitude: ",
+                    value -> value < -180 || value > 180
+                            ? Optional.of("Longitude must be between -180 and 180.")
+                            : Optional.empty()
             );
+            if (longitude == null) {
+                return;
+            }
+
+            Double radiusKm = readDoubleWithDefaultRetry(
+                    "Maximum distance in km (default 50): ",
+                    50.0,
+                    value -> value <= 0
+                            ? Optional.of("Search distance must be greater than zero.")
+                            : Optional.empty()
+            );
+            if (radiusKm == null) {
+                return;
+            }
+
+            System.out.println("1. Rank by distance");
+            System.out.println("2. Rank by cheapest price ascending");
+            System.out.println("3. Rank by cheapest price descending");
+            Integer sortChoice = readValidatedInteger(
+                    "Select option: ",
+                    value -> value < 1 || value > 3
+                            ? Optional.of("Select sort option 1, 2, or 3.")
+                            : Optional.empty()
+            );
+            if (sortChoice == null) {
+                return;
+            }
+
+            String sortBy = switch (sortChoice) {
+                case 2 -> "price_asc";
+                case 3 -> "price_desc";
+                default -> "distance";
+            };
+            location = LocationSearchInput.coordinates(
+                    latitude,
+                    longitude,
+                    radiusKm,
+                    sortBy
+            );
+        }
+        case 2 -> {
+            String postalCode = readValidatedText(
+                    "Enter postal code: ",
+                    value -> value.isBlank()
+                            ? Optional.of("Postal code is required.")
+                            : Optional.empty()
+            );
+            if (postalCode == null) {
+                return;
+            }
+            location = LocationSearchInput.postalCode(postalCode);
+        }
+        case 3 -> {
+            String address = readValidatedText(
+                    "Enter exact address: ",
+                    value -> value.isBlank()
+                            ? Optional.of("Address is required.")
+                            : Optional.empty()
+            );
+            if (address == null) {
+                return;
+            }
+            location = LocationSearchInput.address(address);
+        }
+        default -> throw new IllegalStateException("Unexpected location option");
+    }
+
+    LocalDateTime[] dates = readSearchDateRange(false);
+    if (dates == null) {
+        return;
+    }
+
+    Integer minTickets = readPositiveIntWithRetry(
+            "Minimum available tickets: "
+    );
+    if (minTickets == null) {
+        return;
+    }
 
 
     OperationResult<List<DateRangePerformanceQuery>> result =
             queries.query4(
-                    postalCode,
+                    location,
                     dates[0],
                     dates[1],
                     minTickets
@@ -1863,24 +1960,32 @@ private void query4() {
 
 
         System.out.printf(
-                "%-8s %-25s %-20s %-12s %-12s%n",
+                "%-8s %-22s %-20s %-14s %-17s %-10s %-10s %-9s%n",
                 "ID",
                 "Event",
                 "Venue",
-                "Postal",
-                "Available"
+                "City",
+                "Date",
+                "Available",
+                "Price",
+                "Distance"
         );
 
 
         for (DateRangePerformanceQuery row : rows) {
 
             System.out.printf(
-                    "%-8d %-25s %-20s %-12s %-12d%n",
+                    "%-8d %-22s %-20s %-14s %-17s %-10d $%-9.2f %-9s%n",
                     row.getPerformanceId(),
                     row.getTitle(),
                     row.getVenueName(),
-                    row.getPostalCode(),
-                    row.getAvailableTickets()
+                    row.getCity(),
+                    row.getDateTime().format(DATE_TIME_FORMAT),
+                    row.getAvailableTickets(),
+                    row.getCheapestPrice(),
+                    row.getDistanceKm() == null
+                            ? "-"
+                            : String.format(Locale.ROOT, "%.2f km", row.getDistanceKm())
             );
         }
     });
@@ -1892,40 +1997,56 @@ private void query4() {
 private void query5() {
 
     printHeading("Filtered Performance Search");
+    System.out.println("Press Enter to skip any filter.");
 
+    String city = readLine("City: ");
+    String segment = readLine("Segment: ");
+    String genre = readLine("Genre: ");
 
-    String city =
-            readLine("City: ");
-
-    String segment =
-            readLine("Segment: ");
-
-    String genre =
-            readLine("Genre: ");
-
-     LocalDateTime[] dates = readReportDateRange();
+    LocalDateTime[] dates = readSearchDateRange(true);
     if (dates == null) {
-                pause();
-                return;
-            }
+        return;
+    }
 
-    double minPrice =
-            Double.parseDouble(
-                    readLine("Minimum price: ")
-            );
+    Double minPrice = readOptionalDoubleWithRetry(
+            "Minimum price: ",
+            value -> value < 0
+                    ? Optional.of("Minimum price must be zero or greater.")
+                    : Optional.empty()
+    );
+    if (!running) {
+        return;
+    }
 
-    double maxPrice =
-            Double.parseDouble(
-                    readLine("Maximum price: ")
-            );
+    Double maxPrice = readOptionalDoubleWithRetry(
+            "Maximum price: ",
+            value -> value < 0
+                    ? Optional.of("Maximum price must be zero or greater.")
+                    : Optional.empty()
+    );
+    if (!running) {
+        return;
+    }
 
-    int minAvailable =
-            Integer.parseInt(
-                    readLine("Minimum available tickets: ")
-            );
+    if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+        printInputError("Minimum price cannot exceed maximum price.");
+        pause();
+        return;
+    }
 
-    String sectionType =
-            readLine("Section type (reserved/general): ");
+    Integer minAvailable = readOptionalPositiveIntWithRetry(
+            "Minimum available tickets: "
+    );
+    if (!running) {
+        return;
+    }
+
+    String sectionType = readOptionalSectionTypeWithRetry(
+            "Section type (reserved/general): "
+    );
+    if (!running) {
+        return;
+    }
 
 
     OperationResult<List<FilteredPerformanceQuery>> result =
@@ -1933,8 +2054,8 @@ private void query5() {
                     city,
                     segment,
                     genre,
-                    dates[0],
-                    dates[1],
+                    dates.length == 0 ? null : dates[0],
+                    dates.length == 0 ? null : dates[1],
                     minPrice,
                     maxPrice,
                     minAvailable,
@@ -1954,12 +2075,14 @@ private void query5() {
 
 
         System.out.printf(
-                "%-8s %-25s %-15s %-15s %-15s %-12s %-12s%n",
+                "%-8s %-22s %-18s %-14s %-14s %-14s %-17s %-10s %-10s%n",
                 "ID",
                 "Event",
+                "Venue",
                 "City",
                 "Segment",
                 "Genre",
+                "Date",
                 "Price",
                 "Available"
         );
@@ -1968,12 +2091,14 @@ private void query5() {
         for (FilteredPerformanceQuery row : rows) {
 
             System.out.printf(
-                    "%-8d %-25s %-15s %-15s %-15s %-12.2f %-12d%n",
+                    "%-8d %-22s %-18s %-14s %-14s %-14s %-17s $%-9.2f %-10d%n",
                     row.getPerformanceId(),
                     row.getTitle(),
+                    row.getVenueName(),
                     row.getCity(),
                     row.getSegment(),
                     row.getGenre(),
+                    row.getDateTime().format(DATE_TIME_FORMAT),
                     row.getCheapestPrice(),
                     row.getAvailableTickets()
             );
@@ -2159,6 +2284,44 @@ private LocalDateTime[] readReportDateRange() {
             printInputError("End date/time cannot be in the future.");
         } else {
             return new LocalDateTime[]{startDate, endDate};
+        }
+
+        if (!promptToRetry()) {
+            return null;
+        }
+    }
+    return null;
+}
+
+private LocalDateTime[] readSearchDateRange(boolean optional) {
+    while (running) {
+        String startValue = readLine(
+                optional
+                        ? "Start date/time (YYYY-MM-DD HH:mm, blank to skip): "
+                        : "Start date/time (YYYY-MM-DD HH:mm): "
+        );
+        if (!running) {
+            return null;
+        }
+        if (optional && startValue.isBlank()) {
+            return new LocalDateTime[0];
+        }
+
+        String endValue = readLine("End date/time (YYYY-MM-DD HH:mm): ");
+        if (!running) {
+            return null;
+        }
+
+        try {
+            LocalDateTime startDate = LocalDateTime.parse(startValue, DATE_TIME_FORMAT);
+            LocalDateTime endDate = LocalDateTime.parse(endValue, DATE_TIME_FORMAT);
+            if (!startDate.isBefore(endDate)) {
+                printInputError("Start date/time must be before end date/time.");
+            } else {
+                return new LocalDateTime[]{startDate, endDate};
+            }
+        } catch (DateTimeParseException exception) {
+            printInputError("Enter date and time in YYYY-MM-DD HH:mm format.");
         }
 
         if (!promptToRetry()) {
@@ -3186,6 +3349,157 @@ private void estimateRevenueImpact(PricingRecommendation lastRecommendation) {
                 return parsed;
             }
             printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Double readValidatedDouble(
+            String prompt,
+            Function<Double, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+
+            double parsed;
+            try {
+                parsed = Double.parseDouble(value);
+                if (!Double.isFinite(parsed)) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(parsed);
+            if (error.isEmpty()) {
+                return parsed;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Double readDoubleWithDefaultRetry(
+            String prompt,
+            double defaultValue,
+            Function<Double, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+
+            double parsed;
+            try {
+                parsed = value.isBlank() ? defaultValue : Double.parseDouble(value);
+                if (!Double.isFinite(parsed)) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(parsed);
+            if (error.isEmpty()) {
+                return parsed;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Double readOptionalDoubleWithRetry(
+            String prompt,
+            Function<Double, Optional<String>> validator
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running || value.isBlank()) {
+                return null;
+            }
+
+            double parsed;
+            try {
+                parsed = Double.parseDouble(value);
+                if (!Double.isFinite(parsed)) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid number or leave the field blank.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            Optional<String> error = validator.apply(parsed);
+            if (error.isEmpty()) {
+                return parsed;
+            }
+            printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Integer readOptionalPositiveIntWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running || value.isBlank()) {
+                return null;
+            }
+            try {
+                int parsed = Integer.parseInt(value);
+                if (parsed > 0) {
+                    return parsed;
+                }
+            } catch (NumberFormatException ignored) {
+                // Handled by the shared message below.
+            }
+
+            printInputError("Enter a positive whole number or leave the field blank.");
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String readOptionalSectionTypeWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running || value.isBlank()) {
+                return null;
+            }
+            if (value.equalsIgnoreCase("reserved")
+                    || value.equalsIgnoreCase("general")) {
+                return value.toLowerCase(Locale.ROOT);
+            }
+
+            printInputError("Enter reserved, general, or leave the field blank.");
             if (!promptToRetry()) {
                 return null;
             }

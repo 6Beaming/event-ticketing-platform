@@ -22,6 +22,8 @@ import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
 import operations.resale.ResaleOperations;
 import operations.review.ReviewOperations;
+import queries.LocationSearchInput;
+import queries.QueryOperations;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -67,6 +69,8 @@ public final class FoundationSelfTest {
         test("customer cancellation deadline is inclusive", this::cancellationDeadlineValidated);
         test("resale cap uses decimal money", this::resaleCapValidated);
         test("review rules are validated", this::reviewRulesValidated);
+        test("Q4 and Q5 search inputs are validated", this::searchInputsValidated);
+        test("Q4 and Q5 SQL parameters are bound", this::searchSqlParametersBound);
         test("development SQL generation is deterministic", this::dataGenerationDeterministic);
 
         System.out.println();
@@ -326,6 +330,150 @@ public final class FoundationSelfTest {
                 .contains("required"));
     }
 
+    private void searchInputsValidated() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 8, 0, 0);
+        LocalDateTime end = start.plusDays(30);
+
+        assertTrue(QueryOperations.validateQuery4(
+                LocationSearchInput.coordinates(43.64, -79.38, 50, "distance"),
+                start,
+                end,
+                1
+        ) == null);
+        assertTrue(QueryOperations.validateQuery4(
+                LocationSearchInput.postalCode("M5J 2X2"),
+                start,
+                end,
+                1
+        ) == null);
+        assertTrue(QueryOperations.validateQuery4(
+                LocationSearchInput.address("40 Bay Street"),
+                start,
+                end,
+                1
+        ) == null);
+        assertTrue(QueryOperations.validateQuery4(
+                LocationSearchInput.coordinates(100, -79.38, 50, "distance"),
+                start,
+                end,
+                1
+        ).contains("Latitude"));
+
+        assertTrue(QueryOperations.validateQuery5(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ) == null);
+        assertTrue(QueryOperations.validateQuery5(
+                start,
+                end,
+                20.0,
+                200.0,
+                4,
+                "reserved"
+        ) == null);
+        assertTrue(QueryOperations.validateQuery5(
+                start,
+                null,
+                null,
+                null,
+                null,
+                null
+        ).contains("both start and end"));
+        assertTrue(QueryOperations.validateQuery5(
+                null,
+                null,
+                200.0,
+                20.0,
+                null,
+                null
+        ).contains("cannot exceed"));
+        assertTrue(QueryOperations.validateQuery5(
+                null,
+                null,
+                null,
+                null,
+                null,
+                "standing"
+        ).contains("reserved or general"));
+    }
+
+    private void searchSqlParametersBound() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 8, 0, 0);
+        LocalDateTime end = start.plusDays(30);
+
+        QueryRecorder coordinateRecorder = new QueryRecorder();
+        QueryOperations coordinateQueries = new QueryOperations(
+                new TransactionManager(coordinateRecorder.provider())
+        );
+        assertTrue(coordinateQueries.query4(
+                LocationSearchInput.coordinates(43.64, -79.38, 50, "price_asc"),
+                start,
+                end,
+                2
+        ).isSuccess());
+        assertAllParametersBound(coordinateRecorder);
+
+        QueryRecorder addressRecorder = new QueryRecorder();
+        QueryOperations addressQueries = new QueryOperations(
+                new TransactionManager(addressRecorder.provider())
+        );
+        assertTrue(addressQueries.query4(
+                LocationSearchInput.address("40 Bay Street"),
+                start,
+                end,
+                1
+        ).isSuccess());
+        assertAllParametersBound(addressRecorder);
+
+        QueryRecorder allFiltersRecorder = new QueryRecorder();
+        QueryOperations allFilterQueries = new QueryOperations(
+                new TransactionManager(allFiltersRecorder.provider())
+        );
+        assertTrue(allFilterQueries.query5(
+                "Toronto",
+                "Music",
+                "Rock",
+                start,
+                end,
+                20.0,
+                200.0,
+                4,
+                "reserved"
+        ).isSuccess());
+        assertAllParametersBound(allFiltersRecorder);
+
+        QueryRecorder noFiltersRecorder = new QueryRecorder();
+        QueryOperations noFilterQueries = new QueryOperations(
+                new TransactionManager(noFiltersRecorder.provider())
+        );
+        assertTrue(noFilterQueries.query5(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ).isSuccess());
+        assertAllParametersBound(noFiltersRecorder);
+    }
+
+    private void assertAllParametersBound(QueryRecorder recorder) {
+        long placeholderCount = recorder.sql.chars()
+                .filter(character -> character == '?')
+                .count();
+        assertEquals((int) placeholderCount, recorder.boundParameters.size());
+        for (int parameter = 1; parameter <= placeholderCount; parameter++) {
+            assertTrue(recorder.boundParameters.contains(parameter));
+        }
+    }
+
     private void dataGenerationDeterministic() {
         String first = DevelopmentDataGenerator.generateSql();
         String second = DevelopmentDataGenerator.generateSql();
@@ -362,6 +510,92 @@ public final class FoundationSelfTest {
     @FunctionalInterface
     private interface CheckedTest {
         void run() throws Exception;
+    }
+
+    private static final class QueryRecorder implements InvocationHandler {
+        private boolean autoCommit = true;
+        private String sql = "";
+        private final Set<Integer> boundParameters = new java.util.HashSet<>();
+
+        private ConnectionProvider provider() {
+            Connection connection = (Connection) Proxy.newProxyInstance(
+                    Connection.class.getClassLoader(),
+                    new Class<?>[]{Connection.class},
+                    this
+            );
+            return new ConnectionProvider() {
+                @Override
+                public Connection requireConnection() {
+                    return connection;
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            return switch (method.getName()) {
+                case "getAutoCommit" -> autoCommit;
+                case "setAutoCommit" -> {
+                    autoCommit = (Boolean) args[0];
+                    yield null;
+                }
+                case "prepareStatement" -> {
+                    sql = (String) args[0];
+                    yield Proxy.newProxyInstance(
+                            java.sql.PreparedStatement.class.getClassLoader(),
+                            new Class<?>[]{java.sql.PreparedStatement.class},
+                            this::invokePreparedStatement
+                    );
+                }
+                case "commit", "rollback", "close" -> null;
+                case "isClosed" -> false;
+                case "isValid" -> true;
+                case "isWrapperFor" -> false;
+                case "unwrap" -> null;
+                case "toString" -> "QueryRecorderConnection";
+                default -> throw new UnsupportedOperationException(method.getName());
+            };
+        }
+
+        private Object invokePreparedStatement(
+                Object proxy,
+                Method method,
+                Object[] args
+        ) {
+            return switch (method.getName()) {
+                case "setDouble", "setInt", "setString", "setTimestamp" -> {
+                    boundParameters.add((Integer) args[0]);
+                    yield null;
+                }
+                case "executeQuery" -> Proxy.newProxyInstance(
+                        java.sql.ResultSet.class.getClassLoader(),
+                        new Class<?>[]{java.sql.ResultSet.class},
+                        this::invokeResultSet
+                );
+                case "close" -> null;
+                case "isClosed" -> false;
+                case "toString" -> "QueryRecorderStatement";
+                default -> throw new UnsupportedOperationException(method.getName());
+            };
+        }
+
+        private Object invokeResultSet(
+                Object proxy,
+                Method method,
+                Object[] args
+        ) {
+            return switch (method.getName()) {
+                case "next" -> false;
+                case "close" -> null;
+                case "isClosed" -> false;
+                case "toString" -> "QueryRecorderResultSet";
+                default -> throw new UnsupportedOperationException(method.getName());
+            };
+        }
     }
 
     private static final class FakeConnection implements InvocationHandler {

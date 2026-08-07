@@ -1,17 +1,15 @@
 package queries;
 
-import database.TransactionManager;
-
 import common.OperationResult;
 import database.TransactionManager;
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 public final class QueryOperations {
 
@@ -327,134 +325,140 @@ public OperationResult<List<AddressPerformanceQuery>> query3(
 
 /*************************************************************************************************************
  QUERY-4
- Date range and minimum available tickets refinement
+ Date range and minimum available tickets refinement of Q1-Q3
  *************************************************************************************************************/
 public OperationResult<List<DateRangePerformanceQuery>> query4(
-        String postalCode,
+        LocationSearchInput location,
         LocalDateTime startDate,
         LocalDateTime endDate,
         int minTickets
 ) {
+    String validationError = validateQuery4(
+            location,
+            startDate,
+            endDate,
+            minTickets
+    );
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
 
     return transactions.execute(connection -> {
+        boolean coordinateSearch =
+                location.getType() == LocationSearchInput.Type.COORDINATES;
 
-        String sql = """
+        String distanceExpression = coordinateSearch
+                ? """
+                  ROUND(
+                      6371 * ACOS(
+                          LEAST(1.0, GREATEST(-1.0,
+                              COS(RADIANS(?))
+                              * COS(RADIANS(v.latitude))
+                              * COS(RADIANS(v.longitude) - RADIANS(?))
+                              + SIN(RADIANS(?))
+                              * SIN(RADIANS(v.latitude))
+                          ))
+                      ),
+                      2
+                  )
+                  """
+                : "NULL";
+
+        StringBuilder sql = new StringBuilder(availabilityCtes(""));
+        sql.append("""
                 SELECT p.performance_id,
                        e.title,
                        v.name AS venue_name,
+                       v.address,
                        v.postal_code,
-                       avail.total_available
-
+                       v.city,
+                       p.date_time,
+                       availability.total_available,
+                       availability.cheapest_available_price,
+                       %s AS distance_km
                 FROM Performance p
-
                 JOIN Event e
                     ON e.event_id = p.event_id
-
                 JOIN Venue v
                     ON v.venue_id = p.venue_id
-
-                JOIN (
-                    SELECT p2.performance_id,
-                           COALESCE(seats.avail, 0)
-                           + COALESCE(ga.avail, 0) AS total_available
-
-                    FROM Performance p2
-
-                    LEFT JOIN (
-                        SELECT ps.performance_id,
-                               SUM(
-                                   CASE
-                                       WHEN ps.blocked_status = FALSE
-                                       AND ps.performance_seat_id NOT IN (
-                                           SELECT performance_seats_ref
-                                           FROM Tickets
-                                           WHERE status = 'active'
-                                           AND performance_seats_ref IS NOT NULL
-                                       )
-                                       THEN 1
-                                       ELSE 0
-                                   END
-                               ) AS avail
-
-                        FROM PerformanceSeats ps
-
-                        GROUP BY ps.performance_id
-
-                    ) seats
-                        ON seats.performance_id = p2.performance_id
-
-                    LEFT JOIN (
-                        SELECT performance_id,
-                               SUM(remaining_capacity) AS avail
-
-                        FROM GeneralAdmissionCapacity
-
-                        GROUP BY performance_id
-
-                    ) ga
-                        ON ga.performance_id = p2.performance_id
-
-                ) avail
-                    ON avail.performance_id = p.performance_id
-
+                JOIN performance_availability availability
+                    ON availability.performance_id = p.performance_id
                 WHERE p.status = 'scheduled'
-                  AND LEFT(v.postal_code, 3) = LEFT(?, 3)
+                  AND p.date_time > NOW()
                   AND p.date_time BETWEEN ? AND ?
-                  AND avail.total_available >= ?
+                  AND availability.total_available >= ?
+                """.formatted(distanceExpression));
 
-                ORDER BY p.date_time
-                """;
+        switch (location.getType()) {
+            case COORDINATES -> sql.append("HAVING distance_km <= ?\n");
+            case POSTAL_CODE -> sql.append("""
+                      AND LEFT(REPLACE(v.postal_code, ' ', ''), 3)
+                          = LEFT(REPLACE(?, ' ', ''), 3)
+                    """);
+            case ADDRESS -> sql.append("  AND v.address = ?\n");
+        }
 
+        if (coordinateSearch) {
+            switch (location.getSortBy()) {
+                case "price_asc" -> sql.append(
+                        "ORDER BY cheapest_available_price ASC, distance_km ASC, p.date_time ASC");
+                case "price_desc" -> sql.append(
+                        "ORDER BY cheapest_available_price DESC, distance_km ASC, p.date_time ASC");
+                default -> sql.append("ORDER BY distance_km ASC, p.date_time ASC");
+            }
+        } else {
+            sql.append("ORDER BY p.date_time ASC");
+        }
 
-        List<DateRangePerformanceQuery> results =
-                new ArrayList<>();
-
+        List<DateRangePerformanceQuery> results = new ArrayList<>();
 
         try (PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
+                     connection.prepareStatement(sql.toString())) {
+            int parameter = 1;
 
+            if (coordinateSearch) {
+                statement.setDouble(parameter++, location.getLatitude());
+                statement.setDouble(parameter++, location.getLongitude());
+                statement.setDouble(parameter++, location.getLatitude());
+            }
 
-            statement.setString(1, postalCode);
+            statement.setTimestamp(parameter++, Timestamp.valueOf(startDate));
+            statement.setTimestamp(parameter++, Timestamp.valueOf(endDate));
+            statement.setInt(parameter++, minTickets);
 
-            statement.setTimestamp(
-                    2,
-                    Timestamp.valueOf(startDate)
-            );
+            switch (location.getType()) {
+                case COORDINATES ->
+                        statement.setDouble(parameter, location.getRadiusKm());
+                case POSTAL_CODE ->
+                        statement.setString(parameter, location.getPostalCode().trim());
+                case ADDRESS ->
+                        statement.setString(parameter, location.getAddress().trim());
+            }
 
-            statement.setTimestamp(
-                    3,
-                    Timestamp.valueOf(endDate)
-            );
-
-            statement.setInt(
-                    4,
-                    minTickets
-            );
-
-
-            try (ResultSet rows =
-                         statement.executeQuery()) {
-
-
+            try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
-
                     results.add(new DateRangePerformanceQuery(
                             rows.getInt("performance_id"),
                             rows.getString("title"),
                             rows.getString("venue_name"),
+                            rows.getString("address"),
                             rows.getString("postal_code"),
-                            rows.getInt("total_available")
+                            rows.getString("city"),
+                            rows.getTimestamp("date_time").toLocalDateTime(),
+                            rows.getInt("total_available"),
+                            rows.getDouble("cheapest_available_price"),
+                            rows.getObject("distance_km") == null
+                                    ? null
+                                    : rows.getDouble("distance_km")
                     ));
                 }
             }
         }
 
-
         return OperationResult.success(
                 "Date range performance search completed.",
                 List.copyOf(results)
         );
-
     });
 }
 
@@ -468,179 +472,296 @@ public OperationResult<List<FilteredPerformanceQuery>> query5(
         String genre,
         LocalDateTime startDate,
         LocalDateTime endDate,
-        double minPrice,
-        double maxPrice,
-        int minAvailable,
+        Double minPrice,
+        Double maxPrice,
+        Integer minAvailable,
         String sectionType
 ) {
+    String normalizedCity = normalizeOptional(city);
+    String normalizedSegment = normalizeOptional(segment);
+    String normalizedGenre = normalizeOptional(genre);
+    String normalizedSectionType = normalizeOptional(sectionType);
+    if (normalizedSectionType != null) {
+        normalizedSectionType = normalizedSectionType.toLowerCase(Locale.ROOT);
+    }
+
+    String validationError = validateQuery5(
+            startDate,
+            endDate,
+            minPrice,
+            maxPrice,
+            minAvailable,
+            normalizedSectionType
+    );
+    if (validationError != null) {
+        return OperationResult.invalidInput(validationError);
+    }
+
+    String finalSectionType = normalizedSectionType;
 
     return transactions.execute(connection -> {
-
-        String sql = """
-                SELECT p.performance_id, e.title, v.city, sg.segment_name, g.genre_name,
-                       cheapest.min_price AS cheapest_available_price,
-                       avail.total_available
+        String sectionFilter = finalSectionType == null
+                ? ""
+                : "  AND section_type = ?\n";
+        StringBuilder sql = new StringBuilder(availabilityCtes(sectionFilter));
+        sql.append("""
+                SELECT p.performance_id,
+                       e.title,
+                       v.name AS venue_name,
+                       v.city,
+                       sg.segment_name,
+                       g.genre_name,
+                       p.date_time,
+                       availability.cheapest_available_price,
+                       availability.total_available
                 FROM Performance p
-                JOIN Event e    ON e.event_id = p.event_id
-                JOIN Genre g    ON g.genre_id = e.genre_id
-                JOIN Segment sg ON sg.segment_id = g.segment_id
-                JOIN Venue v    ON v.venue_id = p.venue_id
-                JOIN (
-                    SELECT pt.performance_id, MIN(pt.price) AS min_price
-                    FROM PriceTier pt
-                    JOIN SectionTierAssignment sta
-                        ON sta.performance_id = pt.performance_id
-                       AND sta.tier_code = pt.tier_code
-                    JOIN Section s
-                        ON s.venue_id = sta.venue_id
-                       AND s.section_name = sta.section_name
-                    LEFT JOIN (
-                        SELECT performance_id, venue_id, section_name,
-                               SUM(
-                                   CASE
-                                       WHEN blocked_status = FALSE
-                                        AND performance_seat_id NOT IN (
-                                            SELECT performance_seats_ref
-                                            FROM Tickets
-                                            WHERE status = 'active'
-                                              AND performance_seats_ref IS NOT NULL
-                                        )
-                                       THEN 1
-                                       ELSE 0
-                                   END
-                               ) AS avail_count
-                        FROM PerformanceSeats
-                        GROUP BY performance_id, venue_id, section_name
-                    ) seat_avail
-                        ON seat_avail.performance_id = sta.performance_id
-                       AND seat_avail.venue_id = sta.venue_id
-                       AND seat_avail.section_name = sta.section_name
-                    LEFT JOIN GeneralAdmissionCapacity ga
-                        ON ga.performance_id = sta.performance_id
-                       AND ga.venue_id = sta.venue_id
-                       AND ga.section_name = sta.section_name
-                    WHERE (? IS NULL OR s.section_type = ?)
-                      AND (
-                            (s.section_type = 'reserved'
-                             AND COALESCE(seat_avail.avail_count, 0) > 0)
-                         OR (s.section_type = 'general'
-                             AND ga.remaining_capacity > 0)
-                      )
-                    GROUP BY pt.performance_id
-                ) cheapest
-                    ON cheapest.performance_id = p.performance_id
-                JOIN (
-                    SELECT p2.performance_id,
-                           COALESCE(seats.avail, 0)
-                           + COALESCE(ga.avail, 0) AS total_available
-                    FROM Performance p2
-                    LEFT JOIN (
-                        SELECT ps.performance_id,
-                               SUM(
-                                   CASE
-                                       WHEN ps.blocked_status = FALSE
-                                        AND ps.performance_seat_id NOT IN (
-                                            SELECT performance_seats_ref
-                                            FROM Tickets
-                                            WHERE status = 'active'
-                                              AND performance_seats_ref IS NOT NULL
-                                        )
-                                       THEN 1
-                                       ELSE 0
-                                   END
-                               ) AS avail
-                        FROM PerformanceSeats ps
-                        JOIN Section s2
-                            ON s2.venue_id = ps.venue_id
-                           AND s2.section_name = ps.section_name
-                        WHERE (? IS NULL OR s2.section_type = ?)
-                        GROUP BY ps.performance_id
-                    ) seats
-                        ON seats.performance_id = p2.performance_id
-                    LEFT JOIN (
-                        SELECT performance_id,
-                               SUM(remaining_capacity) AS avail
-                        FROM GeneralAdmissionCapacity
-                        WHERE (? IS NULL OR section_type = ?)
-                        GROUP BY performance_id
-                    ) ga
-                        ON ga.performance_id = p2.performance_id
-                ) avail
-                    ON avail.performance_id = p.performance_id
+                JOIN Event e
+                    ON e.event_id = p.event_id
+                JOIN Genre g
+                    ON g.genre_id = e.genre_id
+                JOIN Segment sg
+                    ON sg.segment_id = g.segment_id
+                JOIN Venue v
+                    ON v.venue_id = p.venue_id
+                JOIN performance_availability availability
+                    ON availability.performance_id = p.performance_id
                 WHERE p.status = 'scheduled'
-                  AND v.city = ?
-                  AND sg.segment_name = ?
-                  AND g.genre_name = ?
-                  AND p.date_time BETWEEN ? AND ?
-                  AND cheapest.min_price BETWEEN ? AND ?
-                  AND avail.total_available >= ?
-                ORDER BY p.date_time
-                """;
+                  AND p.date_time > NOW()
+                """);
 
+        if (normalizedCity != null) {
+            sql.append("  AND v.city = ?\n");
+        }
+        if (normalizedSegment != null) {
+            sql.append("  AND sg.segment_name = ?\n");
+        }
+        if (normalizedGenre != null) {
+            sql.append("  AND g.genre_name = ?\n");
+        }
+        if (startDate != null) {
+            sql.append("  AND p.date_time BETWEEN ? AND ?\n");
+        }
+        if (minPrice != null) {
+            sql.append("  AND availability.cheapest_available_price >= ?\n");
+        }
+        if (maxPrice != null) {
+            sql.append("  AND availability.cheapest_available_price <= ?\n");
+        }
+        if (minAvailable != null) {
+            sql.append("  AND availability.total_available >= ?\n");
+        }
+        sql.append("ORDER BY p.date_time ASC");
 
-        List<FilteredPerformanceQuery> results =
-                new ArrayList<>();
-
+        List<FilteredPerformanceQuery> results = new ArrayList<>();
 
         try (PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
+                     connection.prepareStatement(sql.toString())) {
+            int parameter = 1;
 
-            statement.setString(1, sectionType);
-            statement.setString(2, sectionType);
+            if (finalSectionType != null) {
+                statement.setString(parameter++, finalSectionType);
+            }
+            if (normalizedCity != null) {
+                statement.setString(parameter++, normalizedCity);
+            }
+            if (normalizedSegment != null) {
+                statement.setString(parameter++, normalizedSegment);
+            }
+            if (normalizedGenre != null) {
+                statement.setString(parameter++, normalizedGenre);
+            }
+            if (startDate != null) {
+                statement.setTimestamp(parameter++, Timestamp.valueOf(startDate));
+                statement.setTimestamp(parameter++, Timestamp.valueOf(endDate));
+            }
+            if (minPrice != null) {
+                statement.setDouble(parameter++, minPrice);
+            }
+            if (maxPrice != null) {
+                statement.setDouble(parameter++, maxPrice);
+            }
+            if (minAvailable != null) {
+                statement.setInt(parameter, minAvailable);
+            }
 
-            statement.setString(3, sectionType);
-            statement.setString(4, sectionType);
-
-            statement.setString(5, sectionType);
-            statement.setString(6, sectionType);
-
-            statement.setString(7, city);
-            statement.setString(8, segment);
-            statement.setString(9, genre);
-
-            statement.setTimestamp(
-                    10,
-                    Timestamp.valueOf(startDate)
-            );
-
-            statement.setTimestamp(
-                    11,
-                    Timestamp.valueOf(endDate)
-            );
-
-            statement.setDouble(12, minPrice);
-            statement.setDouble(13, maxPrice);
-
-            statement.setInt(14, minAvailable);
-
-
-            try (ResultSet rows =
-                         statement.executeQuery()) {
-
+            try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
-
-                    results.add(
-                            new FilteredPerformanceQuery(
-                                    rows.getInt("performance_id"),
-                                    rows.getString("title"),
-                                    rows.getString("city"),
-                                    rows.getString("segment_name"),
-                                    rows.getString("genre_name"),
-                                    rows.getDouble("cheapest_available_price"),
-                                    rows.getInt("total_available")
-                            )
-                    );
+                    results.add(new FilteredPerformanceQuery(
+                            rows.getInt("performance_id"),
+                            rows.getString("title"),
+                            rows.getString("venue_name"),
+                            rows.getString("city"),
+                            rows.getString("segment_name"),
+                            rows.getString("genre_name"),
+                            rows.getTimestamp("date_time").toLocalDateTime(),
+                            rows.getDouble("cheapest_available_price"),
+                            rows.getInt("total_available")
+                    ));
                 }
             }
         }
-
 
         return OperationResult.success(
                 "Filtered performance search completed.",
                 List.copyOf(results)
         );
-
     });
+}
+
+public static String validateQuery4(
+        LocationSearchInput location,
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        int minTickets
+) {
+    if (location == null || location.getType() == null) {
+        return "A location search type is required.";
+    }
+    if (startDate == null || endDate == null || !startDate.isBefore(endDate)) {
+        return "Start date/time must be before end date/time.";
+    }
+    if (minTickets <= 0) {
+        return "Minimum available tickets must be a positive whole number.";
+    }
+
+    return switch (location.getType()) {
+        case COORDINATES -> validateCoordinateLocation(location);
+        case POSTAL_CODE -> isBlank(location.getPostalCode())
+                ? "Postal code is required."
+                : null;
+        case ADDRESS -> isBlank(location.getAddress())
+                ? "Address is required."
+                : null;
+    };
+}
+
+public static String validateQuery5(
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        Double minPrice,
+        Double maxPrice,
+        Integer minAvailable,
+        String sectionType
+) {
+    if ((startDate == null) != (endDate == null)) {
+        return "Enter both start and end date/time, or leave both blank.";
+    }
+    if (startDate != null && !startDate.isBefore(endDate)) {
+        return "Start date/time must be before end date/time.";
+    }
+    if (minPrice != null && (!Double.isFinite(minPrice) || minPrice < 0)) {
+        return "Minimum price must be zero or greater.";
+    }
+    if (maxPrice != null && (!Double.isFinite(maxPrice) || maxPrice < 0)) {
+        return "Maximum price must be zero or greater.";
+    }
+    if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+        return "Minimum price cannot exceed maximum price.";
+    }
+    if (minAvailable != null && minAvailable <= 0) {
+        return "Minimum available tickets must be a positive whole number.";
+    }
+    if (sectionType != null
+            && !sectionType.equalsIgnoreCase("reserved")
+            && !sectionType.equalsIgnoreCase("general")) {
+        return "Section type must be reserved or general.";
+    }
+    return null;
+}
+
+private static String validateCoordinateLocation(LocationSearchInput location) {
+    Double latitude = location.getLatitude();
+    Double longitude = location.getLongitude();
+    Double radiusKm = location.getRadiusKm();
+    String sortBy = location.getSortBy();
+
+    if (latitude == null || !Double.isFinite(latitude)
+            || latitude < -90 || latitude > 90) {
+        return "Latitude must be between -90 and 90.";
+    }
+    if (longitude == null || !Double.isFinite(longitude)
+            || longitude < -180 || longitude > 180) {
+        return "Longitude must be between -180 and 180.";
+    }
+    if (radiusKm == null || !Double.isFinite(radiusKm) || radiusKm <= 0) {
+        return "Search distance must be greater than zero.";
+    }
+    if (!"distance".equals(sortBy)
+            && !"price_asc".equals(sortBy)
+            && !"price_desc".equals(sortBy)) {
+        return "Coordinate searches require a supported sort choice.";
+    }
+    return null;
+}
+
+private static String availabilityCtes(String sectionFilter) {
+    return """
+            WITH reserved_availability AS (
+                SELECT ps.performance_id,
+                       ps.venue_id,
+                       ps.section_name,
+                       SUM(
+                           CASE
+                               WHEN ps.blocked_status = FALSE
+                                AND t.ticket_id IS NULL
+                               THEN 1
+                               ELSE 0
+                           END
+                       ) AS available_count
+                FROM PerformanceSeats ps
+                LEFT JOIN Tickets t
+                    ON t.performance_id = ps.performance_id
+                   AND t.performance_seats_ref = ps.performance_seat_id
+                   AND t.status = 'active'
+                GROUP BY ps.performance_id,
+                         ps.venue_id,
+                         ps.section_name
+            ),
+            available_sections AS (
+                SELECT sta.performance_id,
+                       s.section_type,
+                       pt.price,
+                       CASE
+                           WHEN s.section_type = 'reserved'
+                           THEN COALESCE(reserved.available_count, 0)
+                           ELSE COALESCE(ga.remaining_capacity, 0)
+                       END AS available_count
+                FROM SectionTierAssignment sta
+                JOIN Section s
+                    ON s.venue_id = sta.venue_id
+                   AND s.section_name = sta.section_name
+                JOIN PriceTier pt
+                    ON pt.performance_id = sta.performance_id
+                   AND pt.tier_code = sta.tier_code
+                LEFT JOIN reserved_availability reserved
+                    ON reserved.performance_id = sta.performance_id
+                   AND reserved.venue_id = sta.venue_id
+                   AND reserved.section_name = sta.section_name
+                LEFT JOIN GeneralAdmissionCapacity ga
+                    ON ga.performance_id = sta.performance_id
+                   AND ga.venue_id = sta.venue_id
+                   AND ga.section_name = sta.section_name
+            ),
+            performance_availability AS (
+                SELECT performance_id,
+                       MIN(price) AS cheapest_available_price,
+                       SUM(available_count) AS total_available
+                FROM available_sections
+                WHERE available_count > 0
+            %sGROUP BY performance_id
+            )
+            """.formatted(sectionFilter);
+}
+
+private static String normalizeOptional(String value) {
+    if (isBlank(value)) {
+        return null;
+    }
+    return value.trim();
+}
+
+private static boolean isBlank(String value) {
+    return value == null || value.isBlank();
 }
 
 /*************************************************************************************************************
