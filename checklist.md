@@ -38,8 +38,10 @@ The dated work blocks below are complete only when every item in this section is
 
 - [x] Create customer and organizer profiles while collecting all required information.
 - [x] Delete users according to a documented history-preserving policy.
+- [x] View a customer's complete past and upcoming order/ticket history in the terminal.
 - [x] Create an event and associate its organizer, taxonomy, artists, and billing order.
 - [x] Add performances to an event.
+- [x] View an organizer's managed events and complete performance sales history in the terminal.
 - [x] Define performance price tiers and prices.
 - [x] Assign every venue section to one tier for the performance.
 - [x] Set the event resale cap.
@@ -58,6 +60,7 @@ The dated work blocks below are complete only when every item in this section is
 - [x] List only a currently owned ticket at or below its resale cap.
 - [x] Withdraw an unsold resale listing.
 - [x] Purchase another customer’s active listing and transfer ownership atomically.
+- [x] View a ticket's complete ownership-transfer history in the terminal.
 - [x] Insert eligible event/venue reviews and reject ineligible or duplicate reviews.
 
 ### Queries Q1-Q7

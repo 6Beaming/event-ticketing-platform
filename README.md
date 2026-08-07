@@ -13,7 +13,11 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 ## Required operations
 
 - Create and delete user profiles.
+- View each customer's complete order and ticket history, including past and upcoming
+  performances, resale acquisitions, ownership changes, cancellations, and refunds.
 - Create events and performances.
+- View every event managed by an organizer and the complete sales history of each
+  performance, including original sales, cancellations, refunds, and completed resales.
 - Define price tiers and assign venue sections to them per performance.
 - Change an unsold future tier's price and reject changes after a ticket in that tier is sold.
 - Block or unblock an available seat without allowing a sold seat to be blocked.
@@ -22,6 +26,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 - Cancel an entire performance and refund every sold ticket.
 - List an owned ticket for resale at or below the event cap, withdraw a listing, and purchase another customer's listing.
 - Preserve every ticket ownership transfer.
+- Inspect the complete ownership history of a ticket in the terminal.
 - Submit one eligible event and venue review per attended performance.
 
 ## Required queries

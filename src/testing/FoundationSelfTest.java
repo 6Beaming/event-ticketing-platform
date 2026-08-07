@@ -332,6 +332,8 @@ public final class FoundationSelfTest {
         assertEquals(first, second);
         assertTrue(first.contains("(7001, 2001, 2101"));
         assertTrue(first.contains("(8002, 7002, 6002"));
+        assertTrue(first.contains("(2001, 'Avery Adams',"));
+        assertTrue(!first.contains("'Avery Adams 001'"));
     }
 
     private void test(String name, CheckedTest test) {

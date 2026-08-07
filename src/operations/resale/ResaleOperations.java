@@ -62,6 +62,58 @@ public final class ResaleOperations {
         });
     }
 
+    public OperationResult<List<TicketOwnershipHistoryEntry>> getTicketOwnershipHistory(
+            int ticketId
+    ) {
+        if (ticketId <= 0) {
+            return OperationResult.invalidInput("Ticket ID must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT t.ticket_id, t.performance_id,
+                           own.customer_id, u.name AS customer_name,
+                           own.acquired_transaction_id, tr.transaction_type,
+                           own.acquired_listing_id,
+                           COALESCE(rl.listing_price, t.face_value) AS purchase_price,
+                           own.acquired_at, own.ended_at
+                    FROM Tickets t
+                    JOIN TicketOwnership own ON own.ticket_id = t.ticket_id
+                    JOIN Users u ON u.user_id = own.customer_id
+                    JOIN Transactions tr
+                      ON tr.transaction_id = own.acquired_transaction_id
+                    LEFT JOIN ResaleListing rl
+                      ON rl.listing_id = own.acquired_listing_id
+                    WHERE t.ticket_id = ?
+                    ORDER BY own.acquired_at, own.ownership_id
+                    """;
+            List<TicketOwnershipHistoryEntry> history = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, ticketId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        history.add(new TicketOwnershipHistoryEntry(
+                                rows.getInt("ticket_id"),
+                                rows.getInt("performance_id"),
+                                rows.getInt("customer_id"),
+                                rows.getString("customer_name"),
+                                rows.getInt("acquired_transaction_id"),
+                                rows.getString("transaction_type"),
+                                nullableInt(rows, "acquired_listing_id"),
+                                rows.getBigDecimal("purchase_price"),
+                                rows.getTimestamp("acquired_at").toLocalDateTime(),
+                                nullableDateTime(rows, "ended_at")
+                        ));
+                    }
+                }
+            }
+            if (history.isEmpty()) {
+                return OperationResult.notFound("Ticket or ownership history not found.");
+            }
+            return OperationResult.success("Ticket ownership history retrieved.", history);
+        });
+    }
+
     public OperationResult<List<AvailableResaleTicket>> getAvailableListings(
             int performanceId
     ) {
@@ -459,6 +511,16 @@ public final class ResaleOperations {
                 return rows.next();
             }
         }
+    }
+
+    private Integer nullableInt(ResultSet rows, String column) throws SQLException {
+        int value = rows.getInt(column);
+        return rows.wasNull() ? null : value;
+    }
+
+    private LocalDateTime nullableDateTime(ResultSet rows, String column) throws SQLException {
+        java.sql.Timestamp value = rows.getTimestamp(column);
+        return value == null ? null : value.toLocalDateTime();
     }
 
     private ListingForPurchase lockListingForPurchase(

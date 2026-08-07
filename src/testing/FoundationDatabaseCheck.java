@@ -14,6 +14,7 @@ import operations.cancellation.CancellationSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
+import operations.event.OrganizerPerformanceSalesHistory;
 import operations.event.PerformanceInput;
 import operations.inventory.GeneralAdmissionAvailability;
 import operations.inventory.InventoryOperations;
@@ -25,6 +26,7 @@ import operations.pricing.PricingSetupInput;
 import operations.pricing.SectionTierInput;
 import operations.pricing.TierInput;
 import operations.profile.PaymentInput;
+import operations.profile.CustomerOrderHistoryEntry;
 import operations.profile.CustomerProfile;
 import operations.profile.ProfileInput;
 import operations.profile.UserProfileOperations;
@@ -33,6 +35,7 @@ import operations.resale.OwnedResaleTicket;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
+import operations.resale.TicketOwnershipHistoryEntry;
 import operations.review.CustomerReview;
 import operations.review.ReviewOperations;
 
@@ -116,6 +119,54 @@ public final class FoundationDatabaseCheck {
         );
         if (events.checkArtist(999999).getStatus() != OperationStatus.NOT_FOUND) {
             throw new IllegalStateException("nonexistent artist preflight check was not rejected");
+        }
+
+        OperationResult<List<CustomerOrderHistoryEntry>> customerHistory =
+                profiles.getCustomerOrderHistory(DevelopmentIds.CUSTOMER_ALICE);
+        requireSuccess(customerHistory, "customer order and ticket history");
+        List<CustomerOrderHistoryEntry> customerHistoryRows =
+                customerHistory.getValue().orElseThrow();
+        if (customerHistoryRows.stream().noneMatch(
+                entry -> entry.getPerformanceId() == DevelopmentIds.PERFORMANCE_RESERVED
+        ) || customerHistoryRows.stream().noneMatch(
+                entry -> entry.getPerformanceId() == DevelopmentIds.PERFORMANCE_PAST
+        ) || customerHistoryRows.stream().anyMatch(
+                entry -> !entry.getMaskedCardNumber().startsWith("****")
+        )) {
+            throw new IllegalStateException(
+                    "customer history did not include safe past and upcoming ticket details"
+            );
+        }
+
+        OperationResult<List<OrganizerPerformanceSalesHistory>> organizerHistory =
+                events.getOrganizerPerformanceSalesHistory(DevelopmentIds.ORGANIZER);
+        requireSuccess(organizerHistory, "organizer event and performance sales history");
+        OrganizerPerformanceSalesHistory reservedPerformance = organizerHistory
+                .getValue().orElseThrow().stream()
+                .filter(entry -> Integer.valueOf(DevelopmentIds.PERFORMANCE_RESERVED)
+                        .equals(entry.getPerformanceId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "organizer history omitted a managed performance"
+                ));
+        if (reservedPerformance.getOriginalTicketCount() != 12
+                || reservedPerformance.getOriginalGrossRevenue()
+                        .compareTo(BigDecimal.ZERO) <= 0
+                || reservedPerformance.getTransactionId() == null
+                || reservedPerformance.getTicketId() == null) {
+            throw new IllegalStateException("organizer performance sales totals were incorrect");
+        }
+
+        OperationResult<List<TicketOwnershipHistoryEntry>> ownershipHistory =
+                resale.getTicketOwnershipHistory(DevelopmentIds.TICKET_DOUBLE_RESALE);
+        requireSuccess(ownershipHistory, "ticket ownership history");
+        List<TicketOwnershipHistoryEntry> owners = ownershipHistory.getValue().orElseThrow();
+        if (owners.size() != 3
+                || owners.get(0).getCustomerId() != 2003
+                || owners.get(1).getCustomerId() != 2099
+                || owners.get(2).getCustomerId() != 2100
+                || owners.get(2).getEndedAt() != null) {
+            throw new IllegalStateException("ticket ownership history was incomplete");
         }
 
         OperationResult<Integer> customer = profiles.createCustomer(

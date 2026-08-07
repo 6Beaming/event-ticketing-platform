@@ -45,6 +45,42 @@ public final class OperationInputChecks {
         });
     }
 
+    public OperationResult<Void> checkCustomer(int customerId) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT 1 FROM Customer WHERE user_id = ?"
+            )) {
+                statement.setInt(1, customerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("Customer found.")
+                            : OperationResult.notFound("Customer not found.");
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkOrganizer(int organizerId) {
+        if (organizerId <= 0) {
+            return OperationResult.invalidInput("Organizer ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT 1 FROM Organizer WHERE user_id = ?"
+            )) {
+                statement.setInt(1, organizerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next()
+                            ? OperationResult.success("Organizer found.")
+                            : OperationResult.notFound("Organizer not found.");
+                }
+            }
+        });
+    }
+
     public OperationResult<Void> checkActiveUser(int userId) {
         if (userId <= 0) {
             return OperationResult.invalidInput("User ID must be positive.");

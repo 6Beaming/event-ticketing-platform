@@ -10,6 +10,7 @@ import operations.cancellation.CancellationSummary;
 import operations.event.ArtistBillingInput;
 import operations.event.EventInput;
 import operations.event.OrganizerEventOperations;
+import operations.event.OrganizerPerformanceSalesHistory;
 import operations.event.PerformanceInput;
 import operations.inventory.GeneralAdmissionAvailability;
 import operations.inventory.InventoryOperations;
@@ -22,6 +23,7 @@ import operations.pricing.PricingSetupSummary;
 import operations.pricing.SectionTierInput;
 import operations.pricing.TierInput;
 import operations.profile.CustomerProfile;
+import operations.profile.CustomerOrderHistoryEntry;
 import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
@@ -31,6 +33,7 @@ import operations.resale.OwnedResaleTicket;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
+import operations.resale.TicketOwnershipHistoryEntry;
 import operations.review.CustomerReview;
 import operations.review.ReviewOperations;
 import operations.validation.OperationInputChecks;
@@ -139,7 +142,7 @@ public final class TerminalApplication {
         System.out.println(" 2. Organizer events and performances");
         System.out.println(" 3. Performance pricing and inventory");
         System.out.println(" 4. Ticket booking and cancellations");
-        System.out.println(" 5. Ticket resale");
+        System.out.println(" 5. Ticket resale and histories");
         System.out.println(" 6. Attendance reviews");
         System.out.println(" 7. Searches (Q1-Q7)");
         System.out.println(" 8. Reports (R1-R9)");
@@ -179,12 +182,14 @@ public final class TerminalApplication {
             System.out.println("2. Create organizer profile");
             System.out.println("3. View customer profile");
             System.out.println("4. Deactivate user profile");
+            System.out.println("5. View customer order and ticket history");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createCustomer);
                 case "2" -> runOnlineAction(this::createOrganizer);
                 case "3" -> runOnlineAction(this::viewCustomer);
                 case "4" -> runOnlineAction(this::deactivateUser);
+                case "5" -> runOnlineAction(this::viewCustomerOrderHistory);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown profile option.");
             }
@@ -386,9 +391,8 @@ public final class TerminalApplication {
     }
 
     private void viewCustomer() {
-        Integer customerId = readPositiveInt("Customer ID: ");
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkCustomer);
         if (customerId == null) {
-            pause();
             return;
         }
         OperationResult<CustomerProfile> result = profiles.getCustomerProfile(customerId);
@@ -405,6 +409,71 @@ public final class TerminalApplication {
             System.out.println("Expiry: " + nullable(customer.getExpiryDate()));
             System.out.println("Billing postal/ZIP: " + nullable(customer.getBillingZip()));
         });
+        pause();
+    }
+
+    private void viewCustomerOrderHistory() {
+        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkCustomer);
+        if (customerId == null) {
+            return;
+        }
+        OperationResult<List<CustomerOrderHistoryEntry>> result =
+                profiles.getCustomerOrderHistory(customerId);
+        printResult(result);
+        if (!result.isSuccess()) {
+            pause();
+            return;
+        }
+
+        List<CustomerOrderHistoryEntry> history = result.getValue().orElseThrow();
+        if (history.isEmpty()) {
+            System.out.println("No order or ticket history found for this customer.");
+            pause();
+            return;
+        }
+
+        int displayedOrderId = -1;
+        for (CustomerOrderHistoryEntry entry : history) {
+            if (entry.getOrderId() != displayedOrderId) {
+                displayedOrderId = entry.getOrderId();
+                System.out.println();
+                System.out.println("Order ID: " + entry.getOrderId());
+                System.out.println("Order type: "
+                        + entry.getOrderType().toUpperCase(Locale.ROOT));
+                System.out.println("Order date: "
+                        + entry.getOrderDate().format(DATE_TIME_FORMAT));
+                System.out.println("Payment card: " + entry.getMaskedCardNumber());
+            }
+
+            String location = entry.getRowName() == null
+                    ? entry.getSectionName() + " (general admission)"
+                    : entry.getSectionName() + ", row " + entry.getRowName()
+                            + ", seat " + entry.getSeatNumber();
+            System.out.println("  Ticket ID: " + entry.getTicketId());
+            System.out.println("    Performance: " + entry.getPerformanceId()
+                    + " - " + entry.getEventTitle());
+            System.out.println("    Date/status: "
+                    + entry.getPerformanceDateTime().format(DATE_TIME_FORMAT)
+                    + " / " + entry.getPerformanceStatus());
+            System.out.println("    Venue: " + entry.getVenueName()
+                    + " (" + entry.getVenueCity() + ")");
+            System.out.println("    Location/tier: " + location
+                    + " / " + entry.getTierCode());
+            System.out.println("    Paid: $" + entry.getPurchasePrice().toPlainString()
+                    + " / ticket status: " + entry.getTicketStatus());
+            System.out.println("    Ownership acquired: "
+                    + entry.getAcquiredAt().format(DATE_TIME_FORMAT));
+            System.out.println("    Ownership: "
+                    + (entry.getOwnershipEndedAt() == null
+                            ? "current"
+                            : "ended "
+                                    + entry.getOwnershipEndedAt().format(DATE_TIME_FORMAT)));
+            if (entry.getCancellationDate() != null) {
+                System.out.println("    Cancelled: "
+                        + entry.getCancellationDate().format(DATE_TIME_FORMAT)
+                        + " / refund: $" + entry.getRefundAmount().toPlainString());
+            }
+        }
         pause();
     }
 
@@ -433,11 +502,13 @@ public final class TerminalApplication {
             System.out.println("1. Create event with artist billing");
             System.out.println("2. Add performance");
             System.out.println("3. Update event resale cap");
+            System.out.println("4. View managed events and performance sales history");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::createEvent);
                 case "2" -> runOnlineAction(this::addPerformance);
                 case "3" -> runOnlineAction(this::updateResaleCap);
+                case "4" -> runOnlineAction(this::viewOrganizerSalesHistory);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown event option.");
             }
@@ -585,6 +656,72 @@ public final class TerminalApplication {
             return;
         }
         printResult(events.updateResaleCap(eventId, cap));
+        pause();
+    }
+
+    private void viewOrganizerSalesHistory() {
+        Integer organizerId = readCheckedId("Organizer ID: ", inputChecks::checkOrganizer);
+        if (organizerId == null) {
+            return;
+        }
+        OperationResult<List<OrganizerPerformanceSalesHistory>> result =
+                events.getOrganizerPerformanceSalesHistory(organizerId);
+        printResult(result);
+        if (!result.isSuccess()) {
+            pause();
+            return;
+        }
+
+        List<OrganizerPerformanceSalesHistory> history = result.getValue().orElseThrow();
+        if (history.isEmpty()) {
+            System.out.println("This organizer does not manage any events.");
+            pause();
+            return;
+        }
+
+        int displayedEventId = -1;
+        Integer displayedPerformanceId = null;
+        for (OrganizerPerformanceSalesHistory entry : history) {
+            if (entry.getEventId() != displayedEventId) {
+                displayedEventId = entry.getEventId();
+                displayedPerformanceId = null;
+                System.out.println();
+                System.out.println("Event " + entry.getEventId()
+                        + ": " + entry.getEventTitle());
+            }
+            if (entry.getPerformanceId() == null) {
+                System.out.println("  No performances have been added.");
+                continue;
+            }
+            if (!entry.getPerformanceId().equals(displayedPerformanceId)) {
+                displayedPerformanceId = entry.getPerformanceId();
+                System.out.println("  Performance ID: " + entry.getPerformanceId());
+                System.out.println("    Date/status: "
+                        + entry.getPerformanceDateTime().format(DATE_TIME_FORMAT)
+                        + " / " + entry.getPerformanceStatus());
+                System.out.println("    Venue: " + entry.getVenueName()
+                        + " (" + entry.getVenueCity() + ")");
+                System.out.println("    Original sales: " + entry.getOriginalTicketCount()
+                        + " tickets / $" + entry.getOriginalGrossRevenue().toPlainString());
+                System.out.println("    Ticket status: " + entry.getActiveTicketCount()
+                        + " active / " + entry.getCancelledTicketCount() + " cancelled");
+                System.out.println("    Refunds: $" + entry.getRefundedAmount().toPlainString());
+                System.out.println("    Completed resales: " + entry.getCompletedResaleCount()
+                        + " / $" + entry.getResaleGrossRevenue().toPlainString());
+                System.out.println("    Sales:");
+            }
+            if (entry.getTransactionId() == null) {
+                System.out.println("      No sales recorded.");
+                continue;
+            }
+            System.out.println("      Transaction " + entry.getTransactionId()
+                    + " / " + entry.getTransactionType().toUpperCase(Locale.ROOT)
+                    + " / " + entry.getTransactionDate().format(DATE_TIME_FORMAT));
+            System.out.println("        Customer: " + entry.getCustomerId()
+                    + " - " + entry.getCustomerName());
+            System.out.println("        Ticket: " + entry.getTicketId()
+                    + " / $" + entry.getSalePrice().toPlainString());
+        }
         pause();
     }
 
@@ -1108,6 +1245,7 @@ public final class TerminalApplication {
             System.out.println("3. Resale a ticket");
             System.out.println("4. Withdraw an active listing");
             System.out.println("5. Purchase a resale ticket");
+            System.out.println("6. View a ticket's ownership history");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::viewCustomerOwnedTickets);
@@ -1115,6 +1253,7 @@ public final class TerminalApplication {
                 case "3" -> runOnlineAction(this::listTicketForResale);
                 case "4" -> runOnlineAction(this::withdrawResaleListing);
                 case "5" -> runOnlineAction(this::purchaseResaleListing);
+                case "6" -> runOnlineAction(this::viewTicketOwnershipHistory);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown resale option.");
             }
@@ -1273,6 +1412,39 @@ public final class TerminalApplication {
             System.out.println("Purchase price: $"
                     + purchase.getPurchasePrice().toPlainString());
         });
+        pause();
+    }
+
+    private void viewTicketOwnershipHistory() {
+        Integer ticketId = readCheckedId("Ticket ID: ", inputChecks::checkTicket);
+        if (ticketId == null) {
+            return;
+        }
+        OperationResult<List<TicketOwnershipHistoryEntry>> result =
+                resale.getTicketOwnershipHistory(ticketId);
+        printResult(result);
+        if (!result.isSuccess()) {
+            pause();
+            return;
+        }
+
+        for (TicketOwnershipHistoryEntry entry : result.getValue().orElseThrow()) {
+            System.out.println();
+            System.out.println("Owner: " + entry.getCustomerId()
+                    + " - " + entry.getCustomerName());
+            System.out.println("Acquisition: "
+                    + entry.getTransactionType().toUpperCase(Locale.ROOT)
+                    + " transaction " + entry.getTransactionId()
+                    + " / $" + entry.getPurchasePrice().toPlainString());
+            if (entry.getListingId() != null) {
+                System.out.println("Resale listing ID: " + entry.getListingId());
+            }
+            System.out.println("Owned from: " + entry.getAcquiredAt().format(DATE_TIME_FORMAT));
+            System.out.println("Ownership: "
+                    + (entry.getEndedAt() == null
+                            ? "current"
+                            : "ended " + entry.getEndedAt().format(DATE_TIME_FORMAT)));
+        }
         pause();
     }
 

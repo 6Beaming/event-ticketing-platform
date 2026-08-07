@@ -1190,8 +1190,7 @@ public final class DevelopmentDataGenerator {
 
     private static String customerName(int index) {
         return FIRST_NAMES[index % FIRST_NAMES.length] + " "
-                + LAST_NAMES[(index / FIRST_NAMES.length + index) % LAST_NAMES.length]
-                + " " + String.format(Locale.ROOT, "%03d", index + 1);
+                + LAST_NAMES[(index / FIRST_NAMES.length + index) % LAST_NAMES.length];
     }
 
     private static String cardNumber(int customerIndex) {
