@@ -19,6 +19,7 @@ import operations.inventory.GeneralAdmissionAvailability;
 import operations.inventory.InventoryOperations;
 import operations.inventory.InventoryState;
 import operations.inventory.ReservedSeatAvailability;
+import operations.inventory.ReservedSeatLocation;
 import operations.pricing.PerformancePricingOperations;
 import operations.pricing.PricingSetupInput;
 import operations.pricing.SectionTierInput;
@@ -331,9 +332,32 @@ public final class FoundationDatabaseCheck {
         requireSuccess(bookingCustomerTwo, "second booking customer creation");
 
         List<ReservedSeatAvailability> newSeats = createdReserved.getValue().orElseThrow();
-        int firstSeatId = newSeats.get(0).getPerformanceSeatId();
-        int secondSeatId = newSeats.get(1).getPerformanceSeatId();
-        int rollbackSeatId = newSeats.get(2).getPerformanceSeatId();
+        requireSuccess(
+                bookings.checkPerformanceForBooking(performance.getValue().orElseThrow()),
+                "future scheduled booking preflight"
+        );
+        OperationResult<List<Integer>> resolvedSeatIds = inventory.resolveReservedSeatIds(
+                performance.getValue().orElseThrow(),
+                List.of(
+                        new ReservedSeatLocation(
+                                newSeats.get(0).getRowName(),
+                                newSeats.get(0).getSeatNumber()
+                        ),
+                        new ReservedSeatLocation(
+                                newSeats.get(1).getRowName(),
+                                newSeats.get(1).getSeatNumber()
+                        ),
+                        new ReservedSeatLocation(
+                                newSeats.get(2).getRowName(),
+                                newSeats.get(2).getSeatNumber()
+                        )
+                )
+        );
+        requireSuccess(resolvedSeatIds, "reserved row-and-seat lookup");
+        List<Integer> selectedSeatIds = resolvedSeatIds.getValue().orElseThrow();
+        int firstSeatId = selectedSeatIds.get(0);
+        int secondSeatId = selectedSeatIds.get(1);
+        int rollbackSeatId = selectedSeatIds.get(2);
         OperationResult<BookingSummary> reservedBooking = bookings.bookReservedSeats(
                 bookingCustomerOne.getValue().orElseThrow(),
                 performance.getValue().orElseThrow(),

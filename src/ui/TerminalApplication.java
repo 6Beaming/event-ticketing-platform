@@ -13,7 +13,9 @@ import operations.event.OrganizerEventOperations;
 import operations.event.PerformanceInput;
 import operations.inventory.GeneralAdmissionAvailability;
 import operations.inventory.InventoryOperations;
+import operations.inventory.InventoryState;
 import operations.inventory.ReservedSeatAvailability;
+import operations.inventory.ReservedSeatLocation;
 import operations.pricing.PerformancePricingOperations;
 import operations.pricing.PricingSetupInput;
 import operations.pricing.PricingSetupSummary;
@@ -882,20 +884,55 @@ public final class TerminalApplication {
         boolean inMenu = true;
         while (running && inMenu) {
             printHeading("Ticket booking and cancellations");
-            System.out.println("1. Book reserved seats");
-            System.out.println("2. Book general-admission tickets");
-            System.out.println("3. Cancel customer tickets");
-            System.out.println("4. Cancel an organizer's performance");
+            System.out.println("1. View available reserved seats");
+            System.out.println("2. Book reserved seats");
+            System.out.println("3. Book general-admission tickets");
+            System.out.println("4. Cancel customer tickets");
+            System.out.println("5. Cancel an organizer's performance");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
-                case "1" -> runOnlineAction(this::bookReservedSeats);
-                case "2" -> runOnlineAction(this::bookGeneralAdmission);
-                case "3" -> runOnlineAction(this::cancelCustomerTickets);
-                case "4" -> runOnlineAction(this::cancelPerformance);
+                case "1" -> runOnlineAction(this::viewAvailableReservedSeats);
+                case "2" -> runOnlineAction(this::bookReservedSeats);
+                case "3" -> runOnlineAction(this::bookGeneralAdmission);
+                case "4" -> runOnlineAction(this::cancelCustomerTickets);
+                case "5" -> runOnlineAction(this::cancelPerformance);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown booking/cancellation option.");
             }
         }
+    }
+
+    private void viewAvailableReservedSeats() {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                bookings::checkPerformanceForBooking
+        );
+        if (performanceId == null) {
+            return;
+        }
+        OperationResult<List<ReservedSeatAvailability>> result =
+                inventory.getReservedInventory(performanceId);
+        printResult(result);
+        result.getValue().ifPresent(seats -> {
+            List<ReservedSeatAvailability> availableSeats = seats.stream()
+                    .filter(seat -> seat.getState() == InventoryState.AVAILABLE)
+                    .toList();
+            if (availableSeats.isEmpty()) {
+                System.out.println("No reserved seats are currently available.");
+                return;
+            }
+            System.out.printf("%-20s %-8s %-6s %-8s %-10s%n",
+                    "Section", "Row", "Seat", "Tier", "Price");
+            for (ReservedSeatAvailability seat : availableSeats) {
+                System.out.printf("%-20s %-8s %-6d %-8s $%-9s%n",
+                        seat.getSectionName(),
+                        seat.getRowName(),
+                        seat.getSeatNumber(),
+                        seat.getTierCode(),
+                        seat.getPrice().toPlainString());
+            }
+        });
+        pause();
     }
 
     private void bookReservedSeats() {
@@ -903,14 +940,34 @@ public final class TerminalApplication {
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readCheckedId("Performance ID: ", inputChecks::checkPerformance);
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                bookings::checkPerformanceForBooking
+        );
         if (performanceId == null) {
             return;
         }
-        List<Integer> seatIds = readCheckedPositiveIntList(
-                "Reserved seat inventory IDs (comma-separated): ",
-                ids -> inputChecks.checkReservedSeats(performanceId, ids)
-        );
+        List<Integer> seatIds = null;
+        while (running) {
+            List<ReservedSeatLocation> locations = readReservedSeatLocationsWithRetry(
+                    "Reserved seats (Row Seat#, comma-separated): "
+            );
+            if (locations == null) {
+                return;
+            }
+            OperationResult<List<Integer>> resolved = inventory.resolveReservedSeatIds(
+                    performanceId,
+                    locations
+            );
+            if (resolved.isSuccess()) {
+                seatIds = resolved.getValue().orElseThrow();
+                break;
+            }
+            printResult(resolved);
+            if (!promptToRetry()) {
+                return;
+            }
+        }
         if (seatIds == null) {
             return;
         }
@@ -928,7 +985,10 @@ public final class TerminalApplication {
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readCheckedId("Performance ID: ", inputChecks::checkPerformance);
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                bookings::checkPerformanceForBooking
+        );
         if (performanceId == null) {
             return;
         }
@@ -2805,6 +2865,51 @@ private void report9() {
                 return values;
             }
             printInputError("Enter unique positive IDs separated by commas.");
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<ReservedSeatLocation> readReservedSeatLocationsWithRetry(String prompt) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+
+            List<ReservedSeatLocation> locations = new ArrayList<>();
+            Set<String> uniqueLocations = new HashSet<>();
+            boolean valid = !value.isBlank();
+            if (valid) {
+                for (String entry : value.split(",")) {
+                    String[] parts = entry.trim().split("\\s+");
+                    if (parts.length != 2 || parts[0].isBlank()) {
+                        valid = false;
+                        break;
+                    }
+                    try {
+                        int seatNumber = Integer.parseInt(parts[1]);
+                        String key = normalize(parts[0]) + ":" + seatNumber;
+                        if (seatNumber <= 0 || !uniqueLocations.add(key)) {
+                            valid = false;
+                            break;
+                        }
+                        locations.add(new ReservedSeatLocation(parts[0], seatNumber));
+                    } catch (NumberFormatException exception) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if (valid) {
+                return List.copyOf(locations);
+            }
+            printInputError(
+                    "Enter unique seats as Row Seat#, separated by commas "
+                            + "(for example: A 1, A 2)."
+            );
             if (!promptToRetry()) {
                 return null;
             }

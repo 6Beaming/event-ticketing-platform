@@ -9,7 +9,10 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public final class InventoryOperations {
     private static final String SEAT_BLOCKING_PERFORMANCE_CONFLICT =
@@ -152,6 +155,79 @@ public final class InventoryOperations {
                         false
                 )
         );
+    }
+
+    public OperationResult<List<Integer>> resolveReservedSeatIds(
+            int performanceId,
+            List<ReservedSeatLocation> locations
+    ) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+        if (locations == null || locations.isEmpty()) {
+            return OperationResult.invalidInput("At least one reserved seat is required.");
+        }
+
+        Set<String> uniqueLocations = new HashSet<>();
+        for (ReservedSeatLocation location : locations) {
+            if (location == null || location.getRowName() == null
+                    || location.getRowName().isBlank() || location.getSeatNumber() <= 0) {
+                return OperationResult.invalidInput(
+                        "Every reserved seat requires a row and a positive seat number."
+                );
+            }
+            String key = location.getRowName().trim().toLowerCase(Locale.ROOT)
+                    + ":" + location.getSeatNumber();
+            if (!uniqueLocations.add(key)) {
+                return OperationResult.invalidInput(
+                        "A reserved seat can be requested only once per booking."
+                );
+            }
+        }
+
+        return transactions.execute(connection -> {
+            if (!performanceExists(connection, performanceId)) {
+                return OperationResult.notFound("Performance not found.");
+            }
+
+            String sql = """
+                    SELECT performance_seat_id
+                    FROM PerformanceSeats
+                    WHERE performance_id = ? AND row_name = ? AND seat_number = ?
+                    ORDER BY performance_seat_id
+                    """;
+            List<Integer> seatIds = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                for (ReservedSeatLocation location : locations) {
+                    String rowName = location.getRowName().trim();
+                    statement.setInt(1, performanceId);
+                    statement.setString(2, rowName);
+                    statement.setInt(3, location.getSeatNumber());
+                    try (ResultSet rows = statement.executeQuery()) {
+                        if (!rows.next()) {
+                            return OperationResult.notFound(
+                                    "Reserved row " + rowName + ", seat "
+                                            + location.getSeatNumber()
+                                            + " was not found for this performance."
+                            );
+                        }
+                        int seatId = rows.getInt("performance_seat_id");
+                        if (rows.next()) {
+                            return OperationResult.conflict(
+                                    "Row " + rowName + ", seat "
+                                            + location.getSeatNumber()
+                                            + " exists in more than one reserved section."
+                            );
+                        }
+                        seatIds.add(seatId);
+                    }
+                }
+            }
+            return OperationResult.success(
+                    "Reserved seats found.",
+                    List.copyOf(seatIds)
+            );
+        });
     }
 
     private OperationResult<Void> changeSeatBlock(

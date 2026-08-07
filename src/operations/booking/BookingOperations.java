@@ -69,14 +69,21 @@ public final class BookingOperations {
             for (ReservedSelection selection : selections) {
                 if (selection.blocked) {
                     return OperationResult.conflict(
-                            "Seat " + selection.performanceSeatId + " is blocked. No tickets were booked."
+                            "Row " + selection.rowName + ", seat " + selection.seatNumber
+                                    + " is blocked. No tickets were booked."
                     );
                 }
             }
             Integer soldSeatId = findSoldReservedSeat(connection, sortedSeatIds);
             if (soldSeatId != null) {
+                ReservedSelection soldSelection = selections.stream()
+                        .filter(selection -> selection.performanceSeatId == soldSeatId)
+                        .findFirst()
+                        .orElseThrow();
                 return OperationResult.conflict(
-                        "Seat " + soldSeatId + " is already sold. No tickets were booked."
+                        "Row " + soldSelection.rowName + ", seat "
+                                + soldSelection.seatNumber
+                                + " is already sold. No tickets were booked."
                 );
             }
 
@@ -196,6 +203,15 @@ public final class BookingOperations {
         });
     }
 
+    public OperationResult<Void> checkPerformanceForBooking(int performanceId) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+        return transactions.execute(
+                connection -> checkSaleablePerformance(connection, performanceId, false)
+        );
+    }
+
     public static String validateReservedRequest(
             int customerId,
             int performanceId,
@@ -271,12 +287,19 @@ public final class BookingOperations {
             Connection connection,
             int performanceId
     ) throws SQLException {
+        return checkSaleablePerformance(connection, performanceId, true);
+    }
+
+    private OperationResult<Void> checkSaleablePerformance(
+            Connection connection,
+            int performanceId,
+            boolean lockForUpdate
+    ) throws SQLException {
         String sql = """
                 SELECT status, date_time
                 FROM Performance
                 WHERE performance_id = ?
-                FOR UPDATE
-                """;
+                """ + (lockForUpdate ? " FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, performanceId);
             try (ResultSet rows = statement.executeQuery()) {
@@ -304,7 +327,7 @@ public final class BookingOperations {
     ) throws SQLException {
         String placeholders = String.join(",", java.util.Collections.nCopies(seatIds.size(), "?"));
         String sql = """
-                SELECT ps.performance_seat_id, ps.blocked_status,
+                SELECT ps.performance_seat_id, ps.row_name, ps.seat_number, ps.blocked_status,
                        sta.tier_code, pt.price
                 FROM PerformanceSeats ps
                 JOIN SectionTierAssignment sta
@@ -329,6 +352,8 @@ public final class BookingOperations {
                 while (rows.next()) {
                     selections.add(new ReservedSelection(
                             rows.getInt("performance_seat_id"),
+                            rows.getString("row_name"),
+                            rows.getInt("seat_number"),
                             rows.getBoolean("blocked_status"),
                             rows.getString("tier_code"),
                             rows.getBigDecimal("price")
@@ -516,17 +541,23 @@ public final class BookingOperations {
 
     private static final class ReservedSelection {
         private final int performanceSeatId;
+        private final String rowName;
+        private final int seatNumber;
         private final boolean blocked;
         private final String tierCode;
         private final BigDecimal price;
 
         private ReservedSelection(
                 int performanceSeatId,
+                String rowName,
+                int seatNumber,
                 boolean blocked,
                 String tierCode,
                 BigDecimal price
         ) {
             this.performanceSeatId = performanceSeatId;
+            this.rowName = rowName;
+            this.seatNumber = seatNumber;
             this.blocked = blocked;
             this.tierCode = tierCode;
             this.price = price;
