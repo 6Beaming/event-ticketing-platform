@@ -3,6 +3,8 @@ package operations.validation;
 import common.OperationResult;
 import database.TransactionManager;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.List;
@@ -103,6 +105,105 @@ public final class OperationInputChecks {
                 "Ticket found.",
                 "Ticket not found."
         );
+    }
+
+    public OperationResult<Void> checkTicketForResale(int sellerId, int ticketId) {
+        if (sellerId <= 0 || ticketId <= 0) {
+            return OperationResult.invalidInput("Seller and ticket IDs must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT t.status AS ticket_status,
+                           p.status AS performance_status,
+                           (p.date_time > UTC_TIMESTAMP()) AS future_performance,
+                           own.ownership_id,
+                           own.customer_id AS owner_customer_id,
+                           EXISTS (
+                               SELECT 1
+                               FROM ResaleListing rl
+                               WHERE rl.active_ticket_id = t.ticket_id
+                           ) AS active_listing_exists
+                    FROM Tickets t
+                    JOIN Performance p ON p.performance_id = t.performance_id
+                    LEFT JOIN TicketOwnership own ON own.current_ticket_id = t.ticket_id
+                    WHERE t.ticket_id = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, ticketId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound("Ticket not found.");
+                    }
+                    if (!"active".equals(rows.getString("ticket_status"))) {
+                        return OperationResult.conflict(
+                                "Only an active ticket can be listed for resale."
+                        );
+                    }
+                    if (!"scheduled".equals(rows.getString("performance_status"))
+                            || !rows.getBoolean("future_performance")) {
+                        return OperationResult.conflict(
+                                "Only a ticket for a scheduled future performance can be listed."
+                        );
+                    }
+                    long ownershipId = rows.getLong("ownership_id");
+                    if (rows.wasNull() || ownershipId <= 0) {
+                        return OperationResult.conflict(
+                                "Ticket has no current ownership record."
+                        );
+                    }
+                    if (rows.getInt("owner_customer_id") != sellerId) {
+                        return OperationResult.forbidden(
+                                "Only the ticket's current owner can list it for resale."
+                        );
+                    }
+                    if (rows.getBoolean("active_listing_exists")) {
+                        return OperationResult.conflict(
+                                "Ticket already has an active resale listing."
+                        );
+                    }
+                    return OperationResult.success("Ticket can be listed for resale.");
+                }
+            }
+        });
+    }
+
+    public OperationResult<Void> checkResaleListingPrice(
+            int ticketId,
+            BigDecimal listingPrice
+    ) {
+        if (ticketId <= 0) {
+            return OperationResult.invalidInput("Ticket ID must be positive.");
+        }
+        if (listingPrice == null || listingPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return OperationResult.invalidInput("Listing price must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT t.face_value, e.resale_cap_pct
+                    FROM Tickets t
+                    JOIN Performance p ON p.performance_id = t.performance_id
+                    JOIN Event e ON e.event_id = p.event_id
+                    WHERE t.ticket_id = ?
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, ticketId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return OperationResult.notFound("Ticket not found.");
+                    }
+                    BigDecimal capPrice = rows.getBigDecimal("face_value")
+                            .multiply(rows.getBigDecimal("resale_cap_pct"))
+                            .setScale(2, RoundingMode.HALF_UP);
+                    if (listingPrice.compareTo(capPrice) > 0) {
+                        return OperationResult.conflict(
+                                "Listing price exceeds the event cap of $"
+                                        + capPrice.toPlainString() + "."
+                        );
+                    }
+                    return OperationResult.success("Listing price is within the event cap.");
+                }
+            }
+        });
     }
 
     public OperationResult<Void> checkTickets(List<Integer> ticketIds) {

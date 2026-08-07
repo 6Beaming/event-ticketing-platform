@@ -1122,15 +1122,16 @@ public final class TerminalApplication {
         if (sellerId == null) {
             return;
         }
-        Integer ticketId = readCheckedId("Ticket ID: ", inputChecks::checkTicket);
+        Integer ticketId = readCheckedId(
+                "Ticket ID: ",
+                id -> inputChecks.checkTicketForResale(sellerId, id)
+        );
         if (ticketId == null) {
             return;
         }
-        BigDecimal listingPrice = readDecimalWithRetry(
+        BigDecimal listingPrice = readCheckedDecimal(
                 "Listing price: ",
-                value -> value.compareTo(BigDecimal.ZERO) <= 0
-                        ? Optional.of("Listing price must be positive.")
-                        : Optional.empty()
+                value -> inputChecks.checkResaleListingPrice(ticketId, value)
         );
         if (listingPrice == null) {
             return;
@@ -2985,6 +2986,38 @@ private void report9() {
                 return parsed;
             }
             printInputError(error.get());
+            if (!promptToRetry()) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal readCheckedDecimal(
+            String prompt,
+            Function<BigDecimal, OperationResult<Void>> checker
+    ) {
+        while (running) {
+            String value = readLine(prompt);
+            if (!running) {
+                return null;
+            }
+            BigDecimal parsed;
+            try {
+                parsed = new BigDecimal(value);
+            } catch (NumberFormatException exception) {
+                printInputError("Enter a valid decimal number.");
+                if (!promptToRetry()) {
+                    return null;
+                }
+                continue;
+            }
+
+            OperationResult<Void> result = checker.apply(parsed);
+            if (result.isSuccess()) {
+                return parsed;
+            }
+            printResult(result);
             if (!promptToRetry()) {
                 return null;
             }
