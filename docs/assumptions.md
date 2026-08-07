@@ -1,47 +1,61 @@
-- The PDF does not specify whether a complete tier and section setup can be replaced. We allow replacement only for a scheduled future performance with no ticket records, including cancelled tickets. If a performance has no ticket records and is still scheduled in the future, the operation will replace its old tiers and assignments atomically.
+# MyTix assumptions
 
-- If any ticket has ever been sold, even if later cancelled, the full replacement will be rejected immediately, so that existing tickets keep their original tier_code and face_value; they will never be altered or orphaned.
+This file records implementation decisions that are not specified by `Database design project (MyTix).pdf`.
 
-- The PDF requires an email but does not define duplicate-email behavior. MyTix treats email as a unique account contact value, checks availability during entry, and keeps the `Users.email` constraint as final protection.
+## Accounts and operations
 
-- “Recently attended” means a completed performance within the previous 365 days. A reviewer must have held a non-cancelled ticket when that performance occurred, and can review that performance only once.
+- Email addresses are unique account identifiers. Availability is checked during entry, with the `Users.email` constraint providing final protection.
 
-- We assume that a tier price cannot be changed if any ticket that belongs to this tier has been sold.
+- “Recently attended” means a completed performance within the previous 365 days.
 
-- We assume that a past performance cannot be configured.
+- A complete pricing setup may be replaced only for a scheduled future performance with no ticket records, including cancelled tickets. Once any ticket has existed, its stored tier and face value are preserved.
+
+## Search assumptions
+
+- “Upcoming” means a scheduled performance whose date and time are later than the current UTC time.
+
+- `GeneralAdmissionCapacity.remaining_capacity` is the authoritative GA availability counter. Booking and cancellation operations update it in the same transaction as the related ticket changes.
+
+- Q1 uses a default radius of 50 km and Haversine great-circle distance with an Earth radius of 6,371 km. When sorted by distance, sold-out performances remain visible with no cheapest available price; when sorted by price, they appear after performances with available tickets.
+
+- Q2 approximates adjacent postal codes using a shared first three characters because the schema has no postal-boundary data.
+
+- Q3 can return multiple venues for the same address because `Venue.address` is not unique.
+
+- Q5 calculates price and availability only from the requested seating type. Performances with no matching available inventory are excluded.
+
+- Query and report ranges are inclusive UTC calendar dates. The application converts the end date to the following day at `00:00` and SQL uses `>= start` and `< next day`.
 
 ## Report assumptions
 
-- Query and report ranges are entered as inclusive calendar dates in UTC. The application converts the entered end date to the next day at `00:00` and SQL uses a half-open interval (`>= start` and `< next day`) so the entire displayed end date is included. The PDF asks for dates, months, years, and periods but does not require a time-of-day for query/report input. Performance creation still requires its PDF-mandated date and time.
+- R1 applies its date range to `Performance.date_time`. It counts active tickets at face value, excluding cancelled tickets, refunds, and resale markup.
 
-- R1 interprets its date range as an inclusive performance-date range, using `Performance.date_time`. Ticket count and gross revenue include active tickets at their stored face value, so cancelled/refunded tickets and resale markup are excluded.
+- R2 counts a distinct event once in every geographic grouping where it has a performance, so a touring event can appear in multiple locations.
 
-- R2 counts a distinct event once in each geographic grouping where it has a performance. A touring event can therefore contribute to more than one country, city, or venue grouping.
+- R3 gross revenue is active-ticket face value. The city view produces separate rankings for each venue city.
 
-- R3 organizer gross revenue uses active tickets at face value. Its city option returns separate organizer rankings for every venue city rather than requiring one city filter.
+- R4 treats original purchases and completed-resale acquisitions as purchases. A ticket listed repeatedly by the same owner counts once. Identified customers cannot make primary bookings, buy resale listings, or create new listings; they may still cancel tickets or withdraw existing listings. Automatic restrictions are refreshed by R4 and before guarded operations.
 
-- R4 counts both original-sale and completed-resale acquisitions as tickets purchased. Counts are grouped by the performance venue's city, and repeat listing attempts for the same ticket by the same owner count once because the requirement refers to tickets listed rather than listing attempts. A customer qualifies in a city only when at least 10 acquisition records fall in the rolling year and the number of distinct tickets listed in that city and year is strictly greater than half that count.
+- R5 counts original ticket-purchase orders and excludes resale transactions.
 
-- The PDF says customers identified by R4 must be prohibited but does not define the prohibited actions. MyTix blocks new primary bookings, resale purchases, and new resale listings while a restriction is active. It still permits cancellations and withdrawal of existing listings, and does not automatically withdraw listings that were active before the restriction. Running R4 refreshes `possible_scalper` flags, and each blocked operation recalculates the SQL rule so enforcement does not depend on the report having been run first. Automatically created flags are closed when the customer no longer qualifies; manual restrictions are not closed by R4.
+- R6 uses the rolling year ending when the report runs. Ticket cancellations are attributed to the recorded customer, and performance cancellations to the event organizer.
 
-- R5 treats an order as an original ticket-purchase transaction. Resale transactions are excluded from both the requested-period and venue-city order rankings.
+- R7 counts active tickets as sold. SQL returns fractions and the terminal displays percentages.
 
-- R6 uses a rolling one-year window ending at the time the report is run. A cancelled ticket is attributed to the customer in its recorded ownership row, and a cancelled performance is attributed to its event organizer.
+- R8 uses the completed resale transaction date for period filtering. A resale is completed only when a sold listing has a linked resale transaction; markup is calculated from the ticket’s face value.
 
-- R7 treats sellable capacity as unblocked reserved seats plus total general-admission capacity. Its sold count includes active tickets; SQL returns decimal fractions and the terminal formats them as percentages.
-
-- R8 measures the requested top-10 period by the completed resale transaction's `Transactions.transaction_date`, not by when the listing was created. A completed resale must have both a sold listing and its linked `resale` transaction; markup is measured against the ticket’s stored face value.
-
-- R9 defines a noun phrase as a contiguous sequence of at least two adjective or noun tokens identified by the bundled English OpenNLP part-of-speech model. Phrases are lowercased, counted by occurrence, and limited to the ten highest counts per event; no graphical word cloud is produced.
+- R9 defines a noun phrase as at least two consecutive adjective or noun tokens identified by the bundled English OpenNLP model. Phrases are lowercased, counted by occurrence, and limited to the ten most frequent per event.
 
 ## Organizer toolkit assumptions
 
-- The PDF leaves the toolkit strategy open. MyTix first selects completed performances from the previous 24 months in the requested city, with venue capacity within 25% of the target. Exact-genre matches rank ahead of performances in another genre of the same segment. Three comparable performances is the minimum treated as a normal-confidence pool.
+- The primary comparable pool contains completed performances from the previous 24 months in the requested city and within 25% of the requested venue capacity. Exact-genre matches rank before same-segment matches. Three comparables is the normal-confidence minimum.
 
-- When fewer than three primary matches exist, the toolkit expands to completed same-genre or same-segment performances from any city within the previous 36 months and 50% of the requested capacity. This may mix different local markets because the schema has no metro-area, exchange-rate, or currency model. If no comparable tier data exists at all, the documented rule-based fallback is three value/mid/premium tiers: 50% at $60, 30% at $100, and 20% at $150.
+- With fewer than three primary matches, the pool expands to any city, 36 months, and 50% capacity tolerance while retaining the genre or segment match. This can mix local markets because the schema has no currency, exchange-rate, or metro-area model.
 
-- Historical tiers are ranked from lowest to highest price. The most common tier count is recommended; if tier counts tie in frequency, the smaller count wins. Capacity shares are averaged by price rank, normalized, rounded to one decimal place, and the rounding remainder is applied to the largest tier so the displayed shares total exactly 100%.
+- With no usable historical tier data, the fallback is three value/mid/premium tiers: 50% at $60, 30% at $100, and 20% at $150.
 
-- Toolkit revenue means organizer primary-ticket revenue from `Tickets.face_value`; resale proceeds are excluded. Blocked reserved seats are excluded from sellable capacity. The displayed historical revenue is the average primary-ticket revenue of the comparable performances with the recommended tier count.
+- Historical tiers are ranked from lowest to highest price. The most common tier count is selected; a frequency tie selects the smaller count. Average capacity shares are normalized and rounded to total exactly 100%.
 
-- The optional revenue-change estimate is a heuristic, not a causal forecast. It separately averages capacity and sell-through for historical tiers within the entered price band around the current and proposed prices, projects revenue at each price, and reports proposed minus current revenue. Small samples and broad price bands should be treated as low-confidence estimates.
+- Toolkit revenue is primary-ticket face value and excludes resale proceeds. Historical revenue is averaged across comparables using the recommended tier count.
+
+- The optional revenue-change result is a heuristic. It projects current and proposed revenue from historical tiers inside the entered price bands and reports proposed minus current revenue; small samples are low confidence.
