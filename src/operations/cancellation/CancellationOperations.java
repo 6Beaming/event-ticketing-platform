@@ -36,8 +36,55 @@ public final class CancellationOperations {
             return OperationResult.invalidInput(validationError);
         }
 
+        return cancelCustomerTicketsForOwner(customerId, ticketIds, reason);
+    }
+
+    public OperationResult<CancellationSummary> cancelCustomerTickets(
+            List<Integer> ticketIds,
+            String reason
+    ) {
+        String validationError = validateTicketIds(ticketIds);
+        if (validationError != null) {
+            return OperationResult.invalidInput(validationError);
+        }
+
+        return cancelCustomerTicketsForOwner(null, ticketIds, reason);
+    }
+
+    private OperationResult<CancellationSummary> cancelCustomerTicketsForOwner(
+            Integer requestedCustomerId,
+            List<Integer> ticketIds,
+            String reason
+    ) {
         List<Integer> sortedTicketIds = ticketIds.stream().sorted().toList();
         return transactions.execute(connection -> {
+            int customerId;
+            if (requestedCustomerId == null) {
+                TicketOwnerSnapshot owner = findCurrentTicketOwner(
+                        connection,
+                        sortedTicketIds.get(0)
+                );
+                if (owner == null) {
+                    return OperationResult.notFound(
+                            "Ticket " + sortedTicketIds.get(0)
+                                    + " was not found. No tickets were cancelled."
+                    );
+                }
+                if (!"active".equals(owner.ticketStatus)) {
+                    return OperationResult.conflict(
+                            "Ticket " + sortedTicketIds.get(0)
+                                    + " is already cancelled. No tickets were cancelled."
+                    );
+                }
+                if (owner.customerId == null) {
+                    return OperationResult.conflict(
+                            "The ticket is missing current ownership. No tickets were cancelled."
+                    );
+                }
+                customerId = owner.customerId;
+            } else {
+                customerId = requestedCustomerId;
+            }
             if (!lockActiveCustomer(connection, customerId)) {
                 return OperationResult.notFound("Active customer not found.");
             }
@@ -97,7 +144,27 @@ public final class CancellationOperations {
             return OperationResult.invalidInput("Organizer and performance IDs must be positive.");
         }
 
+        return cancelPerformanceForOrganizer(organizerId, performanceId, reason);
+    }
+
+    public OperationResult<CancellationSummary> cancelPerformance(
+            int performanceId,
+            String reason
+    ) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+
+        return cancelPerformanceForOrganizer(null, performanceId, reason);
+    }
+
+    private OperationResult<CancellationSummary> cancelPerformanceForOrganizer(
+            Integer requestedOrganizerId,
+            int performanceId,
+            String reason
+    ) {
         return transactions.execute(connection -> {
+            int organizerId;
             String performanceSql = """
                     SELECT p.status, e.organizer_id
                     FROM Performance p
@@ -111,7 +178,9 @@ public final class CancellationOperations {
                     if (!rows.next()) {
                         return OperationResult.notFound("Performance not found.");
                     }
-                    if (rows.getInt("organizer_id") != organizerId) {
+                    organizerId = rows.getInt("organizer_id");
+                    if (requestedOrganizerId != null
+                            && requestedOrganizerId != organizerId) {
                         return OperationResult.forbidden(
                                 "Only the organizer who manages the event can cancel this performance."
                         );
@@ -166,6 +235,10 @@ public final class CancellationOperations {
         if (customerId <= 0) {
             return "Customer ID must be positive.";
         }
+        return validateTicketIds(ticketIds);
+    }
+
+    private static String validateTicketIds(List<Integer> ticketIds) {
         if (ticketIds == null || ticketIds.isEmpty()) {
             return "At least one ticket ID is required.";
         }
@@ -189,6 +262,28 @@ public final class CancellationOperations {
         return currentDateTime != null
                 && performanceDateTime != null
                 && !performanceDateTime.isBefore(currentDateTime.plusDays(7));
+    }
+
+    private TicketOwnerSnapshot findCurrentTicketOwner(Connection connection, int ticketId)
+            throws SQLException {
+        String sql = """
+                SELECT t.status AS ticket_status, own.customer_id
+                FROM Tickets t
+                LEFT JOIN TicketOwnership own ON own.current_ticket_id = t.ticket_id
+                WHERE t.ticket_id = ?
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, ticketId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    return null;
+                }
+                return new TicketOwnerSnapshot(
+                        rows.getString("ticket_status"),
+                        nullableInt(rows, "customer_id")
+                );
+            }
+        }
     }
 
     private boolean lockActiveCustomer(Connection connection, int customerId) throws SQLException {
@@ -455,6 +550,16 @@ public final class CancellationOperations {
             this.ownershipId = ownershipId == null ? 0 : ownershipId;
             this.ownerCustomerId = ownerCustomerId;
             this.refundAmount = refundAmount;
+        }
+    }
+
+    private static final class TicketOwnerSnapshot {
+        private final String ticketStatus;
+        private final Integer customerId;
+
+        private TicketOwnerSnapshot(String ticketStatus, Integer customerId) {
+            this.ticketStatus = ticketStatus;
+            this.customerId = customerId;
         }
     }
 }

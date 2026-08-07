@@ -985,16 +985,48 @@ public final class TerminalApplication {
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readCheckedId(
-                "Performance ID: ",
-                bookings::checkPerformanceForBooking
-        );
+        Integer performanceId = null;
+        while (running) {
+            Integer candidatePerformanceId = readCheckedId(
+                    "Performance ID: ",
+                    bookings::checkPerformanceForBooking
+            );
+            if (candidatePerformanceId == null) {
+                return;
+            }
+            OperationResult<List<GeneralAdmissionAvailability>> inventoryResult =
+                    inventory.getGeneralAdmissionInventory(candidatePerformanceId);
+            if (!inventoryResult.isSuccess()) {
+                printResult(inventoryResult);
+                if (!promptToRetry()) {
+                    return;
+                }
+                continue;
+            }
+            List<String> sectionNames = inventoryResult.getValue().orElseThrow().stream()
+                    .map(GeneralAdmissionAvailability::getSectionName)
+                    .toList();
+            if (sectionNames.isEmpty()) {
+                System.out.println(
+                        "CONFLICT: No general-admission sections are configured "
+                                + "for this performance."
+                );
+                if (!promptToRetry()) {
+                    return;
+                }
+                continue;
+            }
+            System.out.println("General-admission sections: " + String.join(", ", sectionNames));
+            performanceId = candidatePerformanceId;
+            break;
+        }
         if (performanceId == null) {
             return;
         }
+        int selectedPerformanceId = performanceId;
         String sectionName = readCheckedText(
                 "General-admission section name: ",
-                value -> inputChecks.checkGeneralAdmissionSection(performanceId, value)
+                value -> inputChecks.checkGeneralAdmissionSection(selectedPerformanceId, value)
         );
         if (sectionName == null) {
             return;
@@ -1005,7 +1037,7 @@ public final class TerminalApplication {
         }
         OperationResult<BookingSummary> result = bookings.bookGeneralAdmission(
                 customerId,
-                performanceId,
+                selectedPerformanceId,
                 sectionName,
                 quantity
         );
@@ -1023,10 +1055,6 @@ public final class TerminalApplication {
     }
 
     private void cancelCustomerTickets() {
-        Integer customerId = readCheckedId("Customer ID: ", inputChecks::checkActiveCustomer);
-        if (customerId == null) {
-            return;
-        }
         List<Integer> ticketIds = readCheckedPositiveIntList(
                 "Ticket IDs to cancel (comma-separated): ",
                 inputChecks::checkTickets
@@ -1036,7 +1064,6 @@ public final class TerminalApplication {
         }
         String reason = readLine("Cancellation reason (optional): ");
         OperationResult<CancellationSummary> result = cancellations.cancelCustomerTickets(
-                customerId,
                 ticketIds,
                 reason
         );
@@ -1045,20 +1072,15 @@ public final class TerminalApplication {
     }
 
     private void cancelPerformance() {
-        Integer organizerId = readCheckedId("Organizer ID: ", events::checkActiveOrganizer);
-        if (organizerId == null) {
-            return;
-        }
         Integer performanceId = readCheckedId(
                 "Performance ID: ",
-                id -> inputChecks.checkOwnedPerformance(organizerId, id)
+                inputChecks::checkPerformance
         );
         if (performanceId == null) {
             return;
         }
         String reason = readLine("Cancellation reason (optional): ");
         OperationResult<CancellationSummary> result = cancellations.cancelPerformance(
-                organizerId,
                 performanceId,
                 reason
         );
@@ -1078,9 +1100,9 @@ public final class TerminalApplication {
         boolean inMenu = true;
         while (running && inMenu) {
             printHeading("Ticket resale");
-            System.out.println("1. List an owned ticket");
+            System.out.println("1. Resale a ticket");
             System.out.println("2. Withdraw an active listing");
-            System.out.println("3. Purchase another customer's listing");
+            System.out.println("3. Purchase a resale ticket");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::listTicketForResale);

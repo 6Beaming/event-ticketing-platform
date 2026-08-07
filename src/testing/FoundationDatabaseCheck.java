@@ -505,7 +505,6 @@ public final class FoundationDatabaseCheck {
         }
         OperationResult<CancellationSummary> customerCancellation =
                 cancellations.cancelCustomerTickets(
-                        bookingCustomerOne.getValue().orElseThrow(),
                         List.of(firstBookedTicket),
                         "Database check cancellation"
                 );
@@ -524,7 +523,6 @@ public final class FoundationDatabaseCheck {
         }
         OperationResult<CancellationSummary> lateCancellation =
                 cancellations.cancelCustomerTickets(
-                        DevelopmentIds.CUSTOMER_BOB,
                         List.of(DevelopmentIds.TICKET_GENERAL),
                         "Too late check"
                 );
@@ -543,7 +541,6 @@ public final class FoundationDatabaseCheck {
         }
         OperationResult<CancellationSummary> performanceCancellation =
                 cancellations.cancelPerformance(
-                        organizer.getValue().orElseThrow(),
                         performance.getValue().orElseThrow(),
                         "Database check performance cancellation"
                 );
