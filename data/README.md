@@ -53,10 +53,10 @@ ticketing workflows.
 | Future reserved-ticket example | `2001` | Owns tickets for scheduled performance `6001`; also has an existing review for completed performance `6003`. |
 | Near-deadline general-admission example | `2002` | Owns tickets for scheduled performance `6002`, which occurs within seven days; also has an existing review for performance `6003`. |
 | Customer-initiated cancellation history | `2086`-`2097` | Each customer cancelled one ticket before the seven-day deadline. |
-| Initial frequent resale sellers | `2001`, `2002` | Each purchased 12 tickets and created seven resale listings: three sold, two withdrawn, and two active. |
+| Initial frequent resale sellers | `2001`, `2002` | Each purchased 12 Toronto tickets (plus 3 Vancouver tickets) and created seven Toronto resale listings: three sold, two withdrawn, and two active. |
 | Completed resale buyers | `2050`-`2052`, `2060`-`2062`, `2099`, `2100` | Customers who acquired tickets through completed resale transactions. |
 | Twice-resold ticket ownership chain | `2003` -> `2099` -> `2100` | Ownership history for ticket `8007`, which was resold twice. |
-| Possible scalpers | `2001`, `2002` | Seeded `CustomerRestriction` rows for testing report **R4**; these records do not block runtime operations. |
+| Possible scalpers | `2001`, `2002` | Meet the rolling-year R4 SQL rule and have seeded current restrictions; new bookings, resale purchases, and resale listings are prohibited. |
 
 ### Performance IDs category
 
@@ -97,9 +97,9 @@ Ticket categories overlap because one ticket can participate in several workflow
 | Future unlisted reserved ticket | `8004` | Owned by customer `2001` for performance `6001`, which is more than seven days away. |
 | Near-deadline unlisted GA ticket | `8006` | Owned by customer `2002` for performance `6002`; customer cancellation must be rejected. |
 | Active resale listings | `8001`, `8003`, `8002`, `8005` | Visible through option **5 -> 2** for performances `6001` and `6002`. |
-| Completed resale transfers | `8028`-`8030`, `8037`-`8039` | Sold once and transferred to their resale buyers. |
-| Withdrawn resale listings | `8031`, `8032`, `8040`, `8041` | Listings retained as withdrawn history. |
-| Listings priced at the resale cap | `8001`, `8002`, `8007`, `8028`, `8037` | Exact-cap examples for resale reporting and validation. |
+| Completed resale transfers | `8133`-`8135`, `8139`-`8141` | Sold once and transferred to their resale buyers. |
+| Withdrawn resale listings | `8136`, `8137`, `8142`, `8143` | Listings retained as withdrawn history. |
+| Listings priced at the resale cap | `8001`, `8002`, `8007`, `8133`, `8139` | Exact-cap examples for resale reporting and validation. |
 | Ticket with two resale transfers | `8007` | Ownership chain `2003` -> `2099` -> `2100`; view with option **5 -> 6**. |
 | Customer-cancelled tickets | `8274`, `8277`, …, `8307` (every third ID) | Cancelled before the seven-day deadline and fully refunded. |
 | Organizer-cancelled tickets | `8919`-`8933`, `8946`-`8960` | Cancelled and refunded with performances `6058` and `6060`. |
@@ -186,8 +186,8 @@ cities and dates.
 
 Performances `6058` and `6060` are organizer-cancelled with ticket-level refunds.
 Ticket `8007` has two completed ownership transfers. Customers `2001` and
-`2002` each purchased 12 tickets and listed 7, and both have a current
-`possible_scalper` restriction.
+`2002` each purchased 12 Toronto tickets and listed 7 Toronto tickets, and both
+have a current `possible_scalper` restriction.
 
 ## Reviews
 

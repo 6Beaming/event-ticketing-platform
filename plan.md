@@ -287,35 +287,35 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
 
 ### Member A
 
-- [ ] **Build R4: possible scalpers by city.**
-  - [ ] Group by venue city.
+- [x] **Build R4: possible scalpers by city.**
+  - [x] Group by venue city.
   - [x] Use the past-year purchase/listing window.
   - [x] Return customers who purchased at least 10 tickets and listed more than half.
-  - [ ] Flag the identified customers and prohibit the actions chosen by the design.
-  - [ ] Add the R4 report and prohibition result to terminal option 8.
-- [ ] **Build R5: customer order rankings.**
+  - [x] Flag the identified customers and prohibit the actions chosen by the design.
+  - [x] Add the R4 report and prohibition result to terminal option 8.
+- [x] **Build R5: customer order rankings.**
   - [x] Rank customers by order count for a requested period.
   - [x] Rank customers by the city of the performance venue.
   - [x] Apply the at-least-two-orders-in-the-year rule to the city ranking.
-  - [ ] Add terminal period/city inputs, headings, and empty-result handling.
+  - [x] Add terminal period input, city-grouped output, headings, and empty-result handling.
 - [x] **Build R6: cancellation rankings.**
   - [x] Use the required one-year reporting window.
   - [x] Rank customers by cancelled-ticket count.
   - [x] Rank organizers by cancelled-performance count.
   - [x] Keep customer and organizer results clearly separated.
-- [ ] **Build R7: sell-through reports.**
+- [x] **Build R7: sell-through reports.**
   - [x] Calculate sellable capacity with blocked reserved seats excluded and general-admission capacity included.
   - [x] Report sell-through per performance and per performance tier.
-  - [ ] Accept month and city for sold-out and below-25% performance results.
+  - [x] Accept a month and report sold-out and below-25% performances grouped by city.
   - [x] Handle zero-capacity cases safely.
 - [x] **Build R8: resale reports.**
   - [x] Report completed resale count per event.
   - [x] Calculate average markup over face value.
   - [x] Calculate the fraction of listings priced exactly at the cap.
   - [x] Accept a period for the top 10 events by resale volume.
-- [ ] **Finish the R4-R8 terminal screens.**
-  - [ ] Add prompts and check date, city, and period inputs.
-  - [ ] Use clear headings, money/percentage formatting, and empty-result messages.
+- [x] **Finish the R4-R8 terminal screens.**
+  - [x] Add and validate the PDF-required date, period, and month inputs.
+  - [x] Use clear headings, money/percentage formatting, and empty-result messages.
 - [x] **Build the transaction-heavy part of the final sample data.**
   - [x] Add reserved and general-admission orders with known face values and inventory totals.
   - [x] Add eligible and ineligible customer-cancellation examples.
@@ -329,7 +329,7 @@ Keeping [business logic constraint map](docs/business-logic-constraints.md) in m
   - [ ] Check that profile, booking, cancellation, resale, Q6, Q7, and R4-R8 screens accept the documented inputs.
   - [ ] Use consistent headings, money/percentage output, empty results, and validation messages.
   - [ ] Confirm the final data produces the expected inventory, cancellation, resale, and report totals.
-- [ ] **Write expected results** for transaction operations, Q6-Q7, and R4-R8 using stable IDs.
+- [x] **Write expected results** for transaction operations, Q6-Q7, and R4-R8 using stable IDs.
 - [ ] **Write and finalize `manual.pdf`.**
   - [ ] Document prerequisites and exact startup sequence.
   - [ ] Explain every terminal menu option and required input.

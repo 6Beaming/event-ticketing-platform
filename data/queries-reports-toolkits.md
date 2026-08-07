@@ -20,11 +20,13 @@ move with the load date.
 
 Use these input conventions:
 
-- Date/time format: `YYYY-MM-DD HH:mm`.
-- For past-period report examples, `2000-01-01 00:00` is a safe start. For the
-  end, enter today's date at `00:00`; this is safely before the current time.
-- The concrete report examples below show `2026-08-07 00:00` as the end date.
-  Replace it with today's date at `00:00` after reloading the sample data.
+- Query and report date format: `YYYY-MM-DD`; the entered end date is inclusive.
+- For past-period report examples, `2000-01-01` is a safe start and today's date
+  is a safe end.
+- The concrete report examples below show `2026-08-07` as the end date. Replace
+  it with today's date after reloading the sample data.
+- Performance creation still uses `YYYY-MM-DD HH:mm` because a performance has
+  a specific date and time.
 - City, segment, genre, and section-type filters use exact database text.
   Examples include `Toronto`, `Music`, `Rock`, `reserved`, and `general`.
 - At each `Press Enter to continue...` prompt, press Enter to return to the
@@ -98,8 +100,8 @@ assumes the data was loaded on 2026-08-07:
 ```text
 Select option: 2
 Enter postal code: M5J 2X2
-Start date/time (YYYY-MM-DD HH:mm): 2026-08-08 00:00
-End date/time (YYYY-MM-DD HH:mm): 2026-12-06 00:00
+Start date (YYYY-MM-DD): 2026-08-08
+End date (YYYY-MM-DD, inclusive): 2026-12-06
 Minimum available tickets: 1
 ```
 
@@ -121,8 +123,8 @@ example assumes the data was loaded on 2026-08-07:
 City: Toronto
 Segment: Music
 Genre: Rock
-Start date/time (YYYY-MM-DD HH:mm): 2026-08-08 00:00
-End date/time (YYYY-MM-DD HH:mm): 2027-02-03 00:00
+Start date (YYYY-MM-DD): 2026-08-08
+End date (YYYY-MM-DD, inclusive): 2027-02-03
 Minimum price: 0
 Maximum price: 500
 Minimum available tickets: 1
@@ -166,8 +168,8 @@ optional budget constraint.
 
 ```text
 Select option: 1
-Start date/time (YYYY-MM-DD HH:mm): 2000-01-01 00:00
-End date/time (YYYY-MM-DD HH:mm): 2026-08-07 00:00
+Start date (YYYY-MM-DD): 2000-01-01
+End date (YYYY-MM-DD, inclusive): 2026-08-07
 ```
 
 Expected: success. Cities are listed with the number of tickets sold and gross
@@ -177,8 +179,8 @@ revenue for orders in the date range.
 
 ```text
 Select option: 2
-Start date/time (YYYY-MM-DD HH:mm): 2000-01-01 00:00
-End date/time (YYYY-MM-DD HH:mm): 2026-08-07 00:00
+Start date (YYYY-MM-DD): 2000-01-01
+End date (YYYY-MM-DD, inclusive): 2026-08-07
 City: Toronto
 ```
 
@@ -216,17 +218,18 @@ gross ticket revenue.
 
 There are no prompts after selecting report `4`.
 
-Expected: success. Customers `2001` and `2002` are returned because each bought
-12 tickets and listed 7 during the rolling past year. The report identifies
-these customers but the seeded restriction rows do not block other terminal
-operations.
+Expected: success. Customers `2001` and `2002` are returned for Toronto because
+each bought 12 Toronto tickets and listed 7 during the rolling past year. The
+report refreshes their `possible_scalper` restrictions. New primary bookings,
+resale purchases, and new resale listings for those customers return
+`FORBIDDEN`; cancellations and listing withdrawals remain available.
 
 ### 8 -> 5 -> 1 (R5a): Customer ranking by order count in a period
 
 ```text
 Select option: 1
-Start date/time (YYYY-MM-DD HH:mm): 2000-01-01 00:00
-End date/time (YYYY-MM-DD HH:mm): 2026-08-07 00:00
+Start date (YYYY-MM-DD): 2000-01-01
+End date (YYYY-MM-DD, inclusive): 2026-08-07
 ```
 
 Expected: success. Customers are ranked by their number of orders in the
@@ -309,12 +312,13 @@ completed resales.
 
 ```text
 Select option: 2
-Start date/time (YYYY-MM-DD HH:mm): 2000-01-01 00:00
-End date/time (YYYY-MM-DD HH:mm): 2026-08-07 00:00
+Start date (YYYY-MM-DD): 2000-01-01
+End date (YYYY-MM-DD, inclusive): 2026-08-07
 ```
 
 Expected: success. Up to ten events are returned in descending completed-resale
-volume. The seeded sold listings were created 10-45 days before the load.
+volume. The period is applied to the linked resale transaction date, which is
+the completion time, rather than the earlier listing date.
 
 ### 8 -> 9 (R9): Event noun-phrase report
 

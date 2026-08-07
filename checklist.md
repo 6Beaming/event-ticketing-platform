@@ -83,12 +83,12 @@ All reports must be implemented in SQL and invoked from Java. R9 may use Java te
 - [x] **R1:** Ticket count and gross revenue for a date range by city and by venue within a city.
 - [x] **R2:** Event/performance totals per segment and genre at country, country/city, and country/city/venue levels.
 - [x] **R3:** Organizer gross-revenue rankings overall, per country, and optionally by city.
-- [ ] **R4:** For every city, customers who bought at least 10 tickets and listed more than half within the past year.
-- [ ] **R4:** Flag and prohibit customers identified as possible scalpers.
+- [x] **R4:** For every city, customers who bought at least 10 tickets and listed more than half within the past year.
+- [x] **R4:** Flag and prohibit customers identified as possible scalpers.
 - [x] **R5:** Customer order rankings for a time period and by venue city; city ranking includes customers with at least two orders in the year.
 - [x] **R6:** Customers with the most cancelled tickets and organizers with the most cancelled performances within a year.
 - [x] **R7:** Performance and tier sell-through using sellable capacity, excluding blocked seats and including general-admission capacity.
-- [x] **R7:** For a given month/city, report sold-out performances and those below 25% sell-through.
+- [x] **R7:** For a given month, report sold-out performances and those below 25% sell-through by city.
 - [x] **R8:** Per-event completed resales, average markup over face value, and fraction of listings exactly at the cap.
 - [x] **R8:** Top 10 events by resale volume in a requested period.
 - [x] **R9:** Most popular noun phrases for each event; no word-cloud visualization is required.
