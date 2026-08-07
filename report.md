@@ -240,7 +240,7 @@ All report ranges accept calendar dates. The implementation converts the inclusi
 
 ## 12. Sample-data strategy
 
-`sql/load.sql` invokes the deterministic development-data generator. A fresh load supplies stable identifier ranges and dates relative to the day of loading. It includes 5 organizers, 100 customers, 8 venues in 6 cities and 2 countries, 20 events, 60 performances, 320 original orders, 960 tickets, customer and organizer cancellations, sold/withdrawn/active listings, a twice-resold ticket, possible-scalper cases, and reviews for 10 events.
+`sql/load.sql` invokes the deterministic sample-data generator. A fresh load supplies stable identifier ranges and dates relative to the day of loading. It includes 5 organizers, 100 customers, 8 venues in 6 cities and 2 countries, 20 events, 60 performances, 320 original orders, 960 tickets, customer and organizer cancellations, sold/withdrawn/active listings, a twice-resold ticket, possible-scalper cases, and reviews for 10 events.
 
 The dataset deliberately covers available, blocked, sold, sold-out, low-sell-through, cancelled, completed, future, reserved, GA, resale-cap, and consecutive-seat cases. `data/README.md` explains the stable IDs; `data/queries-reports-toolkits.md` gives time-relative inputs and expected result shapes. Because dates are generated relative to load time, documentation describes invariant outcomes instead of claiming that every displayed timestamp or total is universal across modified datasets.
 

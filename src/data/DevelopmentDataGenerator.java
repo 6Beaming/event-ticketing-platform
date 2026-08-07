@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class DevelopmentDataGenerator {
-    private static final Path DEFAULT_OUTPUT = Paths.get("data", "development-data.sql");
+    private static final Path DEFAULT_OUTPUT = Paths.get("data", "sample-data.sql");
 
     private static final int ORGANIZER_COUNT = 5;
     private static final int CUSTOMER_COUNT = 100;
@@ -100,7 +100,7 @@ public final class DevelopmentDataGenerator {
             Files.createDirectories(parent);
         }
         Files.writeString(output, generateSql(), StandardCharsets.UTF_8);
-        System.out.println("Generated deterministic development data at " + output + ".");
+        System.out.println("Generated deterministic sample data at " + output + ".");
     }
 
     public static String generateSql() {

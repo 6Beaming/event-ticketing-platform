@@ -80,7 +80,7 @@ responsibilities, as detailed in `docs/business-logic-constraints.md` and
 - resale ownership and cap calculation;
 - review attendance/recency and customer-restriction checks.
 
-## Stable development-data IDs
+## Stable sample-data IDs
 
 The complete deterministic sample-data generator reserves these ranges and
 representative edge-case IDs:

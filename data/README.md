@@ -10,7 +10,7 @@ or
 mysql -u root -p database_name < sql/load.sql
 ```
 
-The command rewrites `data/development-data.sql`, which `sql/load.sql` loads in
+The command rewrites `data/sample-data.sql`, which `sql/load.sql` loads in
 one execution. 
 
 ## Time-relative validity

@@ -28,7 +28,7 @@ a clean MyTix database:
 
 1. Executed `sql/drop.sql`.
 2. Executed `sql/schema.sql` in one pass.
-3. Executed `sql/load.sql`, including its generated development-data source.
+3. Executed `sql/load.sql`, including its generated sample-data source.
 4. Created, retrieved, masked, and history-preservingly deactivated a customer.
 5. Rejected an under-18 customer and a repeated deactivation.
 6. Created an organizer, event, artist billing order, performance, two tiers,

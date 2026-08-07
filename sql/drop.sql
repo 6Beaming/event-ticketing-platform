@@ -1,7 +1,4 @@
--- ============================================================================
--- MyTix — drop.sql
 -- Cleanly drops everything created by schema.sql, in reverse dependency order.
--- ============================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 

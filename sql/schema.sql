@@ -1,5 +1,4 @@
 -- ============================================================================
--- Creates all tables, keys, and constraints.
 -- Foreign key checks are disabled during creation so mutually dependent tables,
 -- such as Transactions → ResaleListing → Tickets → Transactions,
 -- can declare their relationships inline.

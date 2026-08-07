@@ -118,7 +118,7 @@ sh run.sh --self-test
 sh run.sh --database-check
 ```
 
-- `--generate-data` deterministically rewrites `data/development-data.sql`.
+- `--generate-data` deterministically rewrites `data/sample-data.sql`.
 - `--self-test` checks validation, commit/rollback behavior, inventory math,
   organizer controls, booking/cancellation/resale rules, reviews,
   and deterministic generation without MySQL.
