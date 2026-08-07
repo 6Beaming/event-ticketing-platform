@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class ReviewOperations {
     public static final int RECENT_ATTENDANCE_DAYS = 365;
@@ -18,6 +20,105 @@ public final class ReviewOperations {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
+    }
+
+    public OperationResult<List<Integer>> getReviewablePerformanceIds(int customerId) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            if (!activeCustomerExists(connection, customerId, false)) {
+                return OperationResult.notFound("Active customer not found.");
+            }
+
+            String sql = """
+                    SELECT DISTINCT p.performance_id, p.date_time
+                    FROM Performance p
+                    JOIN Tickets t ON t.performance_id = p.performance_id
+                    JOIN TicketOwnership own ON own.ticket_id = t.ticket_id
+                    WHERE own.customer_id = ?
+                      AND p.status = 'completed'
+                      AND p.date_time < UTC_TIMESTAMP()
+                      AND p.date_time >= DATE_SUB(
+                          UTC_TIMESTAMP(), INTERVAL 365 DAY
+                      )
+                      AND t.status = 'active'
+                      AND own.acquired_at <= p.date_time
+                      AND (own.ended_at IS NULL OR own.ended_at >= p.date_time)
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM Reviews r
+                          WHERE r.customer_id = own.customer_id
+                            AND r.performance_id = p.performance_id
+                      )
+                    ORDER BY p.date_time DESC, p.performance_id
+                    """;
+            List<Integer> performanceIds = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, customerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        performanceIds.add(rows.getInt("performance_id"));
+                    }
+                }
+            }
+            return OperationResult.success(
+                    "Performances available for review retrieved.",
+                    performanceIds
+            );
+        });
+    }
+
+    public OperationResult<List<CustomerReview>> getCustomerReviews(int customerId) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+
+        return transactions.execute(connection -> {
+            if (!activeCustomerExists(connection, customerId, false)) {
+                return OperationResult.notFound("Active customer not found.");
+            }
+
+            String sql = """
+                    SELECT performance_id, event_rating, venue_rating,
+                           comment_text, review_date
+                    FROM Reviews
+                    WHERE customer_id = ?
+                    ORDER BY review_date DESC, performance_id
+                    """;
+            List<CustomerReview> customerReviews = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, customerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        customerReviews.add(new CustomerReview(
+                                rows.getInt("performance_id"),
+                                rows.getInt("event_rating"),
+                                rows.getInt("venue_rating"),
+                                rows.getString("comment_text"),
+                                rows.getTimestamp("review_date").toLocalDateTime()
+                        ));
+                    }
+                }
+            }
+            return OperationResult.success("Customer reviews retrieved.", customerReviews);
+        });
+    }
+
+    public OperationResult<Void> checkReviewEligibility(int customerId, int performanceId) {
+        if (customerId <= 0 || performanceId <= 0) {
+            return OperationResult.invalidInput("Customer and performance IDs must be positive.");
+        }
+
+        return transactions.execute(
+                connection -> checkReviewEligibility(
+                        connection,
+                        customerId,
+                        performanceId,
+                        false
+                )
+        );
     }
 
     public OperationResult<Void> submitReview(
@@ -39,49 +140,14 @@ public final class ReviewOperations {
         }
 
         return transactions.execute(connection -> {
-            if (!lockActiveCustomer(connection, customerId)) {
-                return OperationResult.notFound("Active customer not found.");
-            }
-
-            String performanceSql = """
-                    SELECT status,
-                           date_time < UTC_TIMESTAMP() AS has_occurred,
-                           date_time >= DATE_SUB(
-                               UTC_TIMESTAMP(), INTERVAL 365 DAY
-                           ) AS is_recent
-                    FROM Performance
-                    WHERE performance_id = ?
-                    FOR UPDATE
-                    """;
-            try (PreparedStatement statement = connection.prepareStatement(performanceSql)) {
-                statement.setInt(1, performanceId);
-                try (ResultSet rows = statement.executeQuery()) {
-                    if (!rows.next()) {
-                        return OperationResult.notFound("Performance not found.");
-                    }
-                    if (!"completed".equals(rows.getString("status"))
-                            || !rows.getBoolean("has_occurred")) {
-                        return OperationResult.conflict(
-                                "Reviews can be submitted only after a completed performance."
-                        );
-                    }
-                    if (!rows.getBoolean("is_recent")) {
-                        return OperationResult.conflict(
-                                "The performance is outside the documented one-year review window."
-                        );
-                    }
-                }
-            }
-
-            if (reviewExists(connection, customerId, performanceId)) {
-                return OperationResult.conflict(
-                        "A customer can review an attended performance only once."
-                );
-            }
-            if (!heldActiveTicketAtPerformance(connection, customerId, performanceId)) {
-                return OperationResult.forbidden(
-                        "The customer did not hold a non-cancelled ticket when this performance occurred."
-                );
+            OperationResult<Void> eligibility = checkReviewEligibility(
+                    connection,
+                    customerId,
+                    performanceId,
+                    true
+            );
+            if (!eligibility.isSuccess()) {
+                return eligibility;
             }
 
             String insertSql = """
@@ -121,14 +187,74 @@ public final class ReviewOperations {
         return null;
     }
 
-    private boolean lockActiveCustomer(Connection connection, int customerId) throws SQLException {
+    private OperationResult<Void> checkReviewEligibility(
+            Connection connection,
+            int customerId,
+            int performanceId,
+            boolean lockRows
+    ) throws SQLException {
+        if (!activeCustomerExists(connection, customerId, lockRows)) {
+            return OperationResult.notFound("Active customer not found.");
+        }
+
+        String performanceSql = """
+                SELECT status,
+                       date_time < UTC_TIMESTAMP() AS has_occurred,
+                       date_time >= DATE_SUB(
+                           UTC_TIMESTAMP(), INTERVAL 365 DAY
+                       ) AS is_recent
+                FROM Performance
+                WHERE performance_id = ?
+                """ + (lockRows ? "FOR UPDATE" : "");
+        try (PreparedStatement statement = connection.prepareStatement(performanceSql)) {
+            statement.setInt(1, performanceId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    return OperationResult.notFound("Performance not found.");
+                }
+                if (!"completed".equals(rows.getString("status"))
+                        || !rows.getBoolean("has_occurred")) {
+                    return OperationResult.conflict(
+                            "Reviews can be submitted only after a completed performance."
+                    );
+                }
+                if (!rows.getBoolean("is_recent")) {
+                    return OperationResult.conflict(
+                            "The performance is outside the documented one-year review window."
+                    );
+                }
+            }
+        }
+
+        if (reviewExists(connection, customerId, performanceId, lockRows)) {
+            return OperationResult.conflict(
+                    "This customer has already left a review for this performance."
+            );
+        }
+        if (!heldActiveTicketAtPerformance(
+                connection,
+                customerId,
+                performanceId,
+                lockRows
+        )) {
+            return OperationResult.forbidden(
+                    "The customer did not hold a non-cancelled ticket when this performance occurred."
+            );
+        }
+        return OperationResult.success("Customer can review this performance.");
+    }
+
+    private boolean activeCustomerExists(
+            Connection connection,
+            int customerId,
+            boolean lockRow
+    ) throws SQLException {
         String sql = """
                 SELECT c.user_id
                 FROM Customer c
                 JOIN Users u ON u.user_id = c.user_id
                 WHERE c.user_id = ? AND u.account_status = 'active'
-                FOR UPDATE
-                """;
+                """ + (lockRow ? "FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, customerId);
             try (ResultSet rows = statement.executeQuery()) {
@@ -137,14 +263,17 @@ public final class ReviewOperations {
         }
     }
 
-    private boolean reviewExists(Connection connection, int customerId, int performanceId)
-            throws SQLException {
+    private boolean reviewExists(
+            Connection connection,
+            int customerId,
+            int performanceId,
+            boolean lockRow
+    ) throws SQLException {
         String sql = """
                 SELECT 1
                 FROM Reviews
                 WHERE customer_id = ? AND performance_id = ?
-                FOR UPDATE
-                """;
+                """ + (lockRow ? "FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, customerId);
             statement.setInt(2, performanceId);
@@ -157,7 +286,8 @@ public final class ReviewOperations {
     private boolean heldActiveTicketAtPerformance(
             Connection connection,
             int customerId,
-            int performanceId
+            int performanceId,
+            boolean lockRow
     ) throws SQLException {
         String sql = """
                 SELECT own.ownership_id
@@ -171,8 +301,7 @@ public final class ReviewOperations {
                   AND (own.ended_at IS NULL OR own.ended_at >= p.date_time)
                 ORDER BY own.ownership_id
                 LIMIT 1
-                FOR UPDATE
-                """;
+                """ + (lockRow ? "FOR UPDATE" : "");
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, performanceId);
             statement.setInt(2, customerId);

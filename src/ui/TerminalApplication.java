@@ -31,6 +31,7 @@ import operations.resale.OwnedResaleTicket;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
+import operations.review.CustomerReview;
 import operations.review.ReviewOperations;
 import operations.validation.OperationInputChecks;
 
@@ -1280,9 +1281,11 @@ public final class TerminalApplication {
         while (running && inMenu) {
             printHeading("Attendance reviews");
             System.out.println("1. Submit an event and venue review");
+            System.out.println("2. View a customer's submitted reviews");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
                 case "1" -> runOnlineAction(this::submitReview);
+                case "2" -> runOnlineAction(this::viewCustomerReviews);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown review option.");
             }
@@ -1294,7 +1297,36 @@ public final class TerminalApplication {
         if (customerId == null) {
             return;
         }
-        Integer performanceId = readCheckedId("Performance ID: ", inputChecks::checkPerformance);
+        OperationResult<List<Integer>> reviewableResult =
+                reviews.getReviewablePerformanceIds(customerId);
+        if (!reviewableResult.isSuccess()) {
+            printResult(reviewableResult);
+            pause();
+            return;
+        }
+        List<Integer> reviewablePerformanceIds = reviewableResult.getValue().orElseThrow();
+        if (reviewablePerformanceIds.isEmpty()) {
+            System.out.println(
+                    "No attended and completed performances are currently available for review."
+            );
+            System.out.println("Use option 2 to view this customer's submitted reviews.");
+            pause();
+            return;
+        } else {
+            System.out.println(
+                    "Performance IDs available for review: "
+                            + String.join(
+                                    ", ",
+                                    reviewablePerformanceIds.stream()
+                                            .map(String::valueOf)
+                                            .toList()
+                            )
+            );
+        }
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                id -> reviews.checkReviewEligibility(customerId, id)
+        );
         if (performanceId == null) {
             return;
         }
@@ -1332,6 +1364,36 @@ public final class TerminalApplication {
                 venueRating,
                 comment
         ));
+        pause();
+    }
+
+    private void viewCustomerReviews() {
+        Integer customerId = readCheckedId(
+                "Customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (customerId == null) {
+            return;
+        }
+
+        OperationResult<List<CustomerReview>> result = reviews.getCustomerReviews(customerId);
+        printResult(result);
+        result.getValue().ifPresent(customerReviews -> {
+            if (customerReviews.isEmpty()) {
+                System.out.println("No submitted reviews found for this customer.");
+                return;
+            }
+            for (CustomerReview review : customerReviews) {
+                System.out.println();
+                System.out.println("Performance ID: " + review.getPerformanceId());
+                System.out.println("Event rating: " + review.getEventRating() + "/5");
+                System.out.println("Venue rating: " + review.getVenueRating() + "/5");
+                System.out.println("Comment: " + review.getComment());
+                System.out.println(
+                        "Review date: " + review.getReviewDate().format(DATE_TIME_FORMAT)
+                );
+            }
+        });
         pause();
     }
 

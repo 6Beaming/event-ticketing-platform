@@ -36,6 +36,23 @@ The deterministic generator reserves the following entity ranges.
 | Purchase orders | `7001`-`7320` |
 | Tickets | `8001`-`8960` |
 
+### Customer IDs category
+
+Customer categories overlap because one customer can participate in several
+ticketing workflows.
+
+| Testing category | Customer IDs | Testing purpose |
+|---|---|---|
+| Customers who have submitted reviews | `2001`, `2002`, `2009`-`2011`, `2013`-`2015`, `2021`-`2023`, `2029`-`2031`, `2039`-`2041`, `2053`, `2054`, `2060`, `2065`-`2067`, `2078`-`2080`, `2093`-`2095` | Use option **6 -> 2** to retrieve review history. These 29 customers own the 30 generated review rows; customer `2010` has two reviews. |
+| Attended performance  without review| `2011` | Has attended completed performance `6003` without reviewing it, so option **6 -> 1** can submit a new review. This customer also has an existing review for performance `6034`. |
+| Future reserved-ticket example | `2001` | Owns tickets for scheduled performance `6001`; also has an existing review for completed performance `6003`. |
+| Near-deadline general-admission example | `2002` | Owns tickets for scheduled performance `6002`, which occurs within seven days; also has an existing review for performance `6003`. |
+| Customer-initiated cancellation history | `2086`-`2097` | Each customer cancelled one ticket before the seven-day deadline. |
+| Initial frequent resale sellers | `2001`, `2002` | Each purchased 12 tickets and created seven resale listings: three sold, two withdrawn, and two active. |
+| Completed resale buyers | `2050`-`2052`, `2060`-`2062`, `2099`, `2100` | Customers who acquired tickets through completed resale transactions. |
+| Twice-resold ticket ownership chain | `2003` -> `2099` -> `2100` | Ownership history for ticket `8007`, which was resold twice. |
+| Possible scalpers | `2001`, `2002` | Seeded `CustomerRestriction` rows for testing report **R4**; these records do not block runtime operations. |
+
 ### Performance IDs category
 
 

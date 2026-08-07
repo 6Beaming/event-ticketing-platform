@@ -33,6 +33,7 @@ import operations.resale.OwnedResaleTicket;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
+import operations.review.CustomerReview;
 import operations.review.ReviewOperations;
 
 import java.math.BigDecimal;
@@ -720,6 +721,51 @@ public final class FoundationDatabaseCheck {
             throw new IllegalStateException("completed performance general inventory was hidden");
         }
 
+        OperationResult<List<Integer>> reviewablePerformances =
+                reviews.getReviewablePerformanceIds(2011);
+        requireSuccess(reviewablePerformances, "reviewable performance lookup");
+        if (!reviewablePerformances.getValue().orElseThrow().contains(
+                DevelopmentIds.PERFORMANCE_PAST
+        )) {
+            throw new IllegalStateException(
+                    "reviewable performance lookup omitted an eligible performance"
+            );
+        }
+        OperationResult<List<Integer>> alreadyReviewedPerformances =
+                reviews.getReviewablePerformanceIds(DevelopmentIds.CUSTOMER_ALICE);
+        requireSuccess(alreadyReviewedPerformances, "already-reviewed performance lookup");
+        if (alreadyReviewedPerformances.getValue().orElseThrow().contains(
+                DevelopmentIds.PERFORMANCE_PAST
+        )) {
+            throw new IllegalStateException(
+                    "reviewable performance lookup included an already-reviewed performance"
+            );
+        }
+        OperationResult<List<CustomerReview>> seededReviews =
+                reviews.getCustomerReviews(DevelopmentIds.CUSTOMER_ALICE);
+        requireSuccess(seededReviews, "seeded customer review lookup");
+        if (seededReviews.getValue().orElseThrow().stream().noneMatch(
+                review -> review.getPerformanceId() == DevelopmentIds.PERFORMANCE_PAST
+        )) {
+            throw new IllegalStateException("seeded customer review was not retrieved");
+        }
+        requireSuccess(
+                reviews.checkReviewEligibility(2011, DevelopmentIds.PERFORMANCE_PAST),
+                "eligible attendance review preflight"
+        );
+        OperationResult<Void> incompleteReviewPreflight = reviews.checkReviewEligibility(
+                DevelopmentIds.CUSTOMER_ALICE,
+                DevelopmentIds.PERFORMANCE_RESERVED
+        );
+        if (incompleteReviewPreflight.getStatus() != OperationStatus.CONFLICT
+                || !incompleteReviewPreflight.getMessage().contains(
+                        "only after a completed performance"
+                )) {
+            throw new IllegalStateException(
+                    "incomplete performance review preflight was not rejected"
+            );
+        }
+
         requireSuccess(
                 reviews.submitReview(
                         2011,
@@ -739,6 +785,38 @@ public final class FoundationDatabaseCheck {
         );
         if (duplicateReview.getStatus() != OperationStatus.CONFLICT) {
             throw new IllegalStateException("duplicate attendance review was not rejected");
+        }
+        OperationResult<Void> duplicateReviewPreflight = reviews.checkReviewEligibility(
+                2011,
+                DevelopmentIds.PERFORMANCE_PAST
+        );
+        if (duplicateReviewPreflight.getStatus() != OperationStatus.CONFLICT) {
+            throw new IllegalStateException(
+                    "duplicate attendance review preflight was not rejected"
+            );
+        }
+        OperationResult<List<CustomerReview>> submittedReviews = reviews.getCustomerReviews(2011);
+        requireSuccess(submittedReviews, "submitted customer review lookup");
+        CustomerReview submittedReview = submittedReviews.getValue().orElseThrow().stream()
+                .filter(review -> review.getPerformanceId() == DevelopmentIds.PERFORMANCE_PAST)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "submitted customer review was not retrieved"
+                ));
+        if (submittedReview.getEventRating() != 5
+                || submittedReview.getVenueRating() != 4
+                || !submittedReview.getComment().contains("engaging")) {
+            throw new IllegalStateException("submitted customer review details did not match");
+        }
+        OperationResult<List<Integer>> postReviewPerformances =
+                reviews.getReviewablePerformanceIds(2011);
+        requireSuccess(postReviewPerformances, "post-review performance lookup");
+        if (postReviewPerformances.getValue().orElseThrow().contains(
+                DevelopmentIds.PERFORMANCE_PAST
+        )) {
+            throw new IllegalStateException(
+                    "reviewable performance lookup retained a submitted review"
+            );
         }
         OperationResult<Void> ineligibleReview = reviews.submitReview(
                 bookingCustomerOne.getValue().orElseThrow(),
