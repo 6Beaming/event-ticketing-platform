@@ -14,6 +14,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class ResaleOperations {
     private final TransactionManager transactions;
@@ -23,6 +25,80 @@ public final class ResaleOperations {
             throw new IllegalArgumentException("Transaction manager is required");
         }
         this.transactions = transactions;
+    }
+
+    public OperationResult<List<OwnedResaleTicket>> getOwnedTickets(int customerId) {
+        if (customerId <= 0) {
+            return OperationResult.invalidInput("Customer ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT t.ticket_id, t.performance_id,
+                           CASE
+                               WHEN rl.active_ticket_id IS NOT NULL THEN 'listed'
+                               ELSE 'active'
+                           END AS display_status
+                    FROM TicketOwnership own
+                    JOIN Tickets t ON t.ticket_id = own.current_ticket_id
+                    LEFT JOIN ResaleListing rl ON rl.active_ticket_id = t.ticket_id
+                    WHERE own.customer_id = ?
+                      AND t.status = 'active'
+                    ORDER BY t.ticket_id
+                    """;
+            List<OwnedResaleTicket> tickets = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, customerId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        tickets.add(new OwnedResaleTicket(
+                                rows.getInt("ticket_id"),
+                                rows.getInt("performance_id"),
+                                rows.getString("display_status")
+                        ));
+                    }
+                }
+            }
+            return OperationResult.success("Currently owned tickets retrieved.", tickets);
+        });
+    }
+
+    public OperationResult<List<AvailableResaleTicket>> getAvailableListings(
+            int performanceId
+    ) {
+        if (performanceId <= 0) {
+            return OperationResult.invalidInput("Performance ID must be positive.");
+        }
+        return transactions.execute(connection -> {
+            String sql = """
+                    SELECT rl.ticket_id, seller.customer_id AS seller_customer_id,
+                           rl.listing_price
+                    FROM ResaleListing rl
+                    JOIN Tickets t ON t.ticket_id = rl.active_ticket_id
+                    JOIN Performance p ON p.performance_id = t.performance_id
+                    JOIN TicketOwnership seller
+                      ON seller.ownership_id = rl.seller_ownership_id
+                     AND seller.current_ticket_id = rl.ticket_id
+                    WHERE t.performance_id = ?
+                      AND t.status = 'active'
+                      AND p.status = 'scheduled'
+                      AND p.date_time > UTC_TIMESTAMP()
+                    ORDER BY rl.ticket_id
+                    """;
+            List<AvailableResaleTicket> listings = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, performanceId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        listings.add(new AvailableResaleTicket(
+                                rows.getInt("ticket_id"),
+                                rows.getInt("seller_customer_id"),
+                                rows.getBigDecimal("listing_price")
+                        ));
+                    }
+                }
+            }
+            return OperationResult.success("Available resale tickets retrieved.", listings);
+        });
     }
 
     public OperationResult<ResaleListingSummary> listTicket(
@@ -101,24 +177,54 @@ public final class ResaleOperations {
         if (sellerId <= 0 || listingId <= 0) {
             return OperationResult.invalidInput("Seller and listing IDs must be positive.");
         }
+        return withdrawListing(sellerId, listingId, false);
+    }
 
+    public OperationResult<Void> withdrawListingByTicket(int sellerId, int ticketId) {
+        if (sellerId <= 0 || ticketId <= 0) {
+            return OperationResult.invalidInput("Seller and ticket IDs must be positive.");
+        }
+        return withdrawListing(sellerId, ticketId, true);
+    }
+
+    private OperationResult<Void> withdrawListing(
+            int sellerId,
+            int listingLookupId,
+            boolean lookupByTicket
+    ) {
         return transactions.execute(connection -> {
             if (!lockActiveCustomer(connection, sellerId)) {
                 return OperationResult.notFound("Active seller account not found.");
             }
-            String sql = """
-                    SELECT rl.status, own.customer_id
-                    FROM ResaleListing rl
-                    JOIN TicketOwnership own
-                      ON own.ownership_id = rl.seller_ownership_id
-                    WHERE rl.listing_id = ?
-                    FOR UPDATE
-                    """;
+            String sql = lookupByTicket
+                    ? """
+                            SELECT rl.listing_id, rl.status, own.customer_id
+                            FROM ResaleListing rl
+                            JOIN TicketOwnership own
+                              ON own.ownership_id = rl.seller_ownership_id
+                            WHERE rl.ticket_id = ?
+                            ORDER BY (rl.status = 'active') DESC,
+                                     rl.listed_date DESC,
+                                     rl.listing_id DESC
+                            LIMIT 1
+                            FOR UPDATE
+                            """
+                    : """
+                            SELECT rl.listing_id, rl.status, own.customer_id
+                            FROM ResaleListing rl
+                            JOIN TicketOwnership own
+                              ON own.ownership_id = rl.seller_ownership_id
+                            WHERE rl.listing_id = ?
+                            FOR UPDATE
+                            """;
+            int listingId;
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setInt(1, listingId);
+                statement.setInt(1, listingLookupId);
                 try (ResultSet rows = statement.executeQuery()) {
                     if (!rows.next()) {
-                        return OperationResult.notFound("Resale listing not found.");
+                        return OperationResult.notFound(lookupByTicket
+                                ? "Resale listing for ticket not found."
+                                : "Resale listing not found.");
                     }
                     if (rows.getInt("customer_id") != sellerId) {
                         return OperationResult.forbidden(
@@ -130,6 +236,7 @@ public final class ResaleOperations {
                                 "Only an active unsold listing can be withdrawn."
                         );
                     }
+                    listingId = rows.getInt("listing_id");
                 }
             }
 
@@ -150,7 +257,24 @@ public final class ResaleOperations {
         if (buyerId <= 0 || listingId <= 0) {
             return OperationResult.invalidInput("Buyer and listing IDs must be positive.");
         }
+        return purchaseListing(buyerId, listingId, false);
+    }
 
+    public OperationResult<ResalePurchaseSummary> purchaseListingByTicket(
+            int buyerId,
+            int ticketId
+    ) {
+        if (buyerId <= 0 || ticketId <= 0) {
+            return OperationResult.invalidInput("Buyer and ticket IDs must be positive.");
+        }
+        return purchaseListing(buyerId, ticketId, true);
+    }
+
+    private OperationResult<ResalePurchaseSummary> purchaseListing(
+            int buyerId,
+            int listingLookupId,
+            boolean lookupByTicket
+    ) {
         return transactions.execute(connection -> {
             PaymentSnapshot payment = lockCustomerPayment(connection, buyerId);
             if (payment == null) {
@@ -158,9 +282,15 @@ public final class ResaleOperations {
                         "An active buyer with saved payment information was not found."
                 );
             }
-            ListingForPurchase listing = lockListingForPurchase(connection, listingId);
+            ListingForPurchase listing = lockListingForPurchase(
+                    connection,
+                    listingLookupId,
+                    lookupByTicket
+            );
             if (listing == null) {
-                return OperationResult.notFound("Resale listing not found.");
+                return OperationResult.notFound(lookupByTicket
+                        ? "Resale listing for ticket not found."
+                        : "Resale listing not found.");
             }
             if (!"active".equals(listing.listingStatus)) {
                 return OperationResult.conflict("Resale listing is no longer active.");
@@ -186,13 +316,13 @@ public final class ResaleOperations {
             int transactionId = insertResaleTransaction(
                     connection,
                     buyerId,
-                    listingId,
+                    listing.listingId,
                     payment
             );
             try (PreparedStatement statement = connection.prepareStatement(
                     "UPDATE ResaleListing SET status = 'sold' WHERE listing_id = ?"
             )) {
-                statement.setInt(1, listingId);
+                statement.setInt(1, listing.listingId);
                 statement.executeUpdate();
             }
             try (PreparedStatement statement = connection.prepareStatement(
@@ -209,14 +339,14 @@ public final class ResaleOperations {
                 statement.setInt(1, listing.ticketId);
                 statement.setInt(2, buyerId);
                 statement.setInt(3, transactionId);
-                statement.setInt(4, listingId);
+                statement.setInt(4, listing.listingId);
                 statement.executeUpdate();
             }
             return OperationResult.success(
                     "Resale listing purchased and ticket ownership transferred.",
                     new ResalePurchaseSummary(
                             transactionId,
-                            listingId,
+                            listing.listingId,
                             listing.ticketId,
                             listing.listingPrice
                     )
@@ -331,29 +461,57 @@ public final class ResaleOperations {
         }
     }
 
-    private ListingForPurchase lockListingForPurchase(Connection connection, int listingId)
+    private ListingForPurchase lockListingForPurchase(
+            Connection connection,
+            int listingLookupId,
+            boolean lookupByTicket
+    )
             throws SQLException {
-        String sql = """
-                SELECT rl.status AS listing_status, rl.ticket_id, rl.seller_ownership_id,
-                       rl.listing_price, t.status AS ticket_status,
-                       p.status AS performance_status, p.date_time,
-                       seller.customer_id AS seller_customer_id,
-                       (seller.current_ticket_id = rl.ticket_id) AS current_seller_ownership
-                FROM ResaleListing rl
-                JOIN Tickets t ON t.ticket_id = rl.ticket_id
-                JOIN Performance p ON p.performance_id = t.performance_id
-                JOIN TicketOwnership seller
-                  ON seller.ownership_id = rl.seller_ownership_id
-                WHERE rl.listing_id = ?
-                FOR UPDATE
-                """;
+        String sql = lookupByTicket
+                ? """
+                        SELECT rl.listing_id, rl.status AS listing_status,
+                               rl.ticket_id, rl.seller_ownership_id,
+                               rl.listing_price, t.status AS ticket_status,
+                               p.status AS performance_status, p.date_time,
+                               seller.customer_id AS seller_customer_id,
+                               (seller.current_ticket_id = rl.ticket_id)
+                                   AS current_seller_ownership
+                        FROM ResaleListing rl
+                        JOIN Tickets t ON t.ticket_id = rl.ticket_id
+                        JOIN Performance p ON p.performance_id = t.performance_id
+                        JOIN TicketOwnership seller
+                          ON seller.ownership_id = rl.seller_ownership_id
+                        WHERE rl.ticket_id = ?
+                        ORDER BY (rl.status = 'active') DESC,
+                                 rl.listed_date DESC,
+                                 rl.listing_id DESC
+                        LIMIT 1
+                        FOR UPDATE
+                        """
+                : """
+                        SELECT rl.listing_id, rl.status AS listing_status,
+                               rl.ticket_id, rl.seller_ownership_id,
+                               rl.listing_price, t.status AS ticket_status,
+                               p.status AS performance_status, p.date_time,
+                               seller.customer_id AS seller_customer_id,
+                               (seller.current_ticket_id = rl.ticket_id)
+                                   AS current_seller_ownership
+                        FROM ResaleListing rl
+                        JOIN Tickets t ON t.ticket_id = rl.ticket_id
+                        JOIN Performance p ON p.performance_id = t.performance_id
+                        JOIN TicketOwnership seller
+                          ON seller.ownership_id = rl.seller_ownership_id
+                        WHERE rl.listing_id = ?
+                        FOR UPDATE
+                        """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, listingId);
+            statement.setInt(1, listingLookupId);
             try (ResultSet rows = statement.executeQuery()) {
                 if (!rows.next()) {
                     return null;
                 }
                 return new ListingForPurchase(
+                        rows.getInt("listing_id"),
                         rows.getString("listing_status"),
                         rows.getInt("ticket_id"),
                         rows.getLong("seller_ownership_id"),
@@ -448,6 +606,7 @@ public final class ResaleOperations {
     }
 
     private static final class ListingForPurchase {
+        private final int listingId;
         private final String listingStatus;
         private final int ticketId;
         private final long sellerOwnershipId;
@@ -459,6 +618,7 @@ public final class ResaleOperations {
         private final boolean currentSellerOwnership;
 
         private ListingForPurchase(
+                int listingId,
                 String listingStatus,
                 int ticketId,
                 long sellerOwnershipId,
@@ -469,6 +629,7 @@ public final class ResaleOperations {
                 int sellerCustomerId,
                 boolean currentSellerOwnership
         ) {
+            this.listingId = listingId;
             this.listingStatus = listingStatus;
             this.ticketId = ticketId;
             this.sellerOwnershipId = sellerOwnershipId;

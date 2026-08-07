@@ -26,6 +26,8 @@ import operations.profile.PaymentInput;
 import operations.profile.ProfileInput;
 import operations.profile.ProfileValidator;
 import operations.profile.UserProfileOperations;
+import operations.resale.AvailableResaleTicket;
+import operations.resale.OwnedResaleTicket;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
@@ -1100,18 +1102,91 @@ public final class TerminalApplication {
         boolean inMenu = true;
         while (running && inMenu) {
             printHeading("Ticket resale");
-            System.out.println("1. Resale a ticket");
-            System.out.println("2. Withdraw an active listing");
-            System.out.println("3. Purchase a resale ticket");
+            System.out.println("1. View a customer's currently owned tickets");
+            System.out.println("2. View available resale tickets by performance");
+            System.out.println("3. Resale a ticket");
+            System.out.println("4. Withdraw an active listing");
+            System.out.println("5. Purchase a resale ticket");
             System.out.println("0. Back");
             switch (readLine("Select an option: ")) {
-                case "1" -> runOnlineAction(this::listTicketForResale);
-                case "2" -> runOnlineAction(this::withdrawResaleListing);
-                case "3" -> runOnlineAction(this::purchaseResaleListing);
+                case "1" -> runOnlineAction(this::viewCustomerOwnedTickets);
+                case "2" -> runOnlineAction(this::viewAvailableResaleTickets);
+                case "3" -> runOnlineAction(this::listTicketForResale);
+                case "4" -> runOnlineAction(this::withdrawResaleListing);
+                case "5" -> runOnlineAction(this::purchaseResaleListing);
                 case "0" -> inMenu = false;
                 default -> System.out.println("Unknown resale option.");
             }
         }
+    }
+
+    private void viewCustomerOwnedTickets() {
+        Integer customerId = readCheckedId(
+                "Customer ID: ",
+                inputChecks::checkActiveCustomer
+        );
+        if (customerId == null) {
+            return;
+        }
+        OperationResult<List<OwnedResaleTicket>> result = resale.getOwnedTickets(customerId);
+        printResult(result);
+        result.getValue().ifPresent(tickets -> {
+            if (tickets.isEmpty()) {
+                System.out.println("No active tickets are currently owned by this customer.");
+                return;
+            }
+            System.out.printf(
+                    "%-12s %-15s %-10s%n",
+                    "Ticket ID",
+                    "Performance ID",
+                    "Status"
+            );
+            for (OwnedResaleTicket ticket : tickets) {
+                System.out.printf(
+                        "%-12d %-15d %-10s%n",
+                        ticket.getTicketId(),
+                        ticket.getPerformanceId(),
+                        ticket.getStatus()
+                );
+            }
+        });
+        pause();
+    }
+
+    private void viewAvailableResaleTickets() {
+        Integer performanceId = readCheckedId(
+                "Performance ID: ",
+                inputChecks::checkPerformance
+        );
+        if (performanceId == null) {
+            return;
+        }
+        OperationResult<List<AvailableResaleTicket>> result =
+                resale.getAvailableListings(performanceId);
+        printResult(result);
+        result.getValue().ifPresent(listings -> {
+            if (listings.isEmpty()) {
+                System.out.println(
+                        "No resale tickets are currently available for this performance."
+                );
+                return;
+            }
+            System.out.printf(
+                    "%-12s %-20s %-15s%n",
+                    "Ticket ID",
+                    "Seller customer ID",
+                    "Listing price"
+            );
+            for (AvailableResaleTicket listing : listings) {
+                System.out.printf(
+                        "%-12d %-20d $%-14s%n",
+                        listing.getTicketId(),
+                        listing.getSellerCustomerId(),
+                        listing.getListingPrice().toPlainString()
+                );
+            }
+        });
+        pause();
     }
 
     private void listTicketForResale() {
@@ -1159,14 +1234,14 @@ public final class TerminalApplication {
         if (sellerId == null) {
             return;
         }
-        Integer listingId = readCheckedId(
-                "Listing ID: ",
-                inputChecks::checkResaleListing
+        Integer ticketId = readCheckedId(
+                "Ticket ID: ",
+                inputChecks::checkActiveResaleTicket
         );
-        if (listingId == null) {
+        if (ticketId == null) {
             return;
         }
-        printResult(resale.withdrawListing(sellerId, listingId));
+        printResult(resale.withdrawListingByTicket(sellerId, ticketId));
         pause();
     }
 
@@ -1178,16 +1253,16 @@ public final class TerminalApplication {
         if (buyerId == null) {
             return;
         }
-        Integer listingId = readCheckedId(
-                "Listing ID: ",
-                inputChecks::checkResaleListing
+        Integer ticketId = readCheckedId(
+                "Ticket ID: ",
+                inputChecks::checkActiveResaleTicket
         );
-        if (listingId == null) {
+        if (ticketId == null) {
             return;
         }
-        OperationResult<ResalePurchaseSummary> result = resale.purchaseListing(
+        OperationResult<ResalePurchaseSummary> result = resale.purchaseListingByTicket(
                 buyerId,
-                listingId
+                ticketId
         );
         printResult(result);
         result.getValue().ifPresent(purchase -> {

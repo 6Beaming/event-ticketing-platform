@@ -46,6 +46,7 @@ The deterministic generator reserves the following entity ranges.
 |---|---|---|
 | Scheduled, no tickets | `6006`, `6013` | The only performances with no ticket-sale history. Their complete pricing setup can be replaced safely through option **3 -> 3**. |
 | Scheduled, with ticket sales | `6001`, `6002`, `6014`-`6018`, `6020`, `6023`, `6026`, `6029`, `6032`, `6035`, `6038`, `6040`, `6042`, `6044`, `6046`, `6048`, `6050`, `6052`, `6054`, `6056` | Future performances with ticket-sale history. Full pricing replacement must be rejected, including when sold tickets were later cancelled. |
+| Scheduled, with active resale listings | `6001`, `6002` | Performance `6001` has listed tickets `8001` and `8003`; performance `6002` has listed tickets `8002` and `8005`. Use option **5 -> 2** to view them by performance. |
 | Completed, with ticket sales | `6003`-`6005`, `6007`-`6012`, `6019`, `6021`, `6022`, `6024`, `6025`, `6027`, `6028`, `6030`, `6031`, `6033`, `6034`, `6036`, `6037`, `6039`, `6041`, `6043`, `6045`, `6047`, `6049`, `6051`, `6053`, `6055`, `6057`, `6059` | Historical performances with ticket-sale history, including the sold-out and low-sell-through examples identified below. |
 | Organizer-cancelled after sales | `6058`, `6060` | Performances whose sold tickets were cancelled and refunded after organizer cancellation. |
 

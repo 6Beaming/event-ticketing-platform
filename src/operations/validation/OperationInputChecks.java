@@ -229,6 +229,15 @@ public final class OperationInputChecks {
         });
     }
 
+    public OperationResult<Void> checkActiveResaleTicket(int ticketId) {
+        return checkRecord(
+                ticketId,
+                "SELECT 1 FROM ResaleListing WHERE active_ticket_id = ?",
+                "Active resale listing found for ticket.",
+                "Ticket does not have an active resale listing."
+        );
+    }
+
     public OperationResult<Void> checkResaleListing(int listingId) {
         return checkRecord(
                 listingId,

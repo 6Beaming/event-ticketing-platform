@@ -28,6 +28,8 @@ import operations.profile.PaymentInput;
 import operations.profile.CustomerProfile;
 import operations.profile.ProfileInput;
 import operations.profile.UserProfileOperations;
+import operations.resale.AvailableResaleTicket;
+import operations.resale.OwnedResaleTicket;
 import operations.resale.ResaleListingSummary;
 import operations.resale.ResaleOperations;
 import operations.resale.ResalePurchaseSummary;
@@ -439,24 +441,49 @@ public final class FoundationDatabaseCheck {
                 new BigDecimal("80.00")
         );
         requireSuccess(listing, "owned ticket resale listing");
-        int listingId = listing.getValue().orElseThrow().getListingId();
-        OperationResult<ResalePurchaseSummary> sellerPurchase = resale.purchaseListing(
+        OperationResult<List<OwnedResaleTicket>> ownedTickets = resale.getOwnedTickets(
+                bookingCustomerOne.getValue().orElseThrow()
+        );
+        requireSuccess(ownedTickets, "customer-owned ticket lookup");
+        boolean listedTicketShown = ownedTickets.getValue().orElseThrow().stream()
+                .anyMatch(ticket -> ticket.getTicketId() == secondBookedTicket
+                        && "listed".equals(ticket.getStatus()));
+        boolean activeTicketShown = ownedTickets.getValue().orElseThrow().stream()
+                .anyMatch(ticket -> ticket.getTicketId() == firstBookedTicket
+                        && "active".equals(ticket.getStatus()));
+        if (!listedTicketShown || !activeTicketShown) {
+            throw new IllegalStateException(
+                    "owned tickets were not categorized as active and listed"
+            );
+        }
+        OperationResult<List<AvailableResaleTicket>> availableListings =
+                resale.getAvailableListings(performance.getValue().orElseThrow());
+        requireSuccess(availableListings, "available resale ticket lookup");
+        boolean availableTicketShown = availableListings.getValue().orElseThrow().stream()
+                .anyMatch(ticket -> ticket.getTicketId() == secondBookedTicket
+                        && ticket.getSellerCustomerId()
+                        == bookingCustomerOne.getValue().orElseThrow());
+        if (!availableTicketShown) {
+            throw new IllegalStateException("active resale ticket was not available by performance");
+        }
+        OperationResult<ResalePurchaseSummary> sellerPurchase = resale.purchaseListingByTicket(
                 bookingCustomerOne.getValue().orElseThrow(),
-                listingId
+                secondBookedTicket
         );
         if (sellerPurchase.getStatus() != OperationStatus.FORBIDDEN) {
             throw new IllegalStateException("seller was allowed to buy their own listing");
         }
         requireSuccess(
-                resale.purchaseListing(
+                resale.purchaseListingByTicket(
                         bookingCustomerTwo.getValue().orElseThrow(),
-                        listingId
+                        secondBookedTicket
                 ),
                 "resale purchase and ownership transfer"
         );
-        OperationResult<ResalePurchaseSummary> competingPurchase = resale.purchaseListing(
+        OperationResult<ResalePurchaseSummary> competingPurchase =
+                resale.purchaseListingByTicket(
                 bookingCustomerOne.getValue().orElseThrow(),
-                listingId
+                secondBookedTicket
         );
         if (competingPurchase.getStatus() != OperationStatus.CONFLICT) {
             throw new IllegalStateException("a sold listing was purchased twice");
@@ -470,18 +497,17 @@ public final class FoundationDatabaseCheck {
                 new BigDecimal("50.00")
         );
         requireSuccess(withdrawnListing, "resale listing for withdrawal");
-        int withdrawnListingId = withdrawnListing.getValue().orElseThrow().getListingId();
-        OperationResult<Void> wrongSellerWithdrawal = resale.withdrawListing(
+        OperationResult<Void> wrongSellerWithdrawal = resale.withdrawListingByTicket(
                 bookingCustomerTwo.getValue().orElseThrow(),
-                withdrawnListingId
+                firstGaTicket
         );
         if (wrongSellerWithdrawal.getStatus() != OperationStatus.FORBIDDEN) {
             throw new IllegalStateException("non-seller listing withdrawal was not rejected");
         }
         requireSuccess(
-                resale.withdrawListing(
+                resale.withdrawListingByTicket(
                         bookingCustomerOne.getValue().orElseThrow(),
-                        withdrawnListingId
+                        firstGaTicket
                 ),
                 "seller listing withdrawal"
         );
