@@ -7443,3 +7443,299 @@ SELECT 'tickets' AS requirement_name, COUNT(*) AS actual_count, 800 AS minimum_c
 SELECT 'ticket_cancellations' AS requirement_name, COUNT(*) AS actual_count, 1 AS minimum_count FROM TicketCancellation;
 SELECT 'resale_listings' AS requirement_name, COUNT(*) AS actual_count, 1 AS minimum_count FROM ResaleListing;
 SELECT 'reviewed_events' AS requirement_name, COUNT(DISTINCT p.event_id) AS actual_count, 10 AS minimum_count FROM Reviews r JOIN Performance p ON p.performance_id = r.performance_id;
+
+
+
+
+-- ============================================================================
+-- Appended sample data: 10 new events, each with 1 performance.
+-- 2 tickets sold per performance (20 total), 1 of the 2 resold per
+-- performance (10 completed resales).
+--
+-- ID ranges used (continuing from existing max values):
+--   Event:                    5021-5030
+--   Performance:               6061-6070
+--   Transactions:               7509-7528  (10 purchase + 10 resale)
+--   Tickets:                     8961-8980
+--   TicketOwnership:              20009-20038
+--   ResaleListing:                 10017-10026
+--   PerformanceSeats (reserved perf only): 613487+
+--   GeneralAdmissionCapacity (GA perf only): 620032+
+--
+-- Venues/sections used (from existing Venue/Section data):
+--   3001 Balcony (reserved), Orchestra (reserved), General Floor (general)
+--   3002 Balcony (reserved), Mezzanine (reserved), Orchestra (reserved)
+--   3003 Lower Bowl (reserved), Upper Bowl (reserved), General Admission (general)
+--
+-- Assumption: seat_number 1 and 2 exist in every reserved row used below
+-- (capacities are 60+, so this should hold, but verify against real Seats
+-- data before running).
+--
+-- Customers used (from free pool 2003-2020, cycled): 2003-2016
+-- Payment info follows the existing pattern payment_info_id = customer_id + 100.
+--
+-- Performances 1,3,5,7,9 (odd) use reserved seating; 2,4,6,8,10 (even) use GA.
+-- All performances are scheduled in the future relative to load time, per the
+-- README's time-relative-validity convention.
+-- ============================================================================
+
+-- This file has the same circular dependency the base schema documents at
+-- the top of schema.sql (Transactions -> ResaleListing -> Tickets ->
+-- Transactions): Transactions.listing_id references ResaleListing,
+-- ResaleListing.seller_ownership_id references TicketOwnership, and
+-- TicketOwnership.acquired_transaction_id references Transactions. Disable
+-- FK checks for the duration of this load, matching schema.sql's approach.
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ----------------------------------------------------------------------------
+-- Events (5021-5030)
+-- ----------------------------------------------------------------------------
+
+INSERT INTO Event (event_id, title, description, resale_cap_pct, organizer_id, genre_id) VALUES
+(5021, 'Midnight Skyline',        'An indie rock showcase featuring rising acts from across the region.', 1.20, 1001, 4101),
+(5022, 'Pop Reverie Tour',        'A high-energy pop concert with elaborate staging and guest performers.', 1.20, 1002, 4102),
+(5023, 'The Understudy',         'A contemporary musical exploring ambition and identity in the theatre world.', 1.20, 1003, 4103),
+(5024, 'Laugh Track Live',        'A stand-up comedy showcase featuring five touring comedians.', 1.20, 1004, 4104),
+(5025, 'Downtown Hoops Classic',  'An exhibition basketball game between two regional all-star squads.', 1.20, 1005, 4105),
+(5026, 'Frozen Rivals Night',     'A hockey exhibition match between two long-standing rival clubs.', 1.20, 1001, 4106),
+(5027, 'Acoustic Sessions Vol. 2','An intimate acoustic rock set recorded live for a small audience.', 1.20, 1002, 4101),
+(5028, 'Neon Pulse',              'A synth-pop revival concert celebrating early-2000s dance anthems.', 1.20, 1003, 4102),
+(5029, 'Curtain Call',            'A one-night musical revue featuring highlights from the touring season.', 1.20, 1004, 4103),
+(5030, 'Roast & Toast',           'A themed comedy night mixing roast segments with storytelling sets.', 1.20, 1005, 4104);
+
+-- ----------------------------------------------------------------------------
+-- Performances (6061-6070)
+-- Reserved-seating performances: 6061, 6063, 6065, 6067, 6069
+-- GA performances: 6062, 6064, 6066, 6068, 6070
+-- ----------------------------------------------------------------------------
+
+INSERT INTO Performance (performance_id, event_id, venue_id, date_time, status) VALUES
+(6061, 5021, 3001, UTC_TIMESTAMP() + INTERVAL 30 DAY, 'scheduled'),
+(6062, 5022, 3003, UTC_TIMESTAMP() + INTERVAL 35 DAY, 'scheduled'),
+(6063, 5023, 3002, UTC_TIMESTAMP() + INTERVAL 40 DAY, 'scheduled'),
+(6064, 5024, 3001, UTC_TIMESTAMP() + INTERVAL 45 DAY, 'scheduled'),
+(6065, 5025, 3003, UTC_TIMESTAMP() + INTERVAL 50 DAY, 'scheduled'),
+(6066, 5026, 3003, UTC_TIMESTAMP() + INTERVAL 55 DAY, 'scheduled'),
+(6067, 5027, 3002, UTC_TIMESTAMP() + INTERVAL 60 DAY, 'scheduled'),
+(6068, 5028, 3001, UTC_TIMESTAMP() + INTERVAL 65 DAY, 'scheduled'),
+(6069, 5029, 3002, UTC_TIMESTAMP() + INTERVAL 70 DAY, 'scheduled'),
+(6070, 5030, 3003, UTC_TIMESTAMP() + INTERVAL 75 DAY, 'scheduled');
+
+-- ----------------------------------------------------------------------------
+-- Price tiers (2 per performance minimum, per requirements checklist)
+-- ----------------------------------------------------------------------------
+
+INSERT INTO PriceTier (performance_id, tier_code, price) VALUES
+(6061, 'P1', 85.00), (6061, 'P2', 55.00),
+(6062, 'P1', 65.00), (6062, 'P2', 40.00),
+(6063, 'P1', 110.00), (6063, 'P2', 70.00),
+(6064, 'P1', 60.00), (6064, 'P2', 35.00),
+(6065, 'P1', 95.00), (6065, 'P2', 60.00),
+(6066, 'P1', 100.00), (6066, 'P2', 65.00),
+(6067, 'P1', 75.00), (6067, 'P2', 45.00),
+(6068, 'P1', 80.00), (6068, 'P2', 50.00),
+(6069, 'P1', 90.00), (6069, 'P2', 55.00),
+(6070, 'P1', 70.00), (6070, 'P2', 42.00);
+
+-- ----------------------------------------------------------------------------
+-- Section -> tier assignments
+-- Reserved performances: two reserved sections each mapped to P1/P2.
+-- GA performances: the venue's single general section mapped to P1.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO SectionTierAssignment (performance_id, venue_id, section_name, tier_code) VALUES
+-- 6061 @ 3001 (reserved)
+(6061, 3001, 'Orchestra', 'P1'),
+(6061, 3001, 'Balcony',   'P2'),
+-- 6062 @ 3003 (GA)
+(6062, 3003, 'General Admission', 'P1'),
+-- 6063 @ 3002 (reserved)
+(6063, 3002, 'Orchestra', 'P1'),
+(6063, 3002, 'Mezzanine', 'P2'),
+-- 6064 @ 3001 (GA)
+(6064, 3001, 'General Floor', 'P1'),
+-- 6065 @ 3003 (reserved)
+(6065, 3003, 'Lower Bowl', 'P1'),
+(6065, 3003, 'Upper Bowl', 'P2'),
+-- 6066 @ 3003 (GA)
+(6066, 3003, 'General Admission', 'P1'),
+-- 6067 @ 3002 (reserved)
+(6067, 3002, 'Orchestra', 'P1'),
+(6067, 3002, 'Balcony',   'P2'),
+-- 6068 @ 3001 (GA)
+(6068, 3001, 'General Floor', 'P1'),
+-- 6069 @ 3002 (reserved)
+(6069, 3002, 'Mezzanine', 'P1'),
+(6069, 3002, 'Balcony',   'P2'),
+-- 6070 @ 3003 (GA)
+(6070, 3003, 'General Admission', 'P1');
+
+-- ----------------------------------------------------------------------------
+-- PerformanceSeats for reserved performances (2 seats sold each = 10 rows)
+-- ----------------------------------------------------------------------------
+
+INSERT INTO PerformanceSeats (performance_seat_id, performance_id, venue_id, section_name, row_name, seat_number) VALUES
+(613487, 6061, 3001, 'Orchestra', 'A', 1),
+(613488, 6061, 3001, 'Orchestra', 'A', 2),
+(613489, 6063, 3002, 'Orchestra', 'A', 1),
+(613490, 6063, 3002, 'Orchestra', 'A', 2),
+(613491, 6065, 3003, 'Lower Bowl', 'A', 1),
+(613492, 6065, 3003, 'Lower Bowl', 'A', 2),
+(613493, 6067, 3002, 'Orchestra', 'B', 1),
+(613494, 6067, 3002, 'Orchestra', 'B', 2),
+(613495, 6069, 3002, 'Mezzanine', 'D', 1),
+(613496, 6069, 3002, 'Mezzanine', 'D', 2);
+
+-- ----------------------------------------------------------------------------
+-- GeneralAdmissionCapacity for GA performances (2 sold, capacity per venue Section)
+-- ----------------------------------------------------------------------------
+
+INSERT INTO GeneralAdmissionCapacity (ga_capacity_id, performance_id, venue_id, section_name, total_capacity, remaining_capacity) VALUES
+(620032, 6062, 3003, 'General Admission', 60, 58),
+(620033, 6064, 3001, 'General Floor',     60, 58),
+(620034, 6066, 3003, 'General Admission', 60, 58),
+(620035, 6068, 3001, 'General Floor',     60, 58),
+(620036, 6070, 3003, 'General Admission', 60, 58);
+
+-- ----------------------------------------------------------------------------
+-- Transactions: 1 purchase transaction per performance (covers both tickets),
+-- plus 1 resale transaction per performance (for the resold ticket).
+-- Purchase transactions: 7509-7518. Resale transactions: 7519-7528.
+-- Buyers cycle through free customers 2003-2016; each resale goes to the
+-- "next" customer in the cycle to keep buyer and resale-buyer distinct.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO Transactions
+  (transaction_id, customer_id, payment_info_id, payment_card_number, payment_card_holder_name,
+   payment_expiry_date, payment_billing_zip, transaction_type, performance_id, listing_id, transaction_date) VALUES
+-- Purchases (buyer A = first ticket owner for each performance's order)
+(7509, 2003, 2103, '4111111111112003', 'Customer 2003', '2028-06-30', 'M5J 2N8', 'purchase', 6061, NULL, UTC_TIMESTAMP() - INTERVAL 10 DAY),
+(7510, 2004, 2104, '4111111111112004', 'Customer 2004', '2028-06-30', 'M5J 2N8', 'purchase', 6062, NULL, UTC_TIMESTAMP() - INTERVAL 9 DAY),
+(7511, 2005, 2105, '4111111111112005', 'Customer 2005', '2028-06-30', 'M5J 2N8', 'purchase', 6063, NULL, UTC_TIMESTAMP() - INTERVAL 8 DAY),
+(7512, 2006, 2106, '4111111111112006', 'Customer 2006', '2028-06-30', 'M5J 2N8', 'purchase', 6064, NULL, UTC_TIMESTAMP() - INTERVAL 7 DAY),
+(7513, 2007, 2107, '4111111111112007', 'Customer 2007', '2028-06-30', 'M5J 2N8', 'purchase', 6065, NULL, UTC_TIMESTAMP() - INTERVAL 6 DAY),
+(7514, 2008, 2108, '4111111111112008', 'Customer 2008', '2028-06-30', 'M5J 2N8', 'purchase', 6066, NULL, UTC_TIMESTAMP() - INTERVAL 5 DAY),
+(7515, 2009, 2109, '4111111111112009', 'Customer 2009', '2028-06-30', 'M5J 2N8', 'purchase', 6067, NULL, UTC_TIMESTAMP() - INTERVAL 4 DAY),
+(7516, 2010, 2110, '4111111111112010', 'Customer 2010', '2028-06-30', 'M5J 2N8', 'purchase', 6068, NULL, UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(7517, 2011, 2111, '4111111111112011', 'Customer 2011', '2028-06-30', 'M5J 2N8', 'purchase', 6069, NULL, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7518, 2012, 2112, '4111111111112012', 'Customer 2012', '2028-06-30', 'M5J 2N8', 'purchase', 6070, NULL, UTC_TIMESTAMP() - INTERVAL 1 DAY),
+-- Resales (resale buyer = next customer in the cycle, distinct from original buyer)
+(7519, 2013, 2113, '4111111111112013', 'Customer 2013', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10017, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7520, 2014, 2114, '4111111111112014', 'Customer 2014', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10018, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7521, 2015, 2115, '4111111111112015', 'Customer 2015', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10019, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7522, 2016, 2116, '4111111111112016', 'Customer 2016', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10020, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7523, 2003, 2103, '4111111111112003', 'Customer 2003', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10021, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7524, 2004, 2104, '4111111111112004', 'Customer 2004', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10022, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7525, 2005, 2105, '4111111111112005', 'Customer 2005', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10023, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7526, 2006, 2106, '4111111111112006', 'Customer 2006', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10024, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7527, 2007, 2107, '4111111111112007', 'Customer 2007', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10025, UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(7528, 2008, 2108, '4111111111112008', 'Customer 2008', '2028-06-30', 'M5J 2N8', 'resale', NULL, 10026, UTC_TIMESTAMP() - INTERVAL 2 DAY);
+
+-- ----------------------------------------------------------------------------
+-- Tickets: 2 per performance (8961-8980). First of each pair is the one
+-- later listed/resold; second stays with its original owner.
+-- Reserved performances use performance_seats_ref; GA performances use
+-- general_seats_ref.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO Tickets (ticket_id, purchase_id, performance_id, tier_code, performance_seats_ref, general_seats_ref, face_value, status) VALUES
+-- 6061 (reserved, Orchestra P1)
+(8961, 7509, 6061, 'P1', 613487, NULL, 85.00, 'active'),  -- resold
+(8962, 7509, 6061, 'P1', 613488, NULL, 85.00, 'active'),
+-- 6062 (GA, P1)
+(8963, 7510, 6062, 'P1', NULL, 620032, 65.00, 'active'),  -- resold
+(8964, 7510, 6062, 'P1', NULL, 620032, 65.00, 'active'),
+-- 6063 (reserved, Orchestra P1)
+(8965, 7511, 6063, 'P1', 613489, NULL, 110.00, 'active'), -- resold
+(8966, 7511, 6063, 'P1', 613490, NULL, 110.00, 'active'),
+-- 6064 (GA, P1)
+(8967, 7512, 6064, 'P1', NULL, 620033, 60.00, 'active'),  -- resold
+(8968, 7512, 6064, 'P1', NULL, 620033, 60.00, 'active'),
+-- 6065 (reserved, Lower Bowl P1)
+(8969, 7513, 6065, 'P1', 613491, NULL, 95.00, 'active'),  -- resold
+(8970, 7513, 6065, 'P1', 613492, NULL, 95.00, 'active'),
+-- 6066 (GA, P1)
+(8971, 7514, 6066, 'P1', NULL, 620034, 100.00, 'active'), -- resold
+(8972, 7514, 6066, 'P1', NULL, 620034, 100.00, 'active'),
+-- 6067 (reserved, Orchestra P1)
+(8973, 7515, 6067, 'P1', 613493, NULL, 75.00, 'active'),  -- resold
+(8974, 7515, 6067, 'P1', 613494, NULL, 75.00, 'active'),
+-- 6068 (GA, P1)
+(8975, 7516, 6068, 'P1', NULL, 620035, 80.00, 'active'),  -- resold
+(8976, 7516, 6068, 'P1', NULL, 620035, 80.00, 'active'),
+-- 6069 (reserved, Mezzanine P1)
+(8977, 7517, 6069, 'P1', 613495, NULL, 90.00, 'active'),  -- resold
+(8978, 7517, 6069, 'P1', 613496, NULL, 90.00, 'active'),
+-- 6070 (GA, P1)
+(8979, 7518, 6070, 'P1', NULL, 620036, 70.00, 'active'),  -- resold
+(8980, 7518, 6070, 'P1', NULL, 620036, 70.00, 'active');
+
+-- ----------------------------------------------------------------------------
+-- TicketOwnership: initial ownership row per ticket (20009-20028), plus a
+-- closed-out original row and new active row for each resold ticket
+-- (10 tickets resold -> 10 additional "new owner" rows: 20029-20038).
+-- The original owner's row for the resold ticket is first inserted as
+-- current (ended_at NULL), then closed via UPDATE once the transfer happens,
+-- matching the "close current row, append new row" pattern described in the
+-- schema comments.
+-- ----------------------------------------------------------------------------
+
+-- Initial ownership for all 20 tickets (both members of each pair)
+INSERT INTO TicketOwnership (ownership_id, ticket_id, customer_id, acquired_transaction_id, acquired_listing_id, acquired_at, ended_at) VALUES
+(20009, 8961, 2003, 7509, NULL, UTC_TIMESTAMP() - INTERVAL 10 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY), -- closed: resold
+(20010, 8962, 2003, 7509, NULL, UTC_TIMESTAMP() - INTERVAL 10 DAY, NULL),
+(20011, 8963, 2004, 7510, NULL, UTC_TIMESTAMP() - INTERVAL 9 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20012, 8964, 2004, 7510, NULL, UTC_TIMESTAMP() - INTERVAL 9 DAY, NULL),
+(20013, 8965, 2005, 7511, NULL, UTC_TIMESTAMP() - INTERVAL 8 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20014, 8966, 2005, 7511, NULL, UTC_TIMESTAMP() - INTERVAL 8 DAY, NULL),
+(20015, 8967, 2006, 7512, NULL, UTC_TIMESTAMP() - INTERVAL 7 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20016, 8968, 2006, 7512, NULL, UTC_TIMESTAMP() - INTERVAL 7 DAY, NULL),
+(20017, 8969, 2007, 7513, NULL, UTC_TIMESTAMP() - INTERVAL 6 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20018, 8970, 2007, 7513, NULL, UTC_TIMESTAMP() - INTERVAL 6 DAY, NULL),
+(20019, 8971, 2008, 7514, NULL, UTC_TIMESTAMP() - INTERVAL 5 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20020, 8972, 2008, 7514, NULL, UTC_TIMESTAMP() - INTERVAL 5 DAY, NULL),
+(20021, 8973, 2009, 7515, NULL, UTC_TIMESTAMP() - INTERVAL 4 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20022, 8974, 2009, 7515, NULL, UTC_TIMESTAMP() - INTERVAL 4 DAY, NULL),
+(20023, 8975, 2010, 7516, NULL, UTC_TIMESTAMP() - INTERVAL 3 DAY, UTC_TIMESTAMP() - INTERVAL 2 DAY),  -- closed: resold
+(20024, 8976, 2010, 7516, NULL, UTC_TIMESTAMP() - INTERVAL 3 DAY, NULL),
+(20025, 8977, 2011, 7517, NULL, UTC_TIMESTAMP() - INTERVAL 2 DAY, UTC_TIMESTAMP() - INTERVAL 1 DAY),  -- closed: resold (tight window)
+(20026, 8978, 2011, 7517, NULL, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20027, 8979, 2012, 7518, NULL, UTC_TIMESTAMP() - INTERVAL 1 DAY, UTC_TIMESTAMP() - INTERVAL 6 HOUR), -- closed: resold (tight window)
+(20028, 8980, 2012, 7518, NULL, UTC_TIMESTAMP() - INTERVAL 1 DAY, NULL);
+
+-- New ownership rows for the resale buyers (one per resold ticket)
+INSERT INTO TicketOwnership (ownership_id, ticket_id, customer_id, acquired_transaction_id, acquired_listing_id, acquired_at, ended_at) VALUES
+(20029, 8961, 2013, 7519, 10017, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20030, 8963, 2014, 7520, 10018, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20031, 8965, 2015, 7521, 10019, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20032, 8967, 2016, 7522, 10020, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20033, 8969, 2003, 7523, 10021, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20034, 8971, 2004, 7524, 10022, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20035, 8973, 2005, 7525, 10023, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20036, 8975, 2006, 7526, 10024, UTC_TIMESTAMP() - INTERVAL 2 DAY, NULL),
+(20037, 8977, 2007, 7527, 10025, UTC_TIMESTAMP() - INTERVAL 1 DAY, NULL),
+(20038, 8979, 2008, 7528, 10026, UTC_TIMESTAMP() - INTERVAL 1 DAY, NULL);
+
+-- ----------------------------------------------------------------------------
+-- ResaleListing: one per resold ticket, all completed (status = 'sold').
+-- Listing price set below the event's resale cap (cap = face_value * 1.20).
+-- ----------------------------------------------------------------------------
+
+INSERT INTO ResaleListing (listing_id, ticket_id, seller_ownership_id, listing_price, cap_price_at_listing, status, listed_date) VALUES
+(10017, 8961, 20009, 95.00,  102.00, 'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10018, 8963, 20011, 72.00,  78.00,  'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10019, 8965, 20013, 120.00, 132.00, 'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10020, 8967, 20015, 68.00,  72.00,  'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10021, 8969, 20017, 105.00, 114.00, 'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10022, 8971, 20019, 110.00, 120.00, 'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10023, 8973, 20021, 82.00,  90.00,  'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10024, 8975, 20023, 88.00,  96.00,  'sold', UTC_TIMESTAMP() - INTERVAL 3 DAY),
+(10025, 8977, 20025, 98.00,  108.00, 'sold', UTC_TIMESTAMP() - INTERVAL 2 DAY),
+(10026, 8979, 20027, 76.00,  84.00,  'sold', UTC_TIMESTAMP() - INTERVAL 2 DAY);
+
+-- ----------------------------------------------------------------------------
+-- Update GeneralAdmissionCapacity remaining_capacity was already set at
+-- insert time above (60 -> 58 for 2 tickets sold). No further update needed.
+-- ----------------------------------------------------------------------------
+
+SET FOREIGN_KEY_CHECKS = 1;
